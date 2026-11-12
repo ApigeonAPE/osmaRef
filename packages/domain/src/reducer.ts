@@ -40,6 +40,8 @@ export function createSession(input: CreateSessionInput, flow: MatchFlow): Match
     matchId: input.matchId,
     tournamentRevision: input.tournamentRevision,
     matchName: input.matchName,
+    matchKind: input.matchKind ?? 'match',
+    participantIds: input.participantIds ?? [input.teamOneId, input.teamTwoId],
     teamOneId: input.teamOneId,
     teamTwoId: input.teamTwoId,
     configSnapshot: input.configSnapshot ?? null,

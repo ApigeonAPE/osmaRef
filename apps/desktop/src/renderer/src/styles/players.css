@@ -1,0 +1,100 @@
+/*
+ * players.css — Workbench roster panel: player rows, invite form and slot assignment.
+ */
+
+.player-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.player-row {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.player-row.slotted {
+  grid-template-columns: 26px 20px minmax(0, 1fr) auto;
+}
+
+.player-row.empty {
+  opacity: 0.45;
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+.player-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.player-invite {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+
+.player-invite input, .player-invite .compact-input {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
+}
+
+.player-invite button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.player-slot {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.player-row.ready {
+  border-color: #3fbf7f;
+  box-shadow: inset 0 0 0 1px rgba(63, 191, 127, 0.25);
+}
+
+.player-row.playing {
+  border-color: var(--amber);
+  box-shadow: inset 0 0 0 1px rgba(255, 196, 92, 0.25);
+}
+
+.player-name {
+  color: #fff;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-row.red .player-name {
+  color: #ff7676;
+}
+
+.player-row.blue .player-name {
+  color: #73b9ff;
+}
+
+.player-mods {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 3px;
+  flex: none;
+}

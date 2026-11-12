@@ -1,0 +1,243 @@
+/*
+ * scoring.css — Scoreboards, team cards and recorded results.
+ */
+
+.flat-scoreboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  padding:2px 0;
+}
+
+.score-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.score-side.left {
+  justify-content: flex-end;
+}
+
+.score-side.right {
+  justify-content: flex-start;
+}
+
+.flat-team {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.flat-team strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 1 auto;
+}
+
+.flat-team.red {
+  color: #ff7676;
+}
+
+.flat-team.blue {
+  color: #73b9ff;
+}
+
+.flat-team.red.active {
+  border-color: #ff5d6c;
+  background: rgba(255, 93, 108, 0.1);
+}
+
+.flat-team.blue.active {
+  border-color: #3d9bff;
+  background: rgba(61, 155, 255, 0.1);
+}
+
+.flat-score {
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1;
+  flex: none;
+}
+
+.flat-dash {
+  font-weight: 800;
+  font-size: 1.6rem;
+  color: var(--muted);
+}
+
+.score-action {
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.score-result {
+  flex: none;
+}
+
+.score-card {
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(34, 26, 31, 0.7);
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+}
+
+.score-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+}
+
+.score-card.red::before {
+  background: var(--red);
+}
+
+.score-card.blue::before {
+  background: var(--blue);
+}
+
+.score-card.active {
+  border-color: var(--pink);
+  box-shadow: 0 0 0 1px var(--pink-soft);
+}
+
+.score-card strong {
+  font-size: 15px;
+}
+
+.score-number {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.score-card:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: 2px;
+}
+
+.first-team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.first-team-head, .first-team-row {
+  display: grid;
+  grid-template-columns: 28px 1fr 130px;
+  gap: 8px;
+  align-items: center;
+}
+
+.first-team-head {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.first-team-row {
+  padding: 6px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.result-history {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.result-history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.result-history-item + .result-history-item {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 10px;
+}
+
+.result-history-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.result-history-scores {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.result-score-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.result-score-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-score-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.result-score-meta {
+  min-width: 48px;
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.result-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1.2fr 90px 90px 70px 60px;
+  gap: 8px;
+  align-items: center;
+}
+
+.result-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}

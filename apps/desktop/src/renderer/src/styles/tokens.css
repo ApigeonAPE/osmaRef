@@ -1,0 +1,71 @@
+/*
+ * tokens.css — Design tokens and fonts. Nothing here depends on any other layer.
+ */
+
+@font-face {
+  font-family: 'HarmonyOS Sans';
+  src: url('@assets/HarmonyOS_Sans/HarmonyOS_Sans_Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'HarmonyOS Sans';
+  src: url('@assets/HarmonyOS_Sans/HarmonyOS_Sans_Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'HarmonyOS Sans';
+  src: url('@assets/HarmonyOS_Sans/HarmonyOS_Sans_Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'HarmonyOS Sans';
+  src: url('@assets/HarmonyOS_Sans/HarmonyOS_Sans_Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'HarmonyOS Sans';
+  src: url('@assets/HarmonyOS_Sans/HarmonyOS_Sans_Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'HarmonyOS Sans';
+  src: url('@assets/HarmonyOS_Sans/HarmonyOS_Sans_Black.ttf') format('truetype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --bg: #141013;
+  --bg-soft: #1b1519;
+  --panel: #221a1f;
+  --panel-2: #2a2026;
+  --line: #3a2c33;
+  --line-soft: #2f252b;
+  --text: #f4e9ee;
+  --muted: #b9a5ae;
+  --pink: #ff66aa;
+  --pink-soft: rgba(255, 102, 170, 0.16);
+  --red: #ff5d6c;
+  --blue: #61b3ff;
+  --green: #63d69b;
+  --amber: #ffc45c;
+  --radius: 12px;
+  --radius-sm: 8px;
+  font-family: 'HarmonyOS Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+}

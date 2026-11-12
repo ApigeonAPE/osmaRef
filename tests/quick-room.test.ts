@@ -5,7 +5,7 @@ import {
   normalizeBestOf,
   applyAction,
 } from '@osmaref/domain';
-import { MatchSessionSchema, TournamentSchema } from '@osmaref/contracts';
+import { MatchSessionSchema, TournamentSchema, matchTeamIds } from '@osmaref/contracts';
 
 describe('quick room configuration', () => {
   it('produces a valid tournament with one beatmap and a picks-only flow', () => {
@@ -19,12 +19,15 @@ describe('quick room configuration', () => {
     });
 
     expect(TournamentSchema.safeParse(tournament).success).toBe(true);
-    expect(tournament.rounds).toHaveLength(1);
-    expect(tournament.rounds[0]?.slots[0]?.beatmapId).toBe(658127);
-    expect(tournament.rounds[0]?.flow.steps.map((step) => step.kind)).toEqual(['pick']);
-    expect(tournament.matches[0]?.initialBeatmapId).toBe(658127);
-    expect(tournament.rounds[0]?.bestOf).toBe(9);
+    expect(tournament.stages).toHaveLength(1);
+    const stage = tournament.stages[0]!;
+    expect(stage.slots[0]?.beatmapId).toBe(658127);
+    expect(stage.flow.steps.map((step) => step.kind)).toEqual(['pick']);
+    expect(stage.bestOf).toBe(9);
     expect(tournament.source).toBeNull();
+    const match = stage.matches[0]!;
+    expect(match.type).toBe('match');
+    expect(match.initialBeatmapId).toBe(658127);
   });
 
   it('normalises the best-of value to a legal odd number', () => {
@@ -46,10 +49,9 @@ describe('quick room configuration', () => {
     });
 
     expect(TournamentSchema.safeParse(tournament).success).toBe(true);
-    expect(tournament.rounds[0]?.slots).toEqual([]);
-    expect(tournament.matches[0]?.initialBeatmapId).toBeNull();
-    // The session can still be created and the flow exists for later picks.
-    expect(tournament.rounds[0]?.flow.steps.length).toBeGreaterThan(0);
+    expect(tournament.stages[0]?.slots).toEqual([]);
+    expect(tournament.stages[0]?.matches[0]?.initialBeatmapId).toBeNull();
+    expect(tournament.stages[0]?.flow.steps.length).toBeGreaterThan(0);
   });
 
   it('keeps the snapshot on the session so it survives without the store', () => {
@@ -61,25 +63,28 @@ describe('quick room configuration', () => {
       transport: 'irc',
       bestOf: 3,
     });
-    const match = tournament.matches[0]!;
-    const flow = tournament.rounds[0]!.flow;
+    const stage = tournament.stages[0]!;
+    const match = stage.matches[0]!;
+    const participantIds = matchTeamIds(match).map(String);
     const session = createSession(
       {
         id: 'session_quick',
         tournamentId: tournament.id,
         matchId: match.id,
         matchName: match.name,
-        teamOneId: match.teamOneId,
-        teamTwoId: match.teamTwoId,
+        matchKind: match.type,
+        participantIds,
+        teamOneId: participantIds[0]!,
+        teamTwoId: participantIds[1]!,
         tournamentRevision: tournament.revision,
-        rulesetId: tournament.rulesetId,
-        matchType: tournament.defaultMatchType,
+        rulesetId: 0,
+        matchType: match.roomMode,
         transport: 'irc',
-        bestOf: tournament.rounds[0]!.bestOf,
+        bestOf: stage.bestOf,
         configSnapshot: tournament,
         now: '2026-01-01T00:00:00.000Z',
       },
-      flow,
+      stage.flow,
     );
 
     expect(MatchSessionSchema.safeParse(session).success).toBe(true);

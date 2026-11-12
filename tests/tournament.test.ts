@@ -9,10 +9,11 @@ import {
   validateTournamentReferences,
   type MappoolSlot,
 } from '@osmaref/contracts';
+
 function slot(overrides: Partial<MappoolSlot> & Pick<MappoolSlot, 'id' | 'label' | 'beatmapId'>): MappoolSlot {
   return {
     category: 'NM',
-    rulesetId: 0,
+    rulesetId: null,
     requiredMods: [],
     allowedMods: [],
     freestyle: false,
@@ -22,7 +23,7 @@ function slot(overrides: Partial<MappoolSlot> & Pick<MappoolSlot, 'id' | 'label'
   };
 }
 
-describe('tournament schema (rounds v2)', () => {
+describe('tournament schema (stages v3)', () => {
   it('accepts a freshly created tournament', () => {
     const tournament = createEmptyTournament('Test Cup');
     const parsed = TournamentSchema.safeParse(tournament);
@@ -30,13 +31,16 @@ describe('tournament schema (rounds v2)', () => {
       throw new Error(JSON.stringify(parsed.error.issues, null, 2));
     }
     expect(parsed.success).toBe(true);
-    expect(parsed.data.rounds[0]?.flow.steps.length).toBeGreaterThan(0);
+    expect(parsed.data.stages[0]?.flow.steps.length).toBeGreaterThan(0);
     expect(parsed.data.teams[0]).not.toHaveProperty('color');
+    expect(parsed.data.teams.map((team) => team.id)).toEqual([0, 1]);
+    expect(parsed.data.mode).toBe('osu');
+    expect(parsed.data.teamSize).toBe(4);
   });
 
-  it('rejects duplicate slot labels in one round', () => {
+  it('rejects duplicate slot labels in one stage', () => {
     const tournament = createEmptyTournament('Test Cup');
-    tournament.rounds[0]!.slots = [
+    tournament.stages[0]!.slots = [
       slot({ id: 's1', label: 'NM1', beatmapId: 1 }),
       slot({ id: 's2', label: 'nm1', beatmapId: 2 }),
     ];
@@ -45,15 +49,15 @@ describe('tournament schema (rounds v2)', () => {
 
   it('rejects freestyle slots that also declare allowed mods', () => {
     const tournament = createEmptyTournament('Test Cup');
-    tournament.rounds[0]!.slots = [
+    tournament.stages[0]!.slots = [
       slot({ id: 's1', label: 'FM1', category: 'FM', beatmapId: 1, allowedMods: ['HD'], freestyle: true }),
     ];
     expect(TournamentSchema.safeParse(tournament).success).toBe(false);
   });
 
-  it('rejects the same beatmap twice in one round', () => {
+  it('rejects the same beatmap twice in one stage', () => {
     const tournament = createEmptyTournament('Test Cup');
-    tournament.rounds[0]!.slots = [
+    tournament.stages[0]!.slots = [
       slot({ id: 's1', label: 'NM1', beatmapId: 42 }),
       slot({ id: 's2', label: 'NM2', beatmapId: 42 }),
     ];
@@ -62,7 +66,7 @@ describe('tournament schema (rounds v2)', () => {
 
   it('rejects a category that does not match its required mods', () => {
     const tournament = createEmptyTournament('Test Cup');
-    tournament.rounds[0]!.slots = [
+    tournament.stages[0]!.slots = [
       slot({ id: 's1', label: 'HD1', category: 'HD', beatmapId: 1 }),
     ];
     expect(TournamentSchema.safeParse(tournament).success).toBe(false);
@@ -70,7 +74,7 @@ describe('tournament schema (rounds v2)', () => {
 
   it('accepts arbitrary category codes such as mania RC/LN/SV', () => {
     const tournament = createEmptyTournament('Test Cup');
-    tournament.rounds[0]!.slots = [
+    tournament.stages[0]!.slots = [
       slot({ id: 's1', label: 'RC1', category: 'RC', beatmapId: 1 }),
       slot({ id: 's2', label: 'LN1', category: 'LN', beatmapId: 2 }),
       slot({ id: 's3', label: 'SV1', category: 'SV', beatmapId: 3 }),
@@ -78,41 +82,105 @@ describe('tournament schema (rounds v2)', () => {
     expect(TournamentSchema.safeParse(tournament).success).toBe(true);
   });
 
-  it('reports dangling references with a path', () => {
+  it('reports dangling team and group references with a path', () => {
     const tournament = createEmptyTournament('Test Cup');
-    tournament.matches.push({
+    const stage = tournament.stages[0]!;
+    stage.matches.push({
       id: 'm1',
+      type: 'match',
       name: 'A vs B',
-      roundId: 'missing_round',
-      teamOneId: 'team_one',
-      teamTwoId: 'team_two',
+      groupId: 'missing_group',
+      teamRedId: 0,
+      teamBlueId: 99,
       refereeIds: [],
       transport: 'referee_hub',
-      scoringId: 'missing_scoring',
+      scheduledAt: '2026-01-01T00:00:00.000Z',
+      result: { scoreRed: 0, scoreBlue: 0 },
+      roomMode: 'team_versus',
       roomNameTemplate: '{tournament}',
       initialBeatmapId: null,
-      scheduledAt: null,
     });
-    const issues = validateTournamentReferences(tournament);
-    expect(issues.map((issue) => issue.message).join('\n')).toMatch(/unknown round/);
-    expect(issues.map((issue) => issue.message).join('\n')).toMatch(/unknown scoring/);
+    const messages = validateTournamentReferences(tournament)
+      .map((issue) => issue.message)
+      .join('\n');
+    expect(messages).toMatch(/unknown group/);
+    expect(messages).toMatch(/unknown team 99/);
     expect(TournamentSchema.safeParse(tournament).success).toBe(false);
   });
 
-  it('requires an odd bestOf on a round', () => {
+  it('requires an odd bestOf on a stage', () => {
     const tournament = createEmptyTournament('Test Cup');
-    tournament.rounds[0]!.bestOf = 8;
+    tournament.stages[0]!.bestOf = 8;
     expect(TournamentSchema.safeParse(tournament).success).toBe(false);
+  });
+
+  it('requires a UTC timestamp on every match', () => {
+    const tournament = createEmptyTournament('Test Cup');
+    tournament.stages[0]!.matches.push({
+      id: 'm1',
+      type: 'match',
+      name: 'A vs B',
+      groupId: null,
+      teamRedId: 0,
+      teamBlueId: 1,
+      refereeIds: [],
+      transport: 'irc',
+      scheduledAt: '2026-01-01T08:00:00+08:00',
+      result: { scoreRed: 0, scoreBlue: 0 },
+      roomMode: 'team_versus',
+      roomNameTemplate: '{tournament}',
+      initialBeatmapId: null,
+    });
+    expect(TournamentSchema.safeParse(tournament).success).toBe(false);
+  });
+
+  it('requires at least three teams in a lobby fixture', () => {
+    const tournament = createEmptyTournament('Test Cup');
+    tournament.stages[0]!.matches.push({
+      id: 'm1',
+      type: 'lobby',
+      name: 'Multi lobby',
+      groupId: null,
+      teamIds: [0, 1],
+      refereeIds: [],
+      transport: 'irc',
+      scheduledAt: '2026-01-01T00:00:00.000Z',
+      result: { scoreRed: 0, scoreBlue: 0 },
+      roomMode: 'head_to_head',
+      roomNameTemplate: '{tournament}',
+      initialBeatmapId: null,
+    });
+    expect(TournamentSchema.safeParse(tournament).success).toBe(false);
+  });
+
+  it('accepts a lobby fixture with three or more teams', () => {
+    const tournament = createEmptyTournament('Test Cup');
+    tournament.teams.push({ id: 2, name: 'Team 3', captainUserId: null, members: [], seed: null });
+    tournament.stages[0]!.matches.push({
+      id: 'm1',
+      type: 'lobby',
+      name: 'Multi lobby',
+      groupId: null,
+      teamIds: [0, 1, 2],
+      refereeIds: [],
+      transport: 'irc',
+      scheduledAt: '2026-01-01T00:00:00.000Z',
+      result: { scoreRed: 0, scoreBlue: 0 },
+      roomMode: 'head_to_head',
+      roomNameTemplate: '{tournament}',
+      initialBeatmapId: null,
+    });
+    expect(TournamentSchema.safeParse(tournament).success).toBe(true);
   });
 
   it('normalises slot labels for lookup', () => {
     const tournament = createEmptyTournament('Test Cup');
-    tournament.rounds[0]!.slots = [
+    tournament.stages[0]!.slots = [
       slot({ id: 's1', label: 'DT2', category: 'DT', beatmapId: 42, requiredMods: ['DT'] }),
     ];
-    const round = tournament.rounds[0]!;
+    const stage = tournament.stages[0]!;
     expect(normalizeSlotLabel(' dt2 ')).toBe('DT2');
-    expect(findSlotByLabel(round, 'dt2')?.beatmapId).toBe(42);
+    expect(findSlotByLabel(stage, 'dt2')?.beatmapId).toBe(42);
   });
 
   it('renders room name templates', () => {
@@ -127,87 +195,99 @@ describe('tournament schema (rounds v2)', () => {
   });
 });
 
-describe('v1 → v2 migration', () => {
-  it('folds stages, mappools and flows into rounds', () => {
-    const now = new Date().toISOString();
-    const v1 = {
-      schemaVersion: 1,
+describe('teams, groups and captains', () => {
+  it('requires the captain to belong to the roster', () => {
+    const tournament = createEmptyTournament('Test Cup');
+    tournament.teams[0]!.captainUserId = 5;
+    const messages = validateTournamentReferences(tournament)
+      .map((issue) => issue.message)
+      .join('\n');
+    expect(messages).toMatch(/not a member/);
+    expect(TournamentSchema.safeParse(tournament).success).toBe(false);
+  });
+
+  it('accepts a captain from the roster and a numeric seed', () => {
+    const tournament = createEmptyTournament('Test Cup');
+    tournament.teams[0] = {
+      id: 0,
+      name: 'Alpha',
+      captainUserId: 5,
+      members: [{ userId: 5, username: 'captain' }],
+      seed: 1,
+    };
+    expect(TournamentSchema.safeParse(tournament).success).toBe(true);
+  });
+
+  it('rejects duplicate team ids', () => {
+    const tournament = createEmptyTournament('Test Cup');
+    tournament.teams[1] = { ...tournament.teams[1]!, id: 0 };
+    expect(validateTournamentReferences(tournament).length).toBeGreaterThan(0);
+  });
+
+  it('assigns a team to at most one group per stage', () => {
+    const tournament = createEmptyTournament('Test Cup');
+    const stage = tournament.stages[0]!;
+    stage.type = 'group';
+    stage.groups = [
+      { id: 'g1', name: 'A', teamIds: [0] },
+      { id: 'g2', name: 'B', teamIds: [0] },
+    ];
+    const messages = validateTournamentReferences(tournament)
+      .map((issue) => issue.message)
+      .join('\n');
+    expect(messages).toMatch(/multiple groups/);
+  });
+
+  it('rejects a match whose teams are outside its group', () => {
+    const tournament = createEmptyTournament('Test Cup');
+    const stage = tournament.stages[0]!;
+    stage.type = 'group';
+    stage.groups = [{ id: 'g1', name: 'A', teamIds: [0] }];
+    stage.matches.push({
+      id: 'm1',
+      type: 'match',
+      name: 'A vs B',
+      groupId: 'g1',
+      teamRedId: 0,
+      teamBlueId: 1,
+      refereeIds: [],
+      transport: 'irc',
+      scheduledAt: '2026-01-01T00:00:00.000Z',
+      result: { scoreRed: 0, scoreBlue: 0 },
+      roomMode: 'team_versus',
+      roomNameTemplate: '{tournament}',
+      initialBeatmapId: null,
+    });
+    const messages = validateTournamentReferences(tournament)
+      .map((issue) => issue.message)
+      .join('\n');
+    expect(messages).toMatch(/outside group/);
+  });
+});
+
+describe('legacy documents', () => {
+  it('does not silently migrate v1/v2 tournaments', () => {
+    const legacy = {
+      schemaVersion: 2,
       id: 'legacy',
       name: 'Legacy Cup',
       abbreviation: 'LC',
       rulesetId: 0,
-      defaultMatchType: 'team_versus',
-      teams: [
-        { id: 'team_red', name: 'Red', color: 'red', members: [{ userId: 1, username: 'A', captain: false }] },
-        { id: 'team_blue', name: 'Blue', color: 'blue', members: [] },
-      ],
-      referees: [{ userId: 9, username: 'Ref' }],
-      stages: [{ id: 'stage_r1', name: 'Round 1', order: 0, bestOf: 9, mappoolId: 'pool_1' }],
-      mappools: [
-        {
-          id: 'pool_1',
-          name: 'Pool 1',
-          stageId: 'stage_r1',
-          slots: [
-            {
-              id: 's1',
-              label: 'NM1',
-              category: 'NM',
-              beatmapId: 10,
-              rulesetId: 0,
-              requiredMods: [],
-              allowedMods: [],
-              freestyle: false,
-              winCondition: null,
-              winConditionWinner: null,
-            },
-          ],
-        },
-      ],
-      flows: [
-        {
-          id: 'flow_1',
-          name: 'Flow',
-          steps: [{ id: 'step', kind: 'pick', count: 10, side: 'both' }],
-          triggers: [],
-        },
-      ],
-      scoringSchemes: [
-        { id: 'score', name: 'ScoreV2', winCondition: 'score_v2', aggregation: 'sum', modMultipliers: {} },
-      ],
-      matches: [
-        {
-          id: 'm1',
-          name: 'A vs B',
-          stageId: 'stage_r1',
-          teamOneId: 'team_red',
-          teamTwoId: 'team_blue',
-          refereeIds: [],
-          transport: 'irc',
-          mappoolId: 'pool_1',
-          flowId: 'flow_1',
-          scoringId: 'score',
-          roomNameTemplate: '{tournament}',
-          initialBeatmapId: null,
-          scheduledAt: null,
-        },
-      ],
-      automation: [],
-      revision: 1,
-      createdAt: now,
-      updatedAt: now,
-      source: null,
+      teams: [],
+      rounds: [],
     };
+    expect(parseTournament(legacy).success).toBe(false);
+  });
 
-    const parsed = parseTournament(v1);
+  it('normalises hand-edited v3 abbreviations while loading', () => {
+    const stored = {
+      ...createEmptyTournament('Legacy Cup'),
+      abbreviation: 'a-very-long-abbreviation',
+    };
+    const parsed = parseTournament(stored);
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
-    expect(parsed.data.schemaVersion).toBe(2);
-    expect(parsed.data.rounds[0]?.id).toBe('stage_r1');
-    expect(parsed.data.rounds[0]?.slots[0]?.beatmapId).toBe(10);
-    expect(parsed.data.rounds[0]?.flow.id).toBe('flow_1');
-    expect(parsed.data.matches[0]?.roundId).toBe('stage_r1');
-    expect(parsed.data.teams[0]).not.toHaveProperty('color');
+    expect(parsed.data.abbreviation).toBe('A-VERY-LON');
   });
 });
 
@@ -230,20 +310,50 @@ describe('tournament abbreviations', () => {
     ).toBe(true);
   });
 
-  it('normalises legacy stored abbreviations while loading', () => {
-    const stored = {
-      ...createEmptyTournament('Legacy Cup'),
-      abbreviation: 'a-very-long-abbreviation',
-    };
-    const parsed = parseTournament(stored);
-    expect(parsed.success).toBe(true);
-    if (!parsed.success) return;
-    expect(parsed.data.abbreviation).toBe('A-VERY-LON');
-  });
-
   it('creates new tournaments with a short uppercase abbreviation', () => {
     const tournament = createEmptyTournament('a rather long tournament name');
     expect(tournament.abbreviation).toBe('A RATHER L');
     expect(tournament.abbreviation.length).toBeLessThanOrEqual(10);
+  });
+});
+
+describe('flow steps', () => {
+  it('drops the legacy "side" field and keeps count as per-team', () => {
+    const tournament = createEmptyTournament('Legacy Flow');
+    const raw = JSON.parse(JSON.stringify(tournament)) as {
+      stages: { flow: { steps: unknown[] } }[];
+    };
+    raw.stages[0]!.flow.steps = [
+      { id: 'legacy_ban', kind: 'ban', count: 1, side: 'team_one' },
+      { id: 'legacy_pick', kind: 'pick', count: 5, side: 'both' },
+    ];
+    const parsed = parseTournament(raw);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.stages[0]?.flow.steps).toEqual([
+      { id: 'legacy_ban', kind: 'ban', count: 1 },
+      { id: 'legacy_pick', kind: 'pick', count: 5 },
+    ]);
+  });
+});
+
+describe('mappool slot labels', () => {
+  function withLabel(label: string) {
+    const tournament = createEmptyTournament('Label Cup');
+    tournament.stages[0]!.slots = [
+      slot({ id: 'slot', label, beatmapId: 1 }),
+    ];
+    return TournamentSchema.safeParse(tournament).success;
+  }
+
+  it('accepts key-count labels such as 4K1', () => {
+    expect(withLabel('4K1')).toBe(true);
+    expect(withLabel('7K2')).toBe(true);
+  });
+
+  it('still rejects labels without a letter or with illegal characters', () => {
+    expect(withLabel('123')).toBe(false);
+    expect(withLabel('NM 1')).toBe(false);
+    expect(withLabel('A'.repeat(13))).toBe(false);
   });
 });

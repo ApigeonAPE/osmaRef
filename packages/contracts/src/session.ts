@@ -99,6 +99,13 @@ export const MatchSessionSchema = z.object({
   matchId: z.string().min(1),
   tournamentRevision: z.number().int().min(1),
   matchName: z.string().min(1),
+  /** Tournament fixture type: a two-team match or a multi-team lobby. */
+  matchKind: z.enum(['lobby', 'match']).default('match'),
+  /**
+   * All participating team IDs as strings. Match sessions use the first two;
+   * lobby sessions keep every participant but do not compute a winner.
+   */
+  participantIds: z.array(z.string().min(1)).default([]),
   teamOneId: z.string().min(1),
   teamTwoId: z.string().min(1),
   /**
@@ -249,6 +256,8 @@ export interface CreateSessionInput {
   tournamentId: string;
   matchId: string;
   matchName: string;
+  matchKind?: 'lobby' | 'match';
+  participantIds?: string[];
   teamOneId: string;
   teamTwoId: string;
   tournamentRevision: number;

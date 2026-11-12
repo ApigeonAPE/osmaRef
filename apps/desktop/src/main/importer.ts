@@ -68,11 +68,12 @@ export class TournamentImporter {
       name: basename(file, '.json'),
     });
     const remoteId = `bracket:${basename(file)}`.slice(0, 200);
+    const matchCount = tournament.stages.reduce((total, stage) => total + stage.matches.length, 0);
     this.logger.runtime(
       'info',
       'tournament',
       `converted bracket ${basename(file)} (${tournament.teams.length} teams, ` +
-        `${tournament.rounds.length} rounds, ${tournament.matches.length} matches, ` +
+        `${tournament.stages.length} stages, ${matchCount} matches, ` +
         `${notes.length} notes)`,
     );
     return this.buildPreview('file', remoteId, null, null, tournament, notes);

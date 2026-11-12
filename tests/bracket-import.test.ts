@@ -1,11 +1,20 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { convertBracketToTournament, parseTournament, TOURNAMENT_ID_PATTERN } from '@osmaref/contracts';
+import {
+  convertBracketToTournament,
+  matchTeamIds,
+  parseTournament,
+  TOURNAMENT_ID_PATTERN,
+} from '@osmaref/contracts';
 
 const sampleBracket = JSON.parse(
   readFileSync(resolve(process.cwd(), 'bracket.json'), 'utf8'),
 ) as unknown;
+
+function allMatches(tournament: ReturnType<typeof convertBracketToTournament>['tournament']) {
+  return tournament.stages.flatMap((stage) => stage.matches);
+}
 
 describe('osu! tournament bracket import', () => {
   const { tournament, notes } = convertBracketToTournament(sampleBracket, {
@@ -20,20 +29,21 @@ describe('osu! tournament bracket import', () => {
     expect(parsed.success).toBe(true);
     expect(notes).toEqual([]);
     expect(tournament.id).toMatch(TOURNAMENT_ID_PATTERN);
-    expect(tournament.rulesetId).toBe(3);
-    expect(tournament.scoringSchemes.map((scheme) => scheme.id)).toEqual(['score_default']);
+    expect(tournament.mode).toBe('mania');
+    expect(tournament.teamSize).toBe(4);
+    expect(tournament.stages.every((stage) => stage.scoringScheme.winCondition === 'score_v2')).toBe(
+      true,
+    );
   });
 
-  it('maps teams, rosters and seeding-independent identity', () => {
+  it('maps teams with zero-based ids, rosters and seeds', () => {
     expect(tournament.teams).toHaveLength(5);
-    const tfs = tournament.teams.find((team) => team.id === 'team_tfs');
+    const tfs = tournament.teams.find((team) => team.id === 0);
     expect(tfs?.name).toBe('Team Falcoms');
     expect(tfs?.members).toHaveLength(4);
-    expect(tfs?.members[0]).toEqual({
-      userId: 32739668,
-      username: 'AkizukiKanna225',
-      captain: false,
-    });
+    expect(tfs?.members[0]).toEqual({ userId: 32739668, username: 'AkizukiKanna225' });
+    expect(tfs?.seed).toBe(1);
+    expect(tfs?.captainUserId).toBeNull();
   });
 
   it('keeps the generated example file loadable', () => {
@@ -44,20 +54,21 @@ describe('osu! tournament bracket import', () => {
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
     expect(parsed.data.teams).toHaveLength(5);
-    expect(parsed.data.matches).toHaveLength(7);
+    expect(parsed.data.stages).toHaveLength(4);
+    expect(allMatches(parsed.data)).toHaveLength(7);
   });
 
-  it('maps rounds with their pools and tiebreakers', () => {
-    expect(tournament.rounds.map((round) => round.name)).toEqual([
+  it('maps rounds to stages with their pools and tiebreakers', () => {
+    expect(tournament.stages.map((stage) => stage.name)).toEqual([
       '资格赛',
       '半决赛',
       '决赛',
       '总决赛',
     ]);
-    expect(tournament.rounds.map((round) => round.bestOf)).toEqual([5, 9, 11, 13]);
-    expect(tournament.rounds.map((round) => round.order)).toEqual([0, 1, 2, 3]);
+    expect(tournament.stages.map((stage) => stage.bestOf)).toEqual([5, 9, 11, 13]);
+    expect(tournament.stages.map((stage) => stage.order)).toEqual([0, 1, 2, 3]);
 
-    const qualifiers = tournament.rounds[0]!;
+    const qualifiers = tournament.stages[0]!;
     expect(qualifiers.slots).toHaveLength(8);
     expect(qualifiers.slots.map((slot) => slot.label)).toEqual([
       'HB1',
@@ -69,35 +80,38 @@ describe('osu! tournament bracket import', () => {
       'RC3',
       'SV1',
     ]);
-    expect(qualifiers.slots.every((slot) => slot.rulesetId === 3)).toBe(true);
 
-    const semifinal = tournament.rounds[1]!;
+    const semifinal = tournament.stages[1]!;
     const tiebreaker = semifinal.slots.find((slot) => slot.label === 'TB');
     expect(tiebreaker?.category).toBe('TB');
     expect(tiebreaker?.requiredMods).toEqual([]);
   });
 
   it('derives a pick/ban flow from best-of and ban count', () => {
-    expect(tournament.rounds[0]!.flow.steps).toEqual([
-      { id: 'step_ban_round_1', kind: 'ban', count: 1, side: 'both' },
-      { id: 'step_pick_round_1', kind: 'pick', count: 3, side: 'both' },
+    expect(tournament.stages[0]!.flow.steps.map((step) => [step.kind, step.count])).toEqual([
+      ['ban', 1],
+      ['pick', 3],
     ]);
-    expect(tournament.rounds[3]!.flow.steps[1]?.count).toBe(7);
+    expect(tournament.stages[3]!.flow.steps[1]?.count).toBe(7);
   });
 
-  it('maps matches to their round, teams and schedule', () => {
-    expect(tournament.matches).toHaveLength(7);
+  it('nests matches under their stage with numeric teams and results', () => {
+    const matches = allMatches(tournament);
+    expect(matches).toHaveLength(7);
 
-    const matchTwo = tournament.matches.find((match) => match.id === 'match_2');
-    expect(matchTwo?.roundId).toBe('round_3');
-    expect(matchTwo?.teamOneId).toBe('team_smw');
-    expect(matchTwo?.teamTwoId).toBe('team_idk');
-    expect(matchTwo?.scheduledAt).toBe('2026-10-25T13:00:00.000Z');
-    expect(matchTwo?.initialBeatmapId).toBe(3989898);
-    expect(matchTwo?.notes).toContain('score 5-6');
+    const matchTwo = matches.find((match) => match.id === 'match_2');
+    expect(matchTwo?.type).toBe('match');
+    expect(tournament.stages[2]!.matches).toContain(matchTwo);
+    if (matchTwo?.type !== 'match') throw new Error('expected a two-team match');
+    expect(matchTwo.teamRedId).toBe(3);
+    expect(matchTwo.teamBlueId).toBe(1);
+    expect(matchTwo.scheduledAt).toBe('2026-10-25T13:00:00.000Z');
+    expect(matchTwo.result).toEqual({ scoreRed: 5, scoreBlue: 6 });
+    expect(matchTwo.initialBeatmapId).toBe(3989898);
+    expect(matchTwo.notes).toContain('score 5-6');
 
-    const firstMatch = tournament.matches.find((match) => match.id === 'match_1');
-    expect(firstMatch?.roundId).toBe('round_2');
+    const firstMatch = matches.find((match) => match.id === 'match_1');
+    expect(tournament.stages[1]!.matches).toContain(firstMatch);
     expect(firstMatch?.initialBeatmapId).toBe(3273376);
   });
 });
@@ -106,6 +120,7 @@ describe('bracket conversion edge cases', () => {
   interface TestBracket {
     Ruleset: { OnlineID: number };
     Teams: { Acronym: string; FullName: string; Players: { id: number; Username: string }[] }[];
+    PlayersPerTeam?: number;
     Rounds: {
       Name: string;
       BestOf: number;
@@ -114,7 +129,7 @@ describe('bracket conversion edge cases', () => {
       Matches: number[];
       StartDate?: string;
     }[];
-    Matches: { ID: number; Team1Acronym: string; Team2Acronym: string; Date: string }[];
+    Matches: { ID: number; Team1Acronym: string | null; Team2Acronym: string | null; Date: string }[];
   }
 
   function baseDocument(): TestBracket {
@@ -146,15 +161,15 @@ describe('bracket conversion edge cases', () => {
     const { tournament, notes } = convertBracketToTournament(baseDocument(), {
       name: 'Edge Cup',
     });
-    expect(tournament.rounds[0]?.bestOf).toBe(9);
+    expect(tournament.stages[0]?.bestOf).toBe(9);
     expect(notes.join('\n')).toMatch(/best-of 8/);
     expect(parseTournament(tournament).success).toBe(true);
   });
 
-  it('skips duplicate beatmaps in one round', () => {
+  it('skips duplicate beatmaps in one stage', () => {
     const { tournament, notes } = convertBracketToTournament(baseDocument());
-    expect(tournament.rounds[0]?.slots).toHaveLength(1);
-    expect(tournament.rounds[0]?.slots[0]?.beatmapId).toBe(10);
+    expect(tournament.stages[0]?.slots).toHaveLength(1);
+    expect(tournament.stages[0]?.slots[0]?.beatmapId).toBe(10);
     expect(notes.join('\n')).toMatch(/beatmap 10 twice/);
   });
 
@@ -164,11 +179,11 @@ describe('bracket conversion edge cases', () => {
       { ID: 2, Team1Acronym: 'A', Team2Acronym: 'ZZZ', Date: '2026-01-01T00:00:00Z' },
     ];
     const { tournament, notes } = convertBracketToTournament(document);
-    expect(tournament.matches).toHaveLength(0);
+    expect(allMatches(tournament)).toHaveLength(0);
     expect(notes.join('\n')).toMatch(/not in the bracket/);
   });
 
-  it('assigns a match that no round lists by its date', () => {
+  it('assigns a match that no stage lists by its date', () => {
     const document = baseDocument();
     document.Rounds = [
       {
@@ -190,8 +205,7 @@ describe('bracket conversion edge cases', () => {
       { ID: 9, Team1Acronym: 'A', Team2Acronym: 'B', Date: '2026-02-10T00:00:00Z' },
     ];
     const { tournament, notes } = convertBracketToTournament(document);
-    expect(tournament.matches[0]?.roundId).toBe('round_late');
-    expect(tournament.matches[0]?.initialBeatmapId).toBe(20);
+    expect(tournament.stages[1]?.matches[0]?.initialBeatmapId).toBe(20);
     expect(notes.join('\n')).toMatch(/assigned to "Late"/);
   });
 
@@ -203,7 +217,7 @@ describe('bracket conversion edge cases', () => {
       { ID: 3, Mods: 'TB' },
     ];
     const { tournament } = convertBracketToTournament(document);
-    const slots = tournament.rounds[0]!.slots;
+    const slots = tournament.stages[0]!.slots;
     expect(slots[0]?.requiredMods).toEqual(['HD']);
     expect(slots[1]?.freestyle).toBe(true);
     expect(slots[2]?.label).toBe('TB');
@@ -213,12 +227,28 @@ describe('bracket conversion edge cases', () => {
   it('normalises mod codes that cannot prefix a slot label', () => {
     const document = baseDocument();
     document.Rounds[0]!.Beatmaps = [
-      { ID: 1, Mods: 'V2HD' },
+      { ID: 1, Mods: '4K+' },
       { ID: 2, Mods: '2' },
     ];
     const { tournament, notes } = convertBracketToTournament(document);
-    expect(tournament.rounds[0]?.slots.map((slot) => slot.label)).toEqual(['VHD1', 'NM1']);
+    expect(tournament.stages[0]?.slots.map((slot) => slot.label)).toEqual(['4K1', 'NM1']);
     expect(notes.join('\n')).toMatch(/normalised/);
+    expect(parseTournament(tournament).success).toBe(true);
+  });
+
+  it('keeps mania key-count mod codes instead of collapsing them to K', () => {
+    const document = baseDocument();
+    document.Rounds[0]!.Beatmaps = [
+      { ID: 1, Mods: '4K' },
+      { ID: 2, Mods: '4K' },
+      { ID: 3, Mods: '7K' },
+      { ID: 4, Mods: 'TB' },
+    ];
+    const { tournament, notes } = convertBracketToTournament(document);
+    const slots = tournament.stages[0]!.slots;
+    expect(slots.map((slot) => slot.label)).toEqual(['4K1', '4K2', '7K1', 'TB']);
+    expect(slots.map((slot) => slot.category)).toEqual(['4K', '4K', '7K', 'TB']);
+    expect(notes.join('\n')).not.toMatch(/normalised/);
     expect(parseTournament(tournament).success).toBe(true);
   });
 
@@ -233,9 +263,10 @@ describe('bracket files produced by the osu! client', () => {
   function document() {
     return {
       Ruleset: { ShortName: 'fruits', OnlineID: 2 },
+      PlayersPerTeam: 3,
       Teams: [
-        { Acronym: 'CN', FullName: 'China', Players: [{ id: 1 }] },
-        { Acronym: 'APAC', FullName: 'Asia-Pacific', Players: [{ id: 2 }] },
+        { Acronym: 'CN', FullName: 'China', Seed: '2', Players: [{ id: 1 }] },
+        { Acronym: 'APAC', FullName: 'Asia-Pacific', Seed: null, Players: [{ id: 2 }] },
       ],
       Rounds: [
         {
@@ -283,17 +314,24 @@ describe('bracket files produced by the osu! client', () => {
       name: 'World Cup',
     });
     expect(parseTournament(tournament).success).toBe(true);
-    expect(tournament.rulesetId).toBe(2);
-    expect(tournament.matches).toHaveLength(1);
-    expect(tournament.matches[0]?.teamOneId).toBe('team_cn');
-    expect(tournament.matches[0]?.teamTwoId).toBe('team_apac');
-    expect(tournament.matches[0]?.scheduledAt).toBe('2026-10-25T07:00:00.000Z');
-    expect(tournament.rounds[0]?.slots.map((slot) => slot.label)).toEqual(['NM1', 'TB']);
+    expect(tournament.mode).toBe('catch');
+    expect(tournament.teamSize).toBe(3);
+    expect(tournament.teams.map((team) => team.seed)).toEqual([2, null]);
+    const matches = tournament.stages[0]!.matches;
+    expect(matches).toHaveLength(1);
+    if (matches[0]?.type !== 'match') throw new Error('expected a two-team match');
+    expect(matches[0].teamRedId).toBe(0);
+    expect(matches[0].teamBlueId).toBe(1);
+    expect(matches[0].scheduledAt).toBe('2026-10-25T07:00:00.000Z');
+    expect(matches[0].result).toEqual({ scoreRed: 5, scoreBlue: 0 });
+    expect(tournament.stages[0]?.slots.map((slot) => slot.label)).toEqual(['NM1', 'TB']);
     expect(notes.join('\n')).toMatch(/1 bracket match\(es\) have undecided teams/);
   });
 
-  it('keeps decided matches when some matches are still TBD', () => {
-    const { tournament } = convertBracketToTournament(document());
-    expect(tournament.matches.map((match) => match.id)).toEqual(['match_1']);
+  it('defaults Team Size to 4 when the bracket omits PlayersPerTeam', () => {
+    const source = document();
+    delete (source as { PlayersPerTeam?: number }).PlayersPerTeam;
+    const { tournament } = convertBracketToTournament(source);
+    expect(tournament.teamSize).toBe(4);
   });
 });

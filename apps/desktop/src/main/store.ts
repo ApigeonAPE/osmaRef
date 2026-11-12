@@ -52,6 +52,9 @@ interface SqliteDatabase {
 
 type SqliteConstructor = new (path: string) => SqliteDatabase;
 
+/** Current persistent shape for tournaments and sessions. */
+const STORE_DATA_VERSION = 3;
+
 /**
  * SQLite-backed store with a JSON fallback.
  *
@@ -115,6 +118,16 @@ class SqliteStore implements AppStore {
         updated_at TEXT NOT NULL
       );
     `);
+
+    const row = this.db.prepare('PRAGMA user_version').get();
+    const dataVersion = Number(row?.['user_version'] ?? 0);
+    if (dataVersion < STORE_DATA_VERSION) {
+      // The user explicitly chose to discard old tournament configs and
+      // sessions on this development-only model break. Keep runtime logs and
+      // lobby logs, which have independent retention policies.
+      this.db.exec('DELETE FROM tournaments; DELETE FROM sessions;');
+      this.db.exec(`PRAGMA user_version = ${STORE_DATA_VERSION};`);
+    }
   }
 
   listTournaments(): Tournament[] {
@@ -308,6 +321,7 @@ class SqliteStore implements AppStore {
 }
 
 interface JsonSnapshot {
+  dataVersion: number;
   tournaments: Tournament[];
   sessions: MatchSession[];
   events: SessionEvent[];
@@ -323,6 +337,7 @@ class JsonStore implements AppStore {
   constructor(file: string) {
     this.file = file;
     this.state = {
+      dataVersion: STORE_DATA_VERSION,
       tournaments: [],
       sessions: [],
       events: [],
@@ -332,11 +347,20 @@ class JsonStore implements AppStore {
     if (existsSync(file)) {
       try {
         const parsed = JSON.parse(readFileSync(file, 'utf8')) as Partial<JsonSnapshot>;
-        this.state.tournaments = parsed.tournaments ?? [];
-        this.state.sessions = parsed.sessions ?? [];
         this.state.events = parsed.events ?? [];
         this.state.runtimeLogs = parsed.runtimeLogs ?? [];
         this.state.lobbyLogSessions = parsed.lobbyLogSessions ?? [];
+        if ((parsed.dataVersion ?? 0) < STORE_DATA_VERSION) {
+          // Match the SQLite v3 upgrade: old tournament configs and sessions
+          // are intentionally discarded, but both log collections survive.
+          this.state.tournaments = [];
+          this.state.sessions = [];
+          this.scheduleSave();
+        } else {
+          this.state.tournaments = parsed.tournaments ?? [];
+          this.state.sessions = parsed.sessions ?? [];
+        }
+        this.state.dataVersion = STORE_DATA_VERSION;
       } catch {
         // ignore corrupt snapshot
       }

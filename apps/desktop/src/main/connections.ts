@@ -4,7 +4,9 @@ import {
   findRound,
   findScoring,
   findSlotByLabel,
+  findStageForMatch,
   findTeam,
+  matchTeamIds,
   renderRoomName,
   type AppState,
   type BeatmapInfo,
@@ -22,6 +24,7 @@ import {
   type SessionEventCategory,
   type SessionEventType,
   type Tournament,
+  type TournamentMode,
   sessionEventCategory,
   toLobbyLogSession,
 } from '@osmaref/contracts';
@@ -67,6 +70,22 @@ import type { AppStore } from './store';
 import type { ServerClient } from './server-client';
 import type { SettingsStore } from './settings';
 import type { AppLogger } from './logger';
+const MODE_RULESETS: Record<Exclude<TournamentMode, 'multi'>, number> = {
+  osu: 0,
+  taiko: 1,
+  catch: 2,
+  mania: 3,
+};
+
+/** Ruleset used for room creation and map submission under the tournament mode. */
+function resolveTournamentRuleset(
+  mode: TournamentMode,
+  slots: { rulesetId: number | null }[],
+): number {
+  if (mode !== 'multi') return MODE_RULESETS[mode];
+  const explicit = slots.find((slot) => slot.rulesetId !== null)?.rulesetId;
+  return explicit ?? 0;
+}
 
 export interface ConnectionManagerDeps {
   store: AppStore;
@@ -470,9 +489,9 @@ export class ConnectionManager {
     if (!tournament) throw new Error('tournament not found');
     const match = findMatch(tournament, input.matchId);
     if (!match) throw new Error('match not found');
-    const round = findRound(tournament, match.roundId);
-    if (!round) throw new Error('round not found');
-    const flow = round.flow;
+    const stage = findStageForMatch(tournament, match.id);
+    if (!stage) throw new Error('stage not found');
+    const flow = stage.flow;
 
     const kind = input.transport ?? match.transport;
     const transport = kind === 'irc' ? this.irc : this.hub;
@@ -482,42 +501,44 @@ export class ConnectionManager {
       );
     }
 
-    const beatmapId = match.initialBeatmapId ?? round.slots[0]?.beatmapId ?? null;
+    const beatmapId = match.initialBeatmapId ?? stage.slots[0]?.beatmapId ?? null;
     if (!beatmapId && kind === 'referee_hub') {
       throw new Error('the Referee Hub requires an initial beatmap; add one to the mappool');
     }
 
-    const teamOne = findTeam(tournament, match.teamOneId);
-    const teamTwo = findTeam(tournament, match.teamTwoId);
+    const participants = matchTeamIds(match);
+    const teamOne = findTeam(tournament, participants[0] ?? 0);
+    const teamTwo = findTeam(tournament, participants[1] ?? 0);
     const name = renderRoomName(match.roomNameTemplate, {
       tournament: tournament.name,
-      stage: round.name,
+      stage: stage.name,
       team_one: teamOne?.name ?? 'Team 1',
       team_two: teamTwo?.name ?? 'Team 2',
     });
-    // A tournament may list more than two teams (brackets do); the room is
-    // sized for the two teams playing this match, not for the whole bracket.
-    const roster = (teamOne?.members.length ?? 0) + (teamTwo?.members.length ?? 0);
-    const maxParticipants = roster === 0 ? 0 : Math.min(16, Math.max(2, roster));
+    const maxParticipants = Math.min(
+      16,
+      Math.max(2, tournament.teamSize * participants.length + 2),
+    );
 
     const snapshot = await transport.createRoom({
       name,
-      rulesetId: tournament.rulesetId,
+      rulesetId: resolveTournamentRuleset(tournament.mode, stage.slots),
       ...(beatmapId ? { beatmapId } : {}),
-      matchType: tournament.defaultMatchType,
+      matchType: match.roomMode,
       maxParticipants,
     });
 
-    const now = new Date().toISOString();
     return this.registerRoom({
       tournament,
       match,
-      flow,
-      bestOf: round.bestOf,
+      flow: match.type === 'lobby'
+        ? { id: `flow_${stage.id}`, name: stage.name, steps: [], triggers: [] }
+        : flow,
+      bestOf: stage.bestOf,
       kind,
       snapshot,
       configSnapshot: tournament,
-      });
+    });
   }
 
   /**
@@ -558,8 +579,9 @@ export class ConnectionManager {
       bestOf,
       referee: this.serverUser,
     });
-    const match = tournament.matches[0];
-    const flow = tournament.rounds[0]?.flow;
+    const stage = tournament.stages[0];
+    const match = stage?.matches[0];
+    const flow = stage?.flow;
     if (!match || !flow) throw new Error('failed to build the quick room configuration');
 
     const requested = Math.round(input.maxParticipants);
@@ -653,8 +675,9 @@ export class ConnectionManager {
       bestOf,
       referee: this.serverUser,
     });
-    const match = tournament.matches[0];
-    const flow = tournament.rounds[0]?.flow;
+    const stage = tournament.stages[0];
+    const match = stage?.matches[0];
+    const flow = stage?.flow;
     if (!match || !flow) throw new Error('failed to prepare the joined room');
     return this.registerRoom({
       tournament,
@@ -687,11 +710,13 @@ export class ConnectionManager {
         tournamentId: params.tournament.id,
         matchId: params.match.id,
         matchName: params.match.name,
-        teamOneId: params.match.teamOneId,
-        teamTwoId: params.match.teamTwoId,
+        matchKind: params.match.type,
+        participantIds: matchTeamIds(params.match).map(String),
+        teamOneId: String(matchTeamIds(params.match)[0] ?? 0),
+        teamTwoId: String(matchTeamIds(params.match)[1] ?? 0),
         tournamentRevision: params.tournament.revision,
-        rulesetId: params.tournament.rulesetId,
-        matchType: params.tournament.defaultMatchType,
+        rulesetId: resolveTournamentRuleset(params.tournament.mode, []),
+        matchType: params.match.roomMode,
         transport: params.kind,
         bestOf: params.bestOf,
         configSnapshot: params.configSnapshot,
@@ -830,6 +855,50 @@ export class ConnectionManager {
       this.emit({ type: 'room_snapshot', sessionId: session.id, snapshot });
     }
     this.appendEvent(session, 'manual_adjustment', 'playlist mods updated', input);
+  }
+
+  /**
+   * Lobby rooms select mappool beatmaps directly. There is no pick/ban flow and
+   * no score to record, so only the room map and the session's current beatmap
+   * change.
+   */
+  async selectBeatmap(input: { sessionId: string; slotLabel: string }): Promise<MatchSession> {
+    const session = this.requireSession(input.sessionId);
+    if (session.matchKind !== 'lobby') {
+      throw new Error('direct beatmap selection is only available for lobby fixtures');
+    }
+    const tournament = this.tournamentForSession(session);
+    if (!tournament) throw new Error('tournament not found');
+    const match = findMatch(tournament, session.matchId);
+    const stage = match ? findStageForMatch(tournament, match.id) : undefined;
+    const slot = stage ? findSlotByLabel(stage, input.slotLabel) : undefined;
+    if (!slot) throw new Error(`unknown mappool slot "${input.slotLabel}"`);
+
+    const transport = session.transport === 'irc' ? this.irc : this.hub;
+    if (transport && session.roomId) {
+      await transport.editBeatmap(session.roomId, {
+        beatmapId: slot.beatmapId,
+        rulesetId:
+          slot.rulesetId ?? resolveTournamentRuleset(tournament.mode, [slot]),
+        requiredMods: slot.requiredMods,
+        allowedMods: slot.allowedMods,
+        freestyle: slot.freestyle,
+      });
+    }
+
+    const next: MatchSession = {
+      ...session,
+      currentSlotLabel: slot.label,
+      currentBeatmapId: slot.beatmapId,
+      updatedAt: new Date().toISOString(),
+    };
+    this.persistSession(next);
+    this.appendEvent(next, 'beatmap_changed', `selected ${slot.label}`, {
+      slotLabel: slot.label,
+      beatmapId: slot.beatmapId,
+    });
+    this.emit({ type: 'session_updated', session: next });
+    return next;
   }
 
   async addPlaylistBeatmap(input: {
@@ -1002,7 +1071,7 @@ export class ConnectionManager {
       throw new Error('tournament not found');
     }
     const match = findMatch(tournament, session.matchId);
-    const pool = match ? findRound(tournament, match.roundId) : undefined;
+    const pool = match ? findStageForMatch(tournament, match.id) : undefined;
     const slot = pool ? findSlotByLabel(pool, input.slotLabel) : undefined;
     if (!slot) {
       const reason = `unknown mappool slot "${input.slotLabel}"`;
@@ -1037,7 +1106,7 @@ export class ConnectionManager {
       try {
         await transport?.editBeatmap(next.roomId, {
           beatmapId: slot.beatmapId,
-          rulesetId: slot.rulesetId,
+          rulesetId: slot.rulesetId ?? resolveTournamentRuleset(tournament.mode, [slot]),
           requiredMods: slot.requiredMods,
           allowedMods: slot.allowedMods,
           freestyle: slot.freestyle,
@@ -1073,9 +1142,9 @@ export class ConnectionManager {
     const tournament = this.tournamentForSession(session);
     if (!tournament) throw new Error('tournament not found');
     const match = findMatch(tournament, session.matchId);
-    const scoring = match ? findScoring(tournament, match.scoringId) : undefined;
+    const scoring = match ? findStageForMatch(tournament, match.id)?.scoringScheme : undefined;
     if (!scoring) throw new Error('scoring scheme not found');
-    const pool = match ? findRound(tournament, match.roundId) : undefined;
+    const pool = match ? findStageForMatch(tournament, match.id) : undefined;
     const slot = pool ? findSlotByLabel(pool, input.slotLabel) : undefined;
     const beatmapId = slot?.beatmapId ?? input.beatmapId ?? session.currentBeatmapId;
     if (!beatmapId) {
@@ -1086,7 +1155,7 @@ export class ConnectionManager {
     const isTeamVersus = (snapshot?.matchType ?? session.matchType) === 'team_versus';
     const rosterById = new Map<number, string>();
     for (const team of tournament.teams) {
-      for (const member of team.members) rosterById.set(member.userId, team.id);
+      for (const member of team.members) rosterById.set(member.userId, String(team.id));
     }
 
     const roomTeamById = new Map<number, 'red' | 'blue'>();
@@ -1165,17 +1234,51 @@ export class ConnectionManager {
     });
     if (next.status === 'finished') {
       this.runAutomation(tournament, next, 'match_finished');
+      this.syncMatchResult(tournament, next);
     }
 
     this.emit({ type: 'session_updated', session: next });
     return next;
   }
 
+  /** Writes a finished two-team match's map wins back into the tournament. */
+  private syncMatchResult(tournament: Tournament, session: MatchSession): void {
+    if (session.matchKind !== 'match') return;
+    const stage = findStageForMatch(tournament, session.matchId);
+    const match = stage?.matches.find((entry) => entry.id === session.matchId);
+    if (!stage || !match || match.type !== 'match') return;
+    const result = { scoreRed: session.wins.team_one, scoreBlue: session.wins.team_two };
+    if (match.result.scoreRed === result.scoreRed && match.result.scoreBlue === result.scoreBlue) {
+      return;
+    }
+    const next: Tournament = {
+      ...tournament,
+      stages: tournament.stages.map((entry) =>
+        entry.id !== stage.id
+          ? entry
+          : {
+              ...entry,
+              matches: entry.matches.map((fixture) =>
+                fixture.id !== match.id ? fixture : { ...fixture, result },
+              ),
+            },
+      ),
+    };
+    try {
+      this.store.saveTournament(next);
+      this.log('info', 'tournament', `synced result ${result.scoreRed}-${result.scoreBlue} for ${match.name}`);
+    } catch (error) {
+      this.log('warn', 'tournament', `could not sync match result: ${errorMessage(error)}`);
+    }
+  }
+
   async undo(sessionId: string): Promise<MatchSession> {
     const session = this.requireSession(sessionId);
+    const tournament = this.tournamentForSession(session);
     const next = undoLast(session, new Date().toISOString());
     this.persistSession(next);
     this.appendEvent(next, 'manual_adjustment', 'undo of the last action');
+    if (tournament) this.syncMatchResult(tournament, next);
     this.emit({ type: 'session_updated', session: next });
     return next;
   }
@@ -1524,8 +1627,8 @@ export class ConnectionManager {
     }
     const tournament = this.tournamentForSession(session);
     const match = tournament ? findMatch(tournament, session.matchId) : undefined;
-    const scoring = tournament && match ? findScoring(tournament, match.scoringId) : undefined;
-    const pool = tournament && match ? findRound(tournament, match.roundId) : undefined;
+    const scoring = tournament && match ? findStageForMatch(tournament, match.id)?.scoringScheme : undefined;
+    const pool = tournament && match ? findStageForMatch(tournament, match.id) : undefined;
     const slot = pool ? findSlotByLabel(pool, slotLabel) : undefined;
     if (!tournament || !scoring || !slot) {
       this.emiteSystemChat(session, 'cannot resolve the match configuration; enter the result manually');
@@ -1638,7 +1741,7 @@ export class ConnectionManager {
 
     const snapshot = this.snapshots.get(session.id) ?? null;
     const match = findMatch(tournament, session.matchId);
-    const pool = match ? findRound(tournament, match.roundId) : undefined;
+    const pool = match ? findStageForMatch(tournament, match.id) : undefined;
     const completed = snapshot?.playlist.find((entry) => entry.id === playlistItemId);
     const completedBeatmapId =
       completed?.beatmapId ?? snapshot?.currentBeatmapId ?? session.currentBeatmapId;
@@ -1730,7 +1833,7 @@ export class ConnectionManager {
     playlistItemId: string,
   ): string | null {
     const match = findMatch(tournament, session.matchId);
-    const pool = match ? findRound(tournament, match.roundId) : undefined;
+    const pool = match ? findStageForMatch(tournament, match.id) : undefined;
     const slot = pool ? findSlotByLabel(pool, slotLabel) : undefined;
     if (!slot) {
       return `the completed beatmap does not belong to slot ${slotLabel}; verify the result manually`;
@@ -1977,7 +2080,7 @@ export class ConnectionManager {
     const tournament = this.tournamentForSession(session);
     const snapshot = this.snapshots.get(sessionId) ?? null;
     const match = tournament ? findMatch(tournament, session.matchId) : undefined;
-    const pool = tournament && match ? findRound(tournament, match.roundId) : undefined;
+    const pool = tournament && match ? findStageForMatch(tournament, match.id) : undefined;
 
     const users = new Map<number, { userId: number; username: string }>();
     if (tournament) {
@@ -1986,8 +2089,14 @@ export class ConnectionManager {
           users.set(member.userId, { userId: member.userId, username: member.username });
         }
       }
-      for (const referee of tournament.referees) {
-        users.set(referee.userId, { userId: referee.userId, username: referee.username });
+      for (const userId of match?.refereeIds ?? []) {
+        users.set(
+          userId,
+          this.resolvedUsers.get(userId) ?? {
+            userId,
+            username: this.userNameCache.get(userId) ?? `#${userId}`,
+          },
+        );
       }
     }
     if (this.serverUser) users.set(this.serverUser.userId, this.serverUser);
@@ -2001,9 +2110,9 @@ export class ConnectionManager {
       room: snapshot,
       users: [...users.values()],
       self: this.serverUser,
-      defaultRulesetId: tournament?.rulesetId ?? 0,
+      defaultRulesetId: tournament ? resolveTournamentRuleset(tournament.mode, pool?.slots ?? []) : 0,
       defaultBeatmapId: match?.initialBeatmapId ?? pool?.slots[0]?.beatmapId ?? null,
-      defaultMatchType: tournament?.defaultMatchType ?? 'team_versus',
+      defaultMatchType: match?.roomMode ?? 'team_versus',
       defaultMaxParticipants: snapshot?.maxParticipants ?? 0,
       freemodPool: [...this.settings.get().freemodMods],
     };
@@ -2053,8 +2162,9 @@ export class ConnectionManager {
         bestOf,
         referee: this.serverUser,
       });
-      const match = tournament.matches[0];
-      const flow = tournament.rounds[0]?.flow;
+      const stage = tournament.stages[0];
+      const match = stage?.matches[0];
+      const flow = stage?.flow;
       if (!match || !flow) return null;
       const linked = await this.registerRoom({
         tournament,

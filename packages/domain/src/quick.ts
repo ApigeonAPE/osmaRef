@@ -2,9 +2,10 @@ import {
   TournamentSchema,
   type Match,
   type MatchFlow,
-  type Round,
   type ScoringScheme,
+  type Stage,
   type Tournament,
+  type TournamentMode,
   type TransportKind,
 } from '@osmaref/contracts';
 
@@ -19,6 +20,8 @@ export interface QuickRoomOptions {
   referee?: { userId: number; username: string } | null;
   now?: Date;
 }
+
+const RULESET_MODES: TournamentMode[] = ['osu', 'taiko', 'catch', 'mania'];
 
 /**
  * Builds the throw-away configuration behind a "quick room".
@@ -35,35 +38,13 @@ export function buildQuickTournament(options: QuickRoomOptions): Tournament {
   const matchType = options.matchType;
   const beatmapId =
     options.beatmapId && options.beatmapId > 0 ? Math.round(options.beatmapId) : null;
+  const mode = RULESET_MODES[options.rulesetId] ?? 'osu';
 
   const flow: MatchFlow = {
     id: 'flow_quick',
     name: 'Quick picks',
-    steps: [{ id: 'step_quick_pick', kind: 'pick', count: 10, side: 'both' }],
+    steps: [{ id: 'step_quick_pick', kind: 'pick', count: 10 }],
     triggers: [],
-  };
-  const round: Round = {
-    id: 'round_quick',
-    name: 'Quick room',
-    order: 0,
-    bestOf,
-    slots: beatmapId
-      ? [
-          {
-            id: 'slot_quick_nm1',
-            label: 'NM1',
-            category: 'NM',
-            beatmapId,
-            rulesetId: options.rulesetId,
-            requiredMods: [],
-            allowedMods: [],
-            freestyle: false,
-            winCondition: null,
-            winConditionWinner: null,
-          },
-        ]
-      : [],
-    flow,
   };
   const scoring: ScoringScheme = {
     id: 'score_quick',
@@ -74,33 +55,60 @@ export function buildQuickTournament(options: QuickRoomOptions): Tournament {
   };
   const match: Match = {
     id: 'match_quick',
+    type: 'match',
     name: options.name,
-    roundId: round.id,
-    teamOneId: 'team_one',
-    teamTwoId: 'team_two',
+    groupId: null,
+    teamRedId: 0,
+    teamBlueId: 1,
     refereeIds: options.referee ? [options.referee.userId] : [],
     transport: options.transport,
-    scoringId: scoring.id,
+    scheduledAt: now,
+    result: { scoreRed: 0, scoreBlue: 0 },
+    roomMode: matchType,
     roomNameTemplate: '{tournament}',
     initialBeatmapId: beatmapId,
-    scheduledAt: null,
+  };
+  const stage: Stage = {
+    id: 'stage_quick',
+    name: 'Quick room',
+    order: 0,
+    type: 'knockout',
+    groups: [],
+    bestOf,
+    slots: beatmapId
+      ? [
+          {
+            id: 'slot_quick_nm1',
+            label: 'NM1',
+            category: 'NM',
+            beatmapId,
+            rulesetId:
+              options.rulesetId >= 0 && options.rulesetId <= 3 ? options.rulesetId : null,
+            requiredMods: [],
+            allowedMods: [],
+            freestyle: false,
+            winCondition: null,
+            winConditionWinner: null,
+          },
+        ]
+      : [],
+    flow,
+    scoringScheme: scoring,
+    matches: [match],
   };
 
   const tournament: Tournament = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     id: `adhoc_${suffix}`,
     name: options.name,
     abbreviation: 'QUICK',
-    rulesetId: options.rulesetId,
-    defaultMatchType: matchType,
+    mode,
+    teamSize: 4,
     teams: [
-      { id: 'team_one', name: 'Team 1', members: [] },
-      { id: 'team_two', name: 'Team 2', members: [] },
+      { id: 0, name: 'Team 1', captainUserId: null, members: [], seed: null },
+      { id: 1, name: 'Team 2', captainUserId: null, members: [], seed: null },
     ],
-    referees: options.referee ? [options.referee] : [],
-    rounds: [round],
-    scoringSchemes: [scoring],
-    matches: [match],
+    stages: [stage],
     automation: [],
     revision: 1,
     createdAt: now,

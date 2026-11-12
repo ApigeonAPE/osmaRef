@@ -324,6 +324,11 @@ export const PlaylistModsInputSchema = z.object({
   freestyle: z.boolean(),
 });
 
+export const SelectBeatmapInputSchema = z.object({
+  sessionId: z.string().min(1).max(128),
+  slotLabel: z.string().min(1).max(12),
+});
+
 export const AddPlaylistBeatmapInputSchema = z.object({
   sessionId: z.string().min(1).max(128),
   beatmapId: z.number().int().positive(),
@@ -455,6 +460,7 @@ export interface DesktopApi {
       allowedMods: string[];
       freestyle: boolean;
     }): Promise<void>;
+    selectBeatmap(input: { sessionId: string; slotLabel: string }): Promise<MatchSession>;
     addPlaylistBeatmap(input: {
       sessionId: string;
       beatmapId: number;
@@ -535,6 +541,7 @@ export const IPC = {
   sessionsAdjustScore: 'sessions:adjust-score',
   sessionsSetFirstTeams: 'sessions:set-first-teams',
   sessionsSetPlaylistMods: 'sessions:set-playlist-mods',
+  sessionsSelectBeatmap: 'sessions:select-beatmap',
   sessionsAddPlaylistBeatmap: 'sessions:add-playlist-beatmap',
   sessionsRemovePlaylistBeatmap: 'sessions:remove-playlist-beatmap',
   sessionsInvitePlayer: 'sessions:invite-player',

@@ -6,11 +6,11 @@ import { z } from 'zod';
  * The configuration is deliberately declarative: no imported script may run.
  * Every rule (scoring, messaging) is data that the domain layer interprets.
  *
- * v2 folds stages, mappools and flows into self-contained rounds, because a
- * tournament round owns its own best-of, mappool and pick/ban procedure.
+ * v3 stores teams and tournament mode at the root, with stages owning groups,
+ * mappools, scoring, flows, and their lobby/match fixtures.
  */
 
-export const TOURNAMENT_SCHEMA_VERSION = 2 as const;
+export const TOURNAMENT_SCHEMA_VERSION = 3 as const;
 
 /**
  * Tournament ids are six random characters: digits plus lower-case letters
@@ -74,24 +74,60 @@ const TimestampSchema = z
   .refine((value) => !Number.isNaN(Date.parse(value)), {
     message: 'must be a parseable date-time string',
   });
+const UtcTimestampSchema = TimestampSchema.refine((value) => value.endsWith('Z'), {
+  message: 'must be a UTC timestamp ending in Z',
+});
 
 const IdSchema = z.string().min(1).max(128);
+
+export const TeamIdSchema = z.number().int().nonnegative();
+export type TeamId = z.infer<typeof TeamIdSchema>;
+
+/** Ruleset mode of a tournament. `osu` means each beatmap's native mode. */
+export const TOURNAMENT_MODES = ['osu', 'taiko', 'catch', 'mania', 'multi'] as const;
+export const TournamentModeSchema = z.enum(TOURNAMENT_MODES);
+export type TournamentMode = z.infer<typeof TournamentModeSchema>;
+
+/** Explicit map conversion mode; null means retain the beatmap's native mode. */
+export const RulesetOverrideSchema = RulesetIdSchema.nullable().default(null);
+export type RulesetOverride = z.infer<typeof RulesetOverrideSchema>;
 
 export const TeamMemberSchema = z.object({
   userId: z.number().int().positive(),
   /** Filled from the osu! API after entering the id; never required by hand. */
   username: z.string().max(64).default(''),
-  captain: z.boolean().default(false),
 });
 export type TeamMember = z.infer<typeof TeamMemberSchema>;
 
-/** Team colours are decided per match, not stored on the team. */
+/** Team colours are assigned to teamRed/teamBlue per match, not stored here. */
 export const TeamSchema = z.object({
-  id: IdSchema,
+  /** Stable zero-based id allocated when the team is created. */
+  id: TeamIdSchema,
   name: z.string().min(1).max(64),
+  captainUserId: z.number().int().positive().nullable().default(null),
   members: z.array(TeamMemberSchema).default([]),
+  seed: z.number().int().nonnegative().nullable().default(null),
 });
 export type Team = z.infer<typeof TeamSchema>;
+
+export const StageTypeSchema = z.enum(['group', 'knockout']);
+export type StageType = z.infer<typeof StageTypeSchema>;
+
+export const StageGroupSchema = z.object({
+  id: IdSchema,
+  name: z.string().min(1).max(64),
+  teamIds: z.array(TeamIdSchema).default([]),
+});
+export type StageGroup = z.infer<typeof StageGroupSchema>;
+
+export const MatchResultSchema = z.object({
+  scoreRed: z.number().int().nonnegative().default(0),
+  scoreBlue: z.number().int().nonnegative().default(0),
+});
+export type MatchResult = z.infer<typeof MatchResultSchema>;
+
+export const TournamentMatchTypeSchema = z.enum(['lobby', 'match']);
+export type TournamentMatchType = z.infer<typeof TournamentMatchTypeSchema>;
 
 export const RefereeSchema = z.object({
   userId: z.number().int().positive(),
@@ -101,15 +137,22 @@ export type Referee = z.infer<typeof RefereeSchema>;
 
 export const MappoolSlotSchema = z.object({
   id: IdSchema,
-  /** Human readable slot label such as `NM1`, `DT3`, `TB`. */
+  /**
+   * Human readable slot label such as `NM1`, `DT3`, `TB` or a mania key-count
+   * pool such as `4K1`. Labels are alphanumeric and must contain a letter.
+   */
   label: z
     .string()
     .min(1)
     .max(12)
-    .regex(/^[A-Za-z]{1,4}\d{0,2}$/, 'slot label must look like NM1, DT3 or TB'),
+    .regex(
+      /^(?=.*[A-Za-z])[A-Za-z0-9]{1,12}$/,
+      'slot label must be 1–12 letters/digits and contain a letter, e.g. NM1, 4K1 or TB',
+    ),
   category: MappoolCategorySchema,
   beatmapId: z.number().int().positive(),
-  rulesetId: RulesetIdSchema.default(0),
+  /** null selects the beatmap's native ruleset; otherwise this may request conversion. */
+  rulesetId: RulesetOverrideSchema,
   requiredMods: z.array(z.string().min(1).max(16)).default([]),
   allowedMods: z.array(z.string().min(1).max(16)).default([]),
   freestyle: z.boolean().default(false),
@@ -123,14 +166,15 @@ export type MappoolSlot = z.infer<typeof MappoolSlotSchema>;
 export const FlowStepKindSchema = z.enum(['protect', 'ban', 'pick']);
 export type FlowStepKind = z.infer<typeof FlowStepKindSchema>;
 
-export const FlowSideSchema = z.enum(['team_one', 'team_two', 'both']);
-export type FlowSide = z.infer<typeof FlowSideSchema>;
-
 export const FlowStepSchema = z.object({
   id: IdSchema,
   kind: FlowStepKindSchema,
+  /**
+   * Actions per team. Every step alternates the two teams, so `count: 1`
+   * means "one action each" ("one ban each", "one protect each", ...).
+   * Older files may still carry a `side` field; it is dropped on parse.
+   */
   count: z.number().int().min(1).max(10),
-  side: FlowSideSchema,
 });
 export type FlowStep = z.infer<typeof FlowStepSchema>;
 
@@ -153,21 +197,6 @@ export const MatchFlowSchema = z.object({
 });
 export type MatchFlow = z.infer<typeof MatchFlowSchema>;
 
-export const RoundSchema = z
-  .object({
-    id: IdSchema,
-    name: z.string().min(1).max(64),
-    order: z.number().int().min(0),
-    bestOf: z.number().int().min(1).max(31),
-    slots: z.array(MappoolSlotSchema).default([]),
-    flow: MatchFlowSchema,
-  })
-  .refine((round) => round.bestOf % 2 === 1, {
-    message: 'bestOf must be an odd number so a match cannot end in a tie',
-    path: ['bestOf'],
-  });
-export type Round = z.infer<typeof RoundSchema>;
-
 export const ScoringSchemeSchema = z.object({
   id: IdSchema,
   name: z.string().min(1).max(64),
@@ -179,6 +208,60 @@ export const ScoringSchemeSchema = z.object({
   note: z.string().max(500).optional(),
 });
 export type ScoringScheme = z.infer<typeof ScoringSchemeSchema>;
+
+const MatchBaseSchema = z.object({
+  id: IdSchema,
+  name: z.string().min(1).max(128),
+  /** Optional group membership for group-stage fixtures. */
+  groupId: IdSchema.nullable().default(null),
+  refereeIds: z.array(z.number().int().positive()).default([]),
+  transport: TransportKindSchema.default('irc'),
+  /** Required UTC timestamp. New matches are initialized to now. */
+  scheduledAt: UtcTimestampSchema,
+  /** Lobby retains a zero result for shape consistency but does not use it. */
+  result: MatchResultSchema.default({ scoreRed: 0, scoreBlue: 0 }),
+  roomNameTemplate: z
+    .string()
+    .min(1)
+    .max(160)
+    .default('{tournament}: ({team_one}) vs ({team_two})'),
+  initialBeatmapId: z.number().int().positive().nullable().default(null),
+  notes: z.string().max(1000).optional(),
+});
+
+export const MatchSchema = z.discriminatedUnion('type', [
+  MatchBaseSchema.extend({
+    type: z.literal('lobby'),
+    teamIds: z.array(TeamIdSchema).min(3),
+    roomMode: MatchTypeSchema.default('head_to_head'),
+  }),
+  MatchBaseSchema.extend({
+    type: z.literal('match'),
+    teamRedId: TeamIdSchema,
+    teamBlueId: TeamIdSchema,
+    roomMode: MatchTypeSchema.default('team_versus'),
+  }),
+]);
+export type Match = z.infer<typeof MatchSchema>;
+
+export const StageSchema = z
+  .object({
+    id: IdSchema,
+    name: z.string().min(1).max(64),
+    order: z.number().int().min(0),
+    type: StageTypeSchema,
+    groups: z.array(StageGroupSchema).default([]),
+    bestOf: z.number().int().min(1).max(31),
+    slots: z.array(MappoolSlotSchema).default([]),
+    flow: MatchFlowSchema,
+    scoringScheme: ScoringSchemeSchema,
+    matches: z.array(MatchSchema).default([]),
+  })
+  .refine((stage) => stage.bestOf % 2 === 1, {
+    message: 'bestOf must be an odd number so a match cannot end in a tie',
+    path: ['bestOf'],
+  });
+export type Stage = z.infer<typeof StageSchema>;
 
 export const AutomationTriggerSchema = z.enum([
   'match_created',
@@ -212,26 +295,6 @@ export const AutomationRuleSchema = z.object({
 });
 export type AutomationRule = z.infer<typeof AutomationRuleSchema>;
 
-export const MatchSchema = z.object({
-  id: IdSchema,
-  name: z.string().min(1).max(128),
-  roundId: IdSchema,
-  teamOneId: IdSchema,
-  teamTwoId: IdSchema,
-  refereeIds: z.array(z.number().int().positive()).default([]),
-  transport: TransportKindSchema.default('irc'),
-  scoringId: IdSchema,
-  roomNameTemplate: z
-    .string()
-    .min(1)
-    .max(160)
-    .default('{tournament}: ({team_one}) vs ({team_two})'),
-  initialBeatmapId: z.number().int().positive().nullable().default(null),
-  scheduledAt: TimestampSchema.nullable().default(null),
-  notes: z.string().max(1000).optional(),
-});
-export type Match = z.infer<typeof MatchSchema>;
-
 export const TournamentSourceSchema = z.object({
   provider: z.enum(['file', 'http']),
   remoteId: z.string().min(1),
@@ -262,13 +325,11 @@ export const TournamentSchema = z
       .refine((value) => value.length <= ABBREVIATION_MAX_LENGTH, {
         message: `abbreviation must be at most ${ABBREVIATION_MAX_LENGTH} characters`,
       }),
-    rulesetId: RulesetIdSchema.default(0),
-    defaultMatchType: MatchTypeSchema.default('team_versus'),
+    mode: TournamentModeSchema.default('osu'),
+    /** Expected players per team in an actual match; roster length is independent. */
+    teamSize: z.number().int().min(1).max(16).default(4),
     teams: z.array(TeamSchema).default([]),
-    referees: z.array(RefereeSchema).default([]),
-    rounds: z.array(RoundSchema).default([]),
-    scoringSchemes: z.array(ScoringSchemeSchema).default([]),
-    matches: z.array(MatchSchema).default([]),
+    stages: z.array(StageSchema).default([]),
     automation: z.array(AutomationRuleSchema).default([]),
     revision: z.number().int().min(1).default(1),
     createdAt: TimestampSchema,
@@ -296,19 +357,13 @@ export interface ValidationIssue {
  * Kept exported so the UI can show a checklist instead of only failing on save.
  */
 export function validateTournamentReferences(
-  tournament: Pick<
-    Tournament,
-    'teams' | 'rounds' | 'scoringSchemes' | 'matches' | 'referees'
-  >,
+  tournament: Pick<Tournament, 'teams' | 'stages'>,
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-  const teamIds = new Set<string>();
+  const teamIds = new Set<TeamId>();
   tournament.teams.forEach((team, index) => {
     if (teamIds.has(team.id)) {
-      issues.push({
-        path: ['teams', index, 'id'],
-        message: `duplicate team id "${team.id}"`,
-      });
+      issues.push({ path: ['teams', index, 'id'], message: `duplicate team id "${team.id}"` });
     }
     teamIds.add(team.id);
     const memberIds = new Set<number>();
@@ -321,50 +376,84 @@ export function validateTournamentReferences(
       }
       memberIds.add(member.userId);
     });
-  });
-
-  // A tournament may hold more than two teams (imported brackets do), because
-  // every match names its own two sides; a single match still only uses two.
-
-  const roundIds = new Set<string>();
-  const scoringIds = new Set(tournament.scoringSchemes.map((scheme) => scheme.id));
-
-  tournament.rounds.forEach((round, roundIndex) => {
-    if (roundIds.has(round.id)) {
+    if (team.captainUserId !== null && !memberIds.has(team.captainUserId)) {
       issues.push({
-        path: ['rounds', roundIndex, 'id'],
-        message: `duplicate round id "${round.id}"`,
+        path: ['teams', index, 'captainUserId'],
+        message: `captain ${team.captainUserId} is not a member of team "${team.name}"`,
       });
     }
-    roundIds.add(round.id);
+  });
+
+  const stageIds = new Set<string>();
+  const matchIds = new Set<string>();
+  tournament.stages.forEach((stage, stageIndex) => {
+    const stagePath = ['stages', stageIndex] as (string | number)[];
+    if (stageIds.has(stage.id)) {
+      issues.push({ path: [...stagePath, 'id'], message: `duplicate stage id "${stage.id}"` });
+    }
+    stageIds.add(stage.id);
+
+    const groupIds = new Set<string>();
+    const assignedTeams = new Set<TeamId>();
+    stage.groups.forEach((group, groupIndex) => {
+      const groupPath = [...stagePath, 'groups', groupIndex];
+      if (groupIds.has(group.id)) {
+        issues.push({ path: [...groupPath, 'id'], message: `duplicate group id "${group.id}"` });
+      }
+      groupIds.add(group.id);
+      const localTeamIds = new Set<TeamId>();
+      group.teamIds.forEach((teamId, teamIndex) => {
+        if (!teamIds.has(teamId)) {
+          issues.push({
+            path: [...groupPath, 'teamIds', teamIndex],
+            message: `group "${group.name}" references unknown team ${teamId}`,
+          });
+        }
+        if (localTeamIds.has(teamId)) {
+          issues.push({
+            path: [...groupPath, 'teamIds', teamIndex],
+            message: `team ${teamId} appears twice in group "${group.name}"`,
+          });
+        }
+        if (assignedTeams.has(teamId)) {
+          issues.push({
+            path: [...groupPath, 'teamIds', teamIndex],
+            message: `team ${teamId} is assigned to multiple groups in stage "${stage.name}"`,
+          });
+        }
+        localTeamIds.add(teamId);
+        assignedTeams.add(teamId);
+      });
+    });
 
     const labels = new Set<string>();
     const beatmaps = new Set<number>();
-    round.slots.forEach((slot, slotIndex) => {
+    stage.slots.forEach((slot, slotIndex) => {
+      const slotPath = [...stagePath, 'slots', slotIndex];
       const label = normalizeSlotLabel(slot.label);
       if (labels.has(label)) {
         issues.push({
-          path: ['rounds', roundIndex, 'slots', slotIndex, 'label'],
-          message: `duplicate slot label "${slot.label}" in round "${round.name}"`,
+          path: [...slotPath, 'label'],
+          message: `duplicate slot label "${slot.label}" in stage "${stage.name}"`,
         });
       }
       labels.add(label);
       if (beatmaps.has(slot.beatmapId)) {
         issues.push({
-          path: ['rounds', roundIndex, 'slots', slotIndex, 'beatmapId'],
-          message: `beatmap ${slot.beatmapId} appears twice in round "${round.name}"`,
+          path: [...slotPath, 'beatmapId'],
+          message: `beatmap ${slot.beatmapId} appears twice in stage "${stage.name}"`,
         });
       }
       beatmaps.add(slot.beatmapId);
       if (slot.freestyle && slot.allowedMods.length > 0) {
         issues.push({
-          path: ['rounds', roundIndex, 'slots', slotIndex, 'allowedMods'],
+          path: [...slotPath, 'allowedMods'],
           message: 'freestyle slots cannot also declare allowed mods',
         });
       }
       if (slot.category === 'TB' && label !== 'TB') {
         issues.push({
-          path: ['rounds', roundIndex, 'slots', slotIndex, 'label'],
+          path: [...slotPath, 'label'],
           message: 'tiebreaker slots must use the TB label',
         });
       }
@@ -377,80 +466,90 @@ export function validateTournamentReferences(
       const alternatives = expectedMods[slot.category];
       if (alternatives && !alternatives.some((mod) => required.has(mod))) {
         issues.push({
-          path: ['rounds', roundIndex, 'slots', slotIndex, 'requiredMods'],
+          path: [...slotPath, 'requiredMods'],
           message: `category ${slot.category} requires one of ${alternatives.join('/')} in required mods`,
         });
       }
       if (slot.category === 'NM' && required.size > 0) {
         issues.push({
-          path: ['rounds', roundIndex, 'slots', slotIndex, 'requiredMods'],
+          path: [...slotPath, 'requiredMods'],
           message: 'NM slots cannot declare required mods',
         });
       }
       if (slot.category === 'FM' && !slot.freestyle && slot.allowedMods.length === 0) {
-        issues.push({
-          path: ['rounds', roundIndex, 'slots', slotIndex],
-          message: 'FM slots must be freestyle or declare allowed mods',
-        });
+        issues.push({ path: slotPath, message: 'FM slots must be freestyle or declare allowed mods' });
       }
     });
 
-    round.flow.triggers.forEach((trigger, triggerIndex) => {
-      if (trigger.threshold > round.bestOf) {
+    stage.flow.triggers.forEach((trigger, triggerIndex) => {
+      if (trigger.threshold > stage.bestOf) {
         issues.push({
-          path: ['rounds', roundIndex, 'flow', 'triggers', triggerIndex, 'threshold'],
-          message: 'trigger threshold cannot exceed the round best-of',
+          path: [...stagePath, 'flow', 'triggers', triggerIndex, 'threshold'],
+          message: 'trigger threshold cannot exceed the stage best-of',
         });
       }
     });
-  });
-
-  tournament.scoringSchemes.forEach((scheme, index) => {
-    for (const [mod, multiplier] of Object.entries(scheme.modMultipliers)) {
+    for (const [mod, multiplier] of Object.entries(stage.scoringScheme.modMultipliers)) {
       if (!Number.isFinite(multiplier) || multiplier <= 0) {
         issues.push({
-          path: ['scoringSchemes', index, 'modMultipliers', mod],
+          path: [...stagePath, 'scoringScheme', 'modMultipliers', mod],
           message: 'multiplier must be a positive finite number',
         });
       }
     }
-  });
 
-  tournament.matches.forEach((match, index) => {
-    if (!roundIds.has(match.roundId)) {
-      issues.push({
-        path: ['matches', index, 'roundId'],
-        message: `unknown round "${match.roundId}"`,
+    stage.matches.forEach((match, matchIndex) => {
+      const matchPath = [...stagePath, 'matches', matchIndex];
+      if (matchIds.has(match.id)) {
+        issues.push({ path: [...matchPath, 'id'], message: `duplicate match id "${match.id}"` });
+      }
+      matchIds.add(match.id);
+      if (match.groupId !== null && !groupIds.has(match.groupId)) {
+        issues.push({
+          path: [...matchPath, 'groupId'],
+          message: `unknown group "${match.groupId}" in stage "${stage.name}"`,
+        });
+      }
+      const participants = match.type === 'match'
+        ? [match.teamRedId, match.teamBlueId]
+        : match.teamIds;
+      const participantIds = new Set<TeamId>();
+      participants.forEach((teamId, teamIndex) => {
+        if (!teamIds.has(teamId)) {
+          issues.push({
+            path: match.type === 'match'
+              ? [...matchPath, teamIndex === 0 ? 'teamRedId' : 'teamBlueId']
+              : [...matchPath, 'teamIds', teamIndex],
+            message: `match "${match.name}" references unknown team ${teamId}`,
+          });
+        }
+        if (participantIds.has(teamId)) {
+          issues.push({
+            path: match.type === 'match' ? matchPath : [...matchPath, 'teamIds', teamIndex],
+            message: `team ${teamId} appears more than once in match "${match.name}"`,
+          });
+        }
+        participantIds.add(teamId);
       });
-    }
-    if (!teamIds.has(match.teamOneId) || !teamIds.has(match.teamTwoId)) {
-      issues.push({
-        path: ['matches', index],
-        message: 'match references an unknown team',
-      });
-    }
-    if (match.teamOneId === match.teamTwoId) {
-      issues.push({
-        path: ['matches', index],
-        message: 'a match cannot use the same team on both sides',
-      });
-    }
-    if (!scoringIds.has(match.scoringId)) {
-      issues.push({
-        path: ['matches', index, 'scoringId'],
-        message: `unknown scoring scheme "${match.scoringId}"`,
-      });
-    }
+      if (match.groupId !== null) {
+        const group = stage.groups.find((entry) => entry.id === match.groupId);
+        if (group && participants.some((teamId) => !group.teamIds.includes(teamId))) {
+          issues.push({
+            path: [...matchPath, 'groupId'],
+            message: `match "${match.name}" includes a team outside group "${group.name}"`,
+          });
+        }
+      }
+    });
   });
 
   return issues;
 }
-
 export function normalizeSlotLabel(label: string): string {
   return label.trim().toUpperCase();
 }
 
-export const SLOT_LABEL_PATTERN = /^[A-Z]{2,4}\d{0,2}$/;
+export const SLOT_LABEL_PATTERN = /^(?=.*[A-Za-z])[A-Za-z0-9]{1,12}$/;
 
 export const DEFAULT_FREEMOD_POOL = [
   'HD',
@@ -498,125 +597,58 @@ export function parseTournament(input: unknown) {
 
 export function migrateTournament(input: unknown): unknown {
   if (!isRecord(input)) return input;
-  // Older versions allowed longer, mixed-case abbreviations; normalise before
-  // validation so stored tournaments keep loading instead of being dropped.
-  const source =
-    typeof input.abbreviation === 'string'
-      ? { ...input, abbreviation: normalizeAbbreviation(input.abbreviation) }
-      : input;
-  if (source.schemaVersion === TOURNAMENT_SCHEMA_VERSION || Array.isArray(source.rounds)) {
-    return source;
-  }
-
-  const stages = Array.isArray(source.stages) ? source.stages : [];
-  const mappools = Array.isArray(source.mappools) ? source.mappools : [];
-  const flows = Array.isArray(source.flows) ? source.flows : [];
-  const matches = Array.isArray(source.matches) ? source.matches : [];
-
-  const rounds = stages.map((rawStage, index) => {
-    const stage = isRecord(rawStage) ? rawStage : {};
-    const stageId = typeof stage.id === 'string' ? stage.id : `round_${index + 1}`;
-    const pool = mappools.find(
-      (candidate) => isRecord(candidate) && candidate.id === stage.mappoolId,
-    );
-    const matchForStage = matches.find(
-      (candidate) => isRecord(candidate) && candidate.stageId === stageId,
-    );
-    const flow =
-      flows.find(
-        (candidate) =>
-          isRecord(candidate) &&
-          isRecord(matchForStage) &&
-          candidate.id === matchForStage.flowId,
-      ) ??
-      flows[0] ??
-      defaultFlow(stageId);
-    return {
-      id: stageId,
-      name: typeof stage.name === 'string' ? stage.name : `Round ${index + 1}`,
-      order: typeof stage.order === 'number' ? stage.order : index,
-      bestOf: typeof stage.bestOf === 'number' ? stage.bestOf : 9,
-      slots: isRecord(pool) && Array.isArray(pool.slots) ? pool.slots : [],
-      flow,
-    };
-  });
-
-  const teams = (Array.isArray(source.teams) ? source.teams : []).map((rawTeam) => {
-    if (!isRecord(rawTeam)) return rawTeam;
-    const { color: _color, ...team } = rawTeam;
-    return team;
-  });
-
-  const migratedMatches = matches.map((rawMatch) => {
-    if (!isRecord(rawMatch)) return rawMatch;
-    const { stageId, mappoolId: _mappoolId, flowId: _flowId, ...rest } = rawMatch;
-    return { ...rest, roundId: rest.roundId ?? stageId };
-  });
-
+  if (input.schemaVersion !== TOURNAMENT_SCHEMA_VERSION) return input;
   return {
-    ...source,
-    schemaVersion: TOURNAMENT_SCHEMA_VERSION,
-    teams,
-    rounds,
-    matches: migratedMatches,
+    ...input,
+    abbreviation:
+      typeof input.abbreviation === 'string'
+        ? normalizeAbbreviation(input.abbreviation)
+        : input.abbreviation,
   };
 }
-
-function defaultFlow(roundId: string): MatchFlow {
-  return {
-    id: `flow_${roundId}`,
-    name: 'Default flow',
-    steps: [
-      { id: `step_ban_${roundId}`, kind: 'ban', count: 1, side: 'both' },
-      { id: `step_pick_${roundId}`, kind: 'pick', count: 10, side: 'both' },
-    ],
-    triggers: [],
-  };
-}
-
 export function createEmptyTournament(name: string, now = new Date()): Tournament {
   const timestamp = now.toISOString();
+  const scoringScheme: ScoringScheme = {
+    id: 'score_default',
+    name: 'Score V2',
+    winCondition: 'score_v2',
+    aggregation: 'sum',
+    modMultipliers: {},
+  };
   return {
     schemaVersion: TOURNAMENT_SCHEMA_VERSION,
     id: createTournamentId(),
     name,
     abbreviation: normalizeAbbreviation(name) || 'TOURNAMENT',
-    rulesetId: 0,
-    defaultMatchType: 'team_versus',
+    mode: 'osu',
+    teamSize: 4,
     teams: [
-      { id: 'team_one', name: 'Team 1', members: [] },
-      { id: 'team_two', name: 'Team 2', members: [] },
+      { id: 0, name: 'Team 1', captainUserId: null, members: [], seed: null },
+      { id: 1, name: 'Team 2', captainUserId: null, members: [], seed: null },
     ],
-    referees: [],
-    rounds: [
+    stages: [
       {
-        id: 'round_1',
-        name: 'Round 1',
+        id: 'stage_1',
+        name: 'Stage 1',
         order: 0,
+        type: 'knockout',
+        groups: [],
         bestOf: 9,
         slots: [],
         flow: {
-          id: 'flow_round_1',
+          id: 'flow_stage_1',
           name: 'Protect, ban, pick',
           steps: [
-            { id: 'step_protect', kind: 'protect', count: 1, side: 'both' },
-            { id: 'step_ban', kind: 'ban', count: 1, side: 'both' },
-            { id: 'step_pick', kind: 'pick', count: 10, side: 'both' },
+            { id: 'step_protect', kind: 'protect', count: 1 },
+            { id: 'step_ban', kind: 'ban', count: 1 },
+            { id: 'step_pick', kind: 'pick', count: 10 },
           ],
           triggers: [],
         },
+        scoringScheme,
+        matches: [],
       },
     ],
-    scoringSchemes: [
-      {
-        id: 'score_default',
-        name: 'Score V2',
-        winCondition: 'score_v2',
-        aggregation: 'sum',
-        modMultipliers: {},
-      },
-    ],
-    matches: [],
     automation: [],
     revision: 1,
     createdAt: timestamp,
@@ -633,31 +665,44 @@ export function slugify(value: string): string {
     .slice(0, 40);
 }
 
-export function findRound(tournament: Tournament, roundId: string): Round | undefined {
-  return tournament.rounds.find((round) => round.id === roundId);
+/** Source alias retained while downstream modules move from rounds to stages. */
+export type Round = Stage;
+
+export function findStage(tournament: Tournament, stageId: string): Stage | undefined {
+  return tournament.stages.find((stage) => stage.id === stageId);
 }
 
-export function findScoring(
-  tournament: Tournament,
-  scoringId: string,
-): ScoringScheme | undefined {
-  return tournament.scoringSchemes.find((scheme) => scheme.id === scoringId);
+/** @deprecated Use findStage. */
+export const findRound = findStage;
+
+export function findScoring(tournament: Tournament, stageId: string): ScoringScheme | undefined {
+  return findStage(tournament, stageId)?.scoringScheme;
 }
 
 export function findMatch(tournament: Tournament, matchId: string): Match | undefined {
-  return tournament.matches.find((match) => match.id === matchId);
+  return tournament.stages.flatMap((stage) => stage.matches).find((match) => match.id === matchId);
 }
 
-export function findTeam(tournament: Tournament, teamId: string): Team | undefined {
-  return tournament.teams.find((team) => team.id === teamId);
+export function findStageForMatch(tournament: Tournament, matchId: string): Stage | undefined {
+  return tournament.stages.find((stage) => stage.matches.some((match) => match.id === matchId));
+}
+
+export function matchTeamIds(match: Match): TeamId[] {
+  return match.type === 'match' ? [match.teamRedId, match.teamBlueId] : match.teamIds;
+}
+
+export function findTeam(tournament: Tournament, teamId: TeamId | string): Team | undefined {
+  const id = typeof teamId === 'string' ? Number(teamId) : teamId;
+  if (!Number.isInteger(id)) return undefined;
+  return tournament.teams.find((team) => team.id === id);
 }
 
 export function findSlotByLabel(
-  round: { slots: MappoolSlot[] },
+  stage: { slots: MappoolSlot[] },
   label: string,
 ): MappoolSlot | undefined {
   const normalized = normalizeSlotLabel(label);
-  return round.slots.find((slot) => normalizeSlotLabel(slot.label) === normalized);
+  return stage.slots.find((slot) => normalizeSlotLabel(slot.label) === normalized);
 }
 
 export function allParticipants(tournament: Tournament): TeamMember[] {

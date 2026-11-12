@@ -1,152 +1,143 @@
 {
-  "schemaVersion": 2,
-  "id": "eejd85",
+  "schemaVersion": 3,
+  "id": "1bntww",
   "name": "bracket",
   "abbreviation": "BRACKET",
-  "rulesetId": 3,
-  "defaultMatchType": "team_versus",
+  "mode": "mania",
+  "teamSize": 4,
   "teams": [
     {
-      "id": "team_tfs",
+      "id": 0,
       "name": "Team Falcoms",
+      "captainUserId": null,
       "members": [
         {
           "userId": 32739668,
-          "username": "AkizukiKanna225",
-          "captain": false
+          "username": "AkizukiKanna225"
         },
         {
           "userId": 30174043,
-          "username": "Sikari_Fracture",
-          "captain": false
+          "username": "Sikari_Fracture"
         },
         {
           "userId": 34215813,
-          "username": "linjiu09",
-          "captain": false
+          "username": "linjiu09"
         },
         {
           "userId": 39243177,
-          "username": "Fareeda030",
-          "captain": false
+          "username": "Fareeda030"
         }
-      ]
+      ],
+      "seed": 1
     },
     {
-      "id": "team_idk",
+      "id": 1,
       "name": "我不到啊",
+      "captainUserId": null,
       "members": [
         {
           "userId": 14502713,
-          "username": "Ph4nt0mx",
-          "captain": false
+          "username": "Ph4nt0mx"
         },
         {
           "userId": 15889545,
-          "username": "chenziao",
-          "captain": false
+          "username": "chenziao"
         },
         {
           "userId": 37668413,
-          "username": "STARROAD",
-          "captain": false
+          "username": "STARROAD"
         },
         {
           "userId": 36148388,
-          "username": "zxingtsai",
-          "captain": false
+          "username": "zxingtsai"
         }
-      ]
+      ],
+      "seed": 2
     },
     {
-      "id": "team_xkt",
+      "id": 2,
       "name": "插奈特幼儿园",
+      "captainUserId": null,
       "members": [
         {
           "userId": 20126778,
-          "username": "adzuki",
-          "captain": false
+          "username": "adzuki"
         },
         {
           "userId": 38607428,
-          "username": "cminusa",
-          "captain": false
+          "username": "cminusa"
         },
         {
           "userId": 16424668,
-          "username": "Tianzyu",
-          "captain": false
+          "username": "Tianzyu"
         },
         {
           "userId": 38902659,
-          "username": "Yumekui",
-          "captain": false
+          "username": "Yumekui"
         }
-      ]
+      ],
+      "seed": 3
     },
     {
-      "id": "team_smw",
+      "id": 3,
       "name": "白毛红瞳双马尾",
+      "captainUserId": null,
       "members": [
         {
           "userId": 12031289,
-          "username": "beta dust",
-          "captain": false
+          "username": "beta dust"
         },
         {
           "userId": 38271402,
-          "username": "kasanagi",
-          "captain": false
+          "username": "kasanagi"
         },
         {
           "userId": 37803200,
-          "username": "NiJiKa11",
-          "captain": false
+          "username": "NiJiKa11"
         },
         {
           "userId": 37941525,
-          "username": "Lingyan",
-          "captain": false
+          "username": "Lingyan"
         }
-      ]
+      ],
+      "seed": 4
     },
     {
-      "id": "team_stf",
+      "id": 4,
       "name": "巧克甜恋",
+      "captainUserId": null,
       "members": [
         {
           "userId": 34455976,
-          "username": "[Crz]weweqe",
-          "captain": false
+          "username": "[Crz]weweqe"
         },
         {
           "userId": 18468376,
-          "username": "Cornet",
-          "captain": false
+          "username": "Cornet"
         },
         {
           "userId": 20425841,
-          "username": "Suzurin",
-          "captain": false
+          "username": "Suzurin"
         },
         {
           "userId": 32541500,
-          "username": "Kamiina Botan",
-          "captain": false
+          "username": "Kamiina Botan"
         }
-      ]
+      ],
+      "seed": 0
     }
   ],
-  "referees": [],
-  "rounds": [
+  "stages": [
     {
-      "id": "round_1",
+      "id": "stage_1",
       "name": "资格赛",
       "order": 0,
+      "type": "knockout",
+      "groups": [],
       "bestOf": 5,
       "slots": [
         {
-          "id": "round_1_hb1",
+          "id": "stage_1_hb1",
           "label": "HB1",
           "category": "HB",
           "beatmapId": 3958820,
@@ -158,7 +149,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_1_hb2",
+          "id": "stage_1_hb2",
           "label": "HB2",
           "category": "HB",
           "beatmapId": 3610288,
@@ -170,7 +161,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_1_ln1",
+          "id": "stage_1_ln1",
           "label": "LN1",
           "category": "LN",
           "beatmapId": 5881754,
@@ -182,7 +173,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_1_ln2",
+          "id": "stage_1_ln2",
           "label": "LN2",
           "category": "LN",
           "beatmapId": 4986115,
@@ -194,7 +185,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_1_rc1",
+          "id": "stage_1_rc1",
           "label": "RC1",
           "category": "RC",
           "beatmapId": 5363577,
@@ -206,7 +197,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_1_rc2",
+          "id": "stage_1_rc2",
           "label": "RC2",
           "category": "RC",
           "beatmapId": 4373685,
@@ -218,7 +209,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_1_rc3",
+          "id": "stage_1_rc3",
           "label": "RC3",
           "category": "RC",
           "beatmapId": 5036665,
@@ -230,7 +221,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_1_sv1",
+          "id": "stage_1_sv1",
           "label": "SV1",
           "category": "SV",
           "beatmapId": 5776110,
@@ -243,33 +234,41 @@
         }
       ],
       "flow": {
-        "id": "flow_round_1",
+        "id": "flow_stage_1",
         "name": "资格赛 flow",
         "steps": [
           {
-            "id": "step_ban_round_1",
+            "id": "step_ban_stage_1",
             "kind": "ban",
-            "count": 1,
-            "side": "both"
+            "count": 1
           },
           {
-            "id": "step_pick_round_1",
+            "id": "step_pick_stage_1",
             "kind": "pick",
-            "count": 3,
-            "side": "both"
+            "count": 3
           }
         ],
         "triggers": []
-      }
+      },
+      "scoringScheme": {
+        "id": "score_stage_1",
+        "name": "Score V2",
+        "winCondition": "score_v2",
+        "aggregation": "sum",
+        "modMultipliers": {}
+      },
+      "matches": []
     },
     {
-      "id": "round_2",
+      "id": "stage_2",
       "name": "半决赛",
       "order": 1,
+      "type": "knockout",
+      "groups": [],
       "bestOf": 9,
       "slots": [
         {
-          "id": "round_2_ac1",
+          "id": "stage_2_ac1",
           "label": "AC1",
           "category": "AC",
           "beatmapId": 3273376,
@@ -281,7 +280,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_2_hb1",
+          "id": "stage_2_hb1",
           "label": "HB1",
           "category": "HB",
           "beatmapId": 4954309,
@@ -293,7 +292,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_2_hb2",
+          "id": "stage_2_hb2",
           "label": "HB2",
           "category": "HB",
           "beatmapId": 4141642,
@@ -305,7 +304,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_2_ln1",
+          "id": "stage_2_ln1",
           "label": "LN1",
           "category": "LN",
           "beatmapId": 4798172,
@@ -317,7 +316,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_2_ln2",
+          "id": "stage_2_ln2",
           "label": "LN2",
           "category": "LN",
           "beatmapId": 4954287,
@@ -329,7 +328,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_2_rc1",
+          "id": "stage_2_rc1",
           "label": "RC1",
           "category": "RC",
           "beatmapId": 4368305,
@@ -341,7 +340,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_2_rc2",
+          "id": "stage_2_rc2",
           "label": "RC2",
           "category": "RC",
           "beatmapId": 4333065,
@@ -353,7 +352,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_2_rc3",
+          "id": "stage_2_rc3",
           "label": "RC3",
           "category": "RC",
           "beatmapId": 5187408,
@@ -365,7 +364,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_2_rc4",
+          "id": "stage_2_rc4",
           "label": "RC4",
           "category": "RC",
           "beatmapId": 5211828,
@@ -377,7 +376,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_2_rc5",
+          "id": "stage_2_rc5",
           "label": "RC5",
           "category": "RC",
           "beatmapId": 4369837,
@@ -389,7 +388,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_2_rc6",
+          "id": "stage_2_rc6",
           "label": "RC6",
           "category": "RC",
           "beatmapId": 3760855,
@@ -401,7 +400,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_2_sv1",
+          "id": "stage_2_sv1",
           "label": "SV1",
           "category": "SV",
           "beatmapId": 3207557,
@@ -413,7 +412,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_2_tb",
+          "id": "stage_2_tb",
           "label": "TB",
           "category": "TB",
           "beatmapId": 4692822,
@@ -426,33 +425,80 @@
         }
       ],
       "flow": {
-        "id": "flow_round_2",
+        "id": "flow_stage_2",
         "name": "半决赛 flow",
         "steps": [
           {
-            "id": "step_ban_round_2",
+            "id": "step_ban_stage_2",
             "kind": "ban",
-            "count": 1,
-            "side": "both"
+            "count": 1
           },
           {
-            "id": "step_pick_round_2",
+            "id": "step_pick_stage_2",
             "kind": "pick",
-            "count": 5,
-            "side": "both"
+            "count": 5
           }
         ],
         "triggers": []
-      }
+      },
+      "scoringScheme": {
+        "id": "score_stage_2",
+        "name": "Score V2",
+        "winCondition": "score_v2",
+        "aggregation": "sum",
+        "modMultipliers": {}
+      },
+      "matches": [
+        {
+          "id": "match_1",
+          "name": "Team Falcoms vs 白毛红瞳双马尾",
+          "groupId": null,
+          "refereeIds": [],
+          "transport": "irc",
+          "scheduledAt": "2026-10-17T13:00:00.000Z",
+          "result": {
+            "scoreRed": 2,
+            "scoreBlue": 5
+          },
+          "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
+          "initialBeatmapId": 3273376,
+          "notes": "osu! bracket match #1 · score 2-5 · completed · winners bracket",
+          "type": "match",
+          "teamRedId": 0,
+          "teamBlueId": 3,
+          "roomMode": "team_versus"
+        },
+        {
+          "id": "match_4",
+          "name": "我不到啊 vs 插奈特幼儿园",
+          "groupId": null,
+          "refereeIds": [],
+          "transport": "irc",
+          "scheduledAt": "2026-10-18T12:00:00.000Z",
+          "result": {
+            "scoreRed": 5,
+            "scoreBlue": 3
+          },
+          "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
+          "initialBeatmapId": 3273376,
+          "notes": "osu! bracket match #4 · score 5-3 · completed · winners bracket",
+          "type": "match",
+          "teamRedId": 1,
+          "teamBlueId": 2,
+          "roomMode": "team_versus"
+        }
+      ]
     },
     {
-      "id": "round_3",
+      "id": "stage_3",
       "name": "决赛",
       "order": 2,
+      "type": "knockout",
+      "groups": [],
       "bestOf": 11,
       "slots": [
         {
-          "id": "round_3_ac1",
+          "id": "stage_3_ac1",
           "label": "AC1",
           "category": "AC",
           "beatmapId": 3105666,
@@ -464,7 +510,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_3_ac2",
+          "id": "stage_3_ac2",
           "label": "AC2",
           "category": "AC",
           "beatmapId": 4262161,
@@ -476,7 +522,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_3_hb1",
+          "id": "stage_3_hb1",
           "label": "HB1",
           "category": "HB",
           "beatmapId": 3871106,
@@ -488,7 +534,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_3_hb2",
+          "id": "stage_3_hb2",
           "label": "HB2",
           "category": "HB",
           "beatmapId": 3402879,
@@ -500,7 +546,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_3_ln1",
+          "id": "stage_3_ln1",
           "label": "LN1",
           "category": "LN",
           "beatmapId": 4974163,
@@ -512,7 +558,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_3_ln2",
+          "id": "stage_3_ln2",
           "label": "LN2",
           "category": "LN",
           "beatmapId": 4226448,
@@ -524,7 +570,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_3_rc1",
+          "id": "stage_3_rc1",
           "label": "RC1",
           "category": "RC",
           "beatmapId": 4983634,
@@ -536,7 +582,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_3_rc2",
+          "id": "stage_3_rc2",
           "label": "RC2",
           "category": "RC",
           "beatmapId": 4245674,
@@ -548,7 +594,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_3_rc3",
+          "id": "stage_3_rc3",
           "label": "RC3",
           "category": "RC",
           "beatmapId": 3919581,
@@ -560,7 +606,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_3_rc4",
+          "id": "stage_3_rc4",
           "label": "RC4",
           "category": "RC",
           "beatmapId": 5187697,
@@ -572,7 +618,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_3_rc5",
+          "id": "stage_3_rc5",
           "label": "RC5",
           "category": "RC",
           "beatmapId": 4661716,
@@ -584,7 +630,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_3_rc6",
+          "id": "stage_3_rc6",
           "label": "RC6",
           "category": "RC",
           "beatmapId": 3422101,
@@ -596,7 +642,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_3_sv1",
+          "id": "stage_3_sv1",
           "label": "SV1",
           "category": "SV",
           "beatmapId": 3971246,
@@ -608,7 +654,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_3_sv2",
+          "id": "stage_3_sv2",
           "label": "SV2",
           "category": "SV",
           "beatmapId": 3989898,
@@ -620,7 +666,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_3_tb",
+          "id": "stage_3_tb",
           "label": "TB",
           "category": "TB",
           "beatmapId": 4226439,
@@ -633,33 +679,80 @@
         }
       ],
       "flow": {
-        "id": "flow_round_3",
+        "id": "flow_stage_3",
         "name": "决赛 flow",
         "steps": [
           {
-            "id": "step_ban_round_3",
+            "id": "step_ban_stage_3",
             "kind": "ban",
-            "count": 1,
-            "side": "both"
+            "count": 1
           },
           {
-            "id": "step_pick_round_3",
+            "id": "step_pick_stage_3",
             "kind": "pick",
-            "count": 6,
-            "side": "both"
+            "count": 6
           }
         ],
         "triggers": []
-      }
+      },
+      "scoringScheme": {
+        "id": "score_stage_3",
+        "name": "Score V2",
+        "winCondition": "score_v2",
+        "aggregation": "sum",
+        "modMultipliers": {}
+      },
+      "matches": [
+        {
+          "id": "match_5",
+          "name": "Team Falcoms vs 插奈特幼儿园",
+          "groupId": null,
+          "refereeIds": [],
+          "transport": "irc",
+          "scheduledAt": "2026-10-25T13:00:00.000Z",
+          "result": {
+            "scoreRed": 6,
+            "scoreBlue": 4
+          },
+          "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
+          "initialBeatmapId": 3105666,
+          "notes": "osu! bracket match #5 · score 6-4 · completed · losers bracket",
+          "type": "match",
+          "teamRedId": 0,
+          "teamBlueId": 2,
+          "roomMode": "team_versus"
+        },
+        {
+          "id": "match_2",
+          "name": "白毛红瞳双马尾 vs 我不到啊",
+          "groupId": null,
+          "refereeIds": [],
+          "transport": "irc",
+          "scheduledAt": "2026-10-25T13:00:00.000Z",
+          "result": {
+            "scoreRed": 5,
+            "scoreBlue": 6
+          },
+          "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
+          "initialBeatmapId": 3989898,
+          "notes": "osu! bracket match #2 · score 5-6 · completed · winners bracket",
+          "type": "match",
+          "teamRedId": 3,
+          "teamBlueId": 1,
+          "roomMode": "team_versus"
+        }
+      ]
     },
     {
-      "id": "round_4",
+      "id": "stage_4",
       "name": "总决赛",
       "order": 3,
+      "type": "knockout",
+      "groups": [],
       "bestOf": 13,
       "slots": [
         {
-          "id": "round_4_ac1",
+          "id": "stage_4_ac1",
           "label": "AC1",
           "category": "AC",
           "beatmapId": 2840685,
@@ -671,7 +764,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_4_ac2",
+          "id": "stage_4_ac2",
           "label": "AC2",
           "category": "AC",
           "beatmapId": 4242535,
@@ -683,7 +776,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_4_ac3",
+          "id": "stage_4_ac3",
           "label": "AC3",
           "category": "AC",
           "beatmapId": 4621573,
@@ -695,7 +788,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_4_hb1",
+          "id": "stage_4_hb1",
           "label": "HB1",
           "category": "HB",
           "beatmapId": 5224161,
@@ -707,7 +800,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_4_hb2",
+          "id": "stage_4_hb2",
           "label": "HB2",
           "category": "HB",
           "beatmapId": 3400503,
@@ -719,7 +812,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_4_ln1",
+          "id": "stage_4_ln1",
           "label": "LN1",
           "category": "LN",
           "beatmapId": 4031878,
@@ -731,7 +824,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_4_ln2",
+          "id": "stage_4_ln2",
           "label": "LN2",
           "category": "LN",
           "beatmapId": 4853515,
@@ -743,7 +836,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_4_ln3",
+          "id": "stage_4_ln3",
           "label": "LN3",
           "category": "LN",
           "beatmapId": 5730659,
@@ -755,7 +848,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_4_rc1",
+          "id": "stage_4_rc1",
           "label": "RC1",
           "category": "RC",
           "beatmapId": 4545255,
@@ -767,7 +860,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_4_rc2",
+          "id": "stage_4_rc2",
           "label": "RC2",
           "category": "RC",
           "beatmapId": 3181691,
@@ -779,7 +872,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_4_rc3",
+          "id": "stage_4_rc3",
           "label": "RC3",
           "category": "RC",
           "beatmapId": 4750475,
@@ -791,7 +884,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_4_rc4",
+          "id": "stage_4_rc4",
           "label": "RC4",
           "category": "RC",
           "beatmapId": 5881767,
@@ -803,7 +896,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_4_rc5",
+          "id": "stage_4_rc5",
           "label": "RC5",
           "category": "RC",
           "beatmapId": 1281033,
@@ -815,7 +908,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_4_rc6",
+          "id": "stage_4_rc6",
           "label": "RC6",
           "category": "RC",
           "beatmapId": 2856150,
@@ -827,7 +920,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_4_sv1",
+          "id": "stage_4_sv1",
           "label": "SV1",
           "category": "SV",
           "beatmapId": 4266321,
@@ -839,7 +932,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_4_sv2",
+          "id": "stage_4_sv2",
           "label": "SV2",
           "category": "SV",
           "beatmapId": 5965244,
@@ -851,7 +944,7 @@
           "winConditionWinner": null
         },
         {
-          "id": "round_4_tb",
+          "id": "stage_4_tb",
           "label": "TB",
           "category": "TB",
           "beatmapId": 5826030,
@@ -864,138 +957,93 @@
         }
       ],
       "flow": {
-        "id": "flow_round_4",
+        "id": "flow_stage_4",
         "name": "总决赛 flow",
         "steps": [
           {
-            "id": "step_ban_round_4",
+            "id": "step_ban_stage_4",
             "kind": "ban",
-            "count": 1,
-            "side": "both"
+            "count": 1
           },
           {
-            "id": "step_pick_round_4",
+            "id": "step_pick_stage_4",
             "kind": "pick",
-            "count": 7,
-            "side": "both"
+            "count": 7
           }
         ],
         "triggers": []
-      }
-    }
-  ],
-  "scoringSchemes": [
-    {
-      "id": "score_default",
-      "name": "Score V2",
-      "winCondition": "score_v2",
-      "aggregation": "sum",
-      "modMultipliers": {}
-    }
-  ],
-  "matches": [
-    {
-      "id": "match_1",
-      "name": "Team Falcoms vs 白毛红瞳双马尾",
-      "roundId": "round_2",
-      "teamOneId": "team_tfs",
-      "teamTwoId": "team_smw",
-      "refereeIds": [],
-      "transport": "irc",
-      "scoringId": "score_default",
-      "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
-      "initialBeatmapId": 3273376,
-      "scheduledAt": "2026-10-17T13:00:00.000Z",
-      "notes": "osu! bracket match #1 · score 2-5 · completed · winners bracket"
-    },
-    {
-      "id": "match_4",
-      "name": "我不到啊 vs 插奈特幼儿园",
-      "roundId": "round_2",
-      "teamOneId": "team_idk",
-      "teamTwoId": "team_xkt",
-      "refereeIds": [],
-      "transport": "irc",
-      "scoringId": "score_default",
-      "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
-      "initialBeatmapId": 3273376,
-      "scheduledAt": "2026-10-18T12:00:00.000Z",
-      "notes": "osu! bracket match #4 · score 5-3 · completed · winners bracket"
-    },
-    {
-      "id": "match_5",
-      "name": "Team Falcoms vs 插奈特幼儿园",
-      "roundId": "round_3",
-      "teamOneId": "team_tfs",
-      "teamTwoId": "team_xkt",
-      "refereeIds": [],
-      "transport": "irc",
-      "scoringId": "score_default",
-      "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
-      "initialBeatmapId": 3105666,
-      "scheduledAt": "2026-10-25T13:00:00.000Z",
-      "notes": "osu! bracket match #5 · score 6-4 · completed · losers bracket"
-    },
-    {
-      "id": "match_2",
-      "name": "白毛红瞳双马尾 vs 我不到啊",
-      "roundId": "round_3",
-      "teamOneId": "team_smw",
-      "teamTwoId": "team_idk",
-      "refereeIds": [],
-      "transport": "irc",
-      "scoringId": "score_default",
-      "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
-      "initialBeatmapId": 3989898,
-      "scheduledAt": "2026-10-25T13:00:00.000Z",
-      "notes": "osu! bracket match #2 · score 5-6 · completed · winners bracket"
-    },
-    {
-      "id": "match_3",
-      "name": "我不到啊 vs Team Falcoms",
-      "roundId": "round_4",
-      "teamOneId": "team_idk",
-      "teamTwoId": "team_tfs",
-      "refereeIds": [],
-      "transport": "irc",
-      "scoringId": "score_default",
-      "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
-      "initialBeatmapId": 5965244,
-      "scheduledAt": "2026-11-01T12:00:00.000Z",
-      "notes": "osu! bracket match #3 · score 7-5 · completed · winners bracket"
-    },
-    {
-      "id": "match_6",
-      "name": "白毛红瞳双马尾 vs Team Falcoms",
-      "roundId": "round_4",
-      "teamOneId": "team_smw",
-      "teamTwoId": "team_tfs",
-      "refereeIds": [],
-      "transport": "irc",
-      "scoringId": "score_default",
-      "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
-      "initialBeatmapId": 5965244,
-      "scheduledAt": "2026-10-31T13:00:00.000Z",
-      "notes": "osu! bracket match #6 · score 5-7 · completed · losers bracket"
-    },
-    {
-      "id": "match_7",
-      "name": "插奈特幼儿园 vs 巧克甜恋",
-      "roundId": "round_4",
-      "teamOneId": "team_xkt",
-      "teamTwoId": "team_stf",
-      "refereeIds": [],
-      "transport": "irc",
-      "scoringId": "score_default",
-      "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
-      "initialBeatmapId": 2840685,
-      "scheduledAt": "2026-10-31T13:00:00.000Z",
-      "notes": "osu! bracket match #7 · score 7-4 · completed · winners bracket"
+      },
+      "scoringScheme": {
+        "id": "score_stage_4",
+        "name": "Score V2",
+        "winCondition": "score_v2",
+        "aggregation": "sum",
+        "modMultipliers": {}
+      },
+      "matches": [
+        {
+          "id": "match_3",
+          "name": "我不到啊 vs Team Falcoms",
+          "groupId": null,
+          "refereeIds": [],
+          "transport": "irc",
+          "scheduledAt": "2026-11-01T12:00:00.000Z",
+          "result": {
+            "scoreRed": 7,
+            "scoreBlue": 5
+          },
+          "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
+          "initialBeatmapId": 5965244,
+          "notes": "osu! bracket match #3 · score 7-5 · completed · winners bracket",
+          "type": "match",
+          "teamRedId": 1,
+          "teamBlueId": 0,
+          "roomMode": "team_versus"
+        },
+        {
+          "id": "match_6",
+          "name": "白毛红瞳双马尾 vs Team Falcoms",
+          "groupId": null,
+          "refereeIds": [],
+          "transport": "irc",
+          "scheduledAt": "2026-10-31T13:00:00.000Z",
+          "result": {
+            "scoreRed": 5,
+            "scoreBlue": 7
+          },
+          "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
+          "initialBeatmapId": 5965244,
+          "notes": "osu! bracket match #6 · score 5-7 · completed · losers bracket",
+          "type": "match",
+          "teamRedId": 3,
+          "teamBlueId": 0,
+          "roomMode": "team_versus"
+        },
+        {
+          "id": "match_7",
+          "name": "插奈特幼儿园 vs 巧克甜恋",
+          "groupId": null,
+          "refereeIds": [],
+          "transport": "irc",
+          "scheduledAt": "2026-10-31T13:00:00.000Z",
+          "result": {
+            "scoreRed": 7,
+            "scoreBlue": 4
+          },
+          "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
+          "initialBeatmapId": 2840685,
+          "notes": "osu! bracket match #7 · score 7-4 · completed · winners bracket",
+          "type": "match",
+          "teamRedId": 2,
+          "teamBlueId": 4,
+          "roomMode": "team_versus"
+        }
+      ]
     }
   ],
   "automation": [],
   "revision": 1,
-  "createdAt": "2026-11-12T05:53:12.114Z",
-  "updatedAt": "2026-11-12T05:53:12.114Z",
+  "createdAt": "2026-11-12T19:46:20.243Z",
+  "updatedAt": "2026-11-12T19:46:20.243Z",
   "source": null
 }

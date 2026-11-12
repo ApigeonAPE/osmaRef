@@ -1,0 +1,105 @@
+/*
+ * settings.css — Login and settings surfaces.
+ */
+
+.settings-mod-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+
+.mod-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* --- login page ---------------------------------------------------------- */
+.login-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.login-oauth {
+  justify-content: space-between;
+}
+
+.login-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.login-username {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.login-irc {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.login-avatar {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel-2);
+}
+
+.login-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.login-avatar-fallback {
+  width: 26px;
+  height: 26px;
+  background-color: var(--muted);
+  -webkit-mask: url('@assets/HarmonyOS_Icons/ic_public_contacts_filled.svg') center / contain no-repeat;
+  mask: url('@assets/HarmonyOS_Icons/ic_public_contacts_filled.svg') center / contain no-repeat;
+}
+
+/* --- collapsed advanced settings ---------------------------------------- */
+.advanced-settings > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  user-select: none;
+  list-style: none;
+}
+
+.advanced-settings > summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-settings > summary::before {
+  content: '›';
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform 0.15s ease;
+}
+
+.advanced-settings[open] > summary {
+  margin-bottom: 12px;
+}
+
+.advanced-settings[open] > summary::before {
+  transform: rotate(90deg);
+}

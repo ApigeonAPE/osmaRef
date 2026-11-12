@@ -24,20 +24,25 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
   const [error, setError] = useState<string | null>(null);
 
   const selectedTournament = model.tournaments.find((entry) => entry.id === tournamentId) ?? null;
+  const selectedMatches = selectedTournament
+    ? selectedTournament.stages.flatMap((stage) =>
+        stage.matches.map((match) => ({ stage, match })),
+      )
+    : [];
 
   useEffect(() => {
     if (!tournamentId && model.tournaments[0]) setTournamentId(model.tournaments[0].id);
   }, [model.tournaments, tournamentId]);
 
   useEffect(() => {
-    const match = selectedTournament?.matches.find((entry) => entry.id === matchId) ?? selectedTournament?.matches[0];
+    const match = selectedMatches.find((entry) => entry.match.id === matchId)?.match ?? selectedMatches[0]?.match;
     if (!match) {
       setMatchId('');
       return;
     }
     if (match.id !== matchId) setMatchId(match.id);
     setTransport(match.transport);
-  }, [selectedTournament, matchId]);
+  }, [selectedMatches, matchId]);
 
   const run = async (label: string, action: () => Promise<unknown>) => {
     setBusy(label);
@@ -126,9 +131,9 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
               </Field>
               <Field label={t('Match')}>
                 <select value={matchId} onChange={(event) => setMatchId(event.target.value)}>
-                  {(selectedTournament?.matches ?? []).map((entry) => (
+                  {selectedMatches.map(({ stage, match: entry }) => (
                     <option key={entry.id} value={entry.id}>
-                      {entry.name}
+                      {stage.name} · {entry.name}
                     </option>
                   ))}
                 </select>
@@ -155,7 +160,7 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
               <p className="muted small">
                 {t('No tournament is configured yet. Create one in Tournaments.')}
               </p>
-            ) : selectedTournament && selectedTournament.matches.length === 0 ? (
+            ) : selectedTournament && selectedMatches.length === 0 ? (
               <p className="muted small">
                 {t('This tournament has no matches yet. Add one in the Tournaments page.')}
               </p>

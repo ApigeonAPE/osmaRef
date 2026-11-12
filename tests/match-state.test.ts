@@ -32,8 +32,8 @@ const flow: MatchFlow = {
   id: 'flow_test',
   name: 'Test flow',
   steps: [
-    { id: 'step_ban', kind: 'ban', count: 1, side: 'both' },
-    { id: 'step_pick', kind: 'pick', count: 10, side: 'both' },
+    { id: 'step_ban', kind: 'ban', count: 1 },
+    { id: 'step_pick', kind: 'pick', count: 10 },
   ],
   triggers: [],
 };
@@ -116,25 +116,30 @@ function result(winner: 'team_one' | 'team_two', slot: string, second: number): 
 }
 
 describe('flow expansion', () => {
-  it('alternates teams for a "both" step', () => {
+  it('alternates both teams for every step', () => {
     const queue = buildActionQueue(flow, TEAM_ONE, TEAM_TWO);
     expect(queue.slice(0, 2).map((action) => action.side)).toEqual(['team_one', 'team_two']);
     expect(queue[0]?.kind).toBe('ban');
     expect(queue[2]?.kind).toBe('pick');
   });
 
-  it('expands team-specific steps without alternating', () => {
+  it('treats count as actions per team', () => {
     const queue = buildActionQueue(
       {
         id: 'f',
         name: 'f',
-        steps: [{ id: 's', kind: 'protect', count: 2, side: 'team_two' }],
+        steps: [{ id: 's', kind: 'protect', count: 2 }],
         triggers: [],
       },
       TEAM_ONE,
       TEAM_TWO,
     );
-    expect(queue.map((action) => action.side)).toEqual(['team_two', 'team_two']);
+    expect(queue.map((action) => action.side)).toEqual([
+      'team_one',
+      'team_two',
+      'team_one',
+      'team_two',
+    ]);
   });
 });
 
@@ -422,7 +427,7 @@ describe('match state machine', () => {
     const shortFlow: MatchFlow = {
       id: 'short',
       name: 'short',
-      steps: [{ id: 'p', kind: 'pick', count: 1, side: 'team_one' }],
+      steps: [{ id: 'p', kind: 'pick', count: 1 }],
       triggers: [],
     };
     let state = createSession(
@@ -442,6 +447,7 @@ describe('match state machine', () => {
       },
       shortFlow,
     );
+    // One pick per team: both actions must be consumed before the flow ends.
     state = applyAction(state, {
       kind: 'pick',
       teamId: TEAM_ONE,
@@ -451,6 +457,15 @@ describe('match state machine', () => {
       at: at(1),
     });
     state = recordResult(state, result('team_one', 'NM1', 2));
+    state = applyAction(state, {
+      kind: 'pick',
+      teamId: TEAM_TWO,
+      slotLabel: 'NM2',
+      beatmapId: 2,
+      byUserId: 2,
+      at: at(3),
+    });
+    state = recordResult(state, result('team_two', 'NM2', 4));
     expect(state.status).toBe('finished');
     expect(state.needsReview.join(' ')).toMatch(/flow ended/);
   });
@@ -550,9 +565,8 @@ describe('scoring', () => {
       id: 'protect_flow',
       name: 'protect flow',
       steps: [
-        { id: 'p', kind: 'protect', count: 1, side: 'team_one' },
-        { id: 'b', kind: 'ban', count: 1, side: 'team_two' },
-        { id: 'k', kind: 'pick', count: 2, side: 'team_one' },
+        { id: 'p', kind: 'protect', count: 1 },
+        { id: 'b', kind: 'ban', count: 1 },
       ],
       triggers: [],
     };
@@ -574,6 +588,7 @@ describe('scoring', () => {
       protectFlow,
     );
 
+    // Both teams protect once, alternating.
     state = applyAction(state, {
       kind: 'protect',
       teamId: TEAM_ONE,
@@ -585,41 +600,44 @@ describe('scoring', () => {
     expect(protectedSlotLabels(state).has('NM1')).toBe(true);
     expect(usedSlotLabels(state).has('NM1')).toBe(false);
 
+    state = applyAction(state, {
+      kind: 'protect',
+      teamId: TEAM_TWO,
+      slotLabel: 'NM2',
+      beatmapId: 2,
+      byUserId: 2,
+      at: at(2),
+    });
+    expect(protectedSlotLabels(state).size).toBe(2);
+
     expect(() =>
       applyAction(state, {
         kind: 'ban',
-        teamId: TEAM_TWO,
+        teamId: TEAM_ONE,
         slotLabel: 'NM1',
         beatmapId: 1,
-        byUserId: 2,
-        at: at(2),
+        byUserId: 1,
+        at: at(3),
       }),
     ).toThrow(/protected/);
 
     state = applyAction(state, {
       kind: 'ban',
-      teamId: TEAM_TWO,
-      slotLabel: 'NM2',
-      beatmapId: 2,
-      byUserId: 2,
-      at: at(3),
-    });
-    state = applyAction(state, {
-      kind: 'pick',
       teamId: TEAM_ONE,
-      slotLabel: 'NM1',
-      beatmapId: 1,
+      slotLabel: 'NM3',
+      beatmapId: 3,
       byUserId: 1,
       at: at(4),
     });
-    expect(state.actions.at(-1)?.kind).toBe('pick');
+    expect(state.actions.at(-1)?.kind).toBe('ban');
+    expect(usedSlotLabels(state).has('NM3')).toBe(true);
   });
 
   it('grants score-triggered actions and records trigger counts', () => {
     const triggerFlow: MatchFlow = {
       id: 'trigger_flow',
       name: 'trigger flow',
-      steps: [{ id: 'p', kind: 'pick', count: 5, side: 'both' }],
+      steps: [{ id: 'p', kind: 'pick', count: 5 }],
       triggers: [
         {
           id: 't1',

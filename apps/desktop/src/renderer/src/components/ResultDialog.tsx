@@ -28,8 +28,8 @@ export function ResultDialog({
 }) {
   const { t } = useI18n();
   const rows = useMemo<ResultRow[]>(() => {
-    const teamOne = tournament.teams.find((team) => team.id === session.teamOneId);
-    const teamTwo = tournament.teams.find((team) => team.id === session.teamTwoId);
+    const teamOne = tournament.teams.find((team) => String(team.id) === session.teamOneId);
+    const teamTwo = tournament.teams.find((team) => String(team.id) === session.teamTwoId);
     return [...(teamOne?.members ?? []), ...(teamTwo?.members ?? [])].map((member) => ({
       userId: member.userId,
       username: member.username,

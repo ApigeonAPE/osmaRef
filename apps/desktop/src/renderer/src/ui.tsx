@@ -25,14 +25,16 @@ export function Section({
   subtitle,
   actions,
   children,
+  className,
 }: {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="card">
+    <section className={`card${className ? ` ${className}` : ''}`}>
       <header className="card-head">
         <div>
           <h2>{title}</h2>

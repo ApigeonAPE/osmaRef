@@ -68,6 +68,7 @@ const api: DesktopApi = {
     adjustScore: (input) => invoke<MatchSession>(IPC.sessionsAdjustScore, input),
     setFirstTeams: (input) => invoke<MatchSession>(IPC.sessionsSetFirstTeams, input),
     setPlaylistMods: (input) => invoke<void>(IPC.sessionsSetPlaylistMods, input),
+    selectBeatmap: (input) => invoke(IPC.sessionsSelectBeatmap, input),
     addPlaylistBeatmap: (input) => invoke<void>(IPC.sessionsAddPlaylistBeatmap, input),
     removePlaylistBeatmap: (input) => invoke<void>(IPC.sessionsRemovePlaylistBeatmap, input),
     invitePlayer: (input) => invoke<void>(IPC.sessionsInvitePlayer, input),

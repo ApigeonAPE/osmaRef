@@ -1,0 +1,378 @@
+/*
+ * workbench.css — Referee workbench shell: columns, resizers, room list and panels.
+ */
+
+.workbench-page {
+  height: 100vh;
+  max-width: none;
+  padding: 0;
+  gap: 0;
+}
+
+.back-button {
+  flex: none;
+}
+
+.wb-left-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  row-gap: 6px;
+  flex: none;
+  flex-wrap: wrap;
+}
+
+.wb-left-actions button {
+  min-width: 76px;
+  height: 30px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wb-channel-button {
+  width: 76px;
+  min-width: 76px;
+  flex: none;
+}
+
+.room-channel-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  line-height: 21.5px;
+}
+
+.wb-left-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+}
+
+.wb-panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.wb-panel .card {
+  height: 100%;
+  min-height: 0;
+}
+
+.wb-panel .panel-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right:4px;
+}
+
+.status-sep {
+  width: 1px;
+  height: 13px;
+  flex: none;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.quick-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.quick-mode button {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.quick-mode button.active {
+  border-color: var(--pink);
+  background: var(--pink-soft);
+}
+
+.join-actions {
+  justify-content: flex-end;
+}
+
+.workbench-grid.sessionless {
+  align-content: start;
+}
+
+.workbench-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 340px;
+  gap: 0;
+}
+
+.column-resizer {
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  align-self: stretch;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: 1px;
+  writing-mode: vertical-rl;
+}
+
+.column-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.column-resizer::after {
+  content: '···';
+  position: relative;
+  letter-spacing: 1;
+}
+
+.column-resizer:hover, body.resizing-columns .column-resizer {
+  color: #fff;
+}
+
+.column-resizer:hover::before, body.resizing-columns .column-resizer::before {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.row-resizer {
+  height: 8px;
+  cursor: row-resize;
+  background: transparent;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: 1px;
+}
+
+.row-resizer::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 8px;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.row-resizer::after {
+  content: '···';
+  position: relative;
+  z-index: 1;
+}
+
+.row-resizer:hover, body.resizing-rows .row-resizer {
+  color: #fff;
+}
+
+.row-resizer:hover::before, body.resizing-rows .row-resizer::before {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.wb-column {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0px 2px 0px;
+}
+
+.wb-left {
+  overflow-x: hidden;
+}
+
+.wb-left .card, .wb-left .wb-panel, .room-list {
+  min-width: 0;
+}
+
+.wb-center {
+  overflow: hidden;
+  padding: 0;
+}
+
+.workbench-page .card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  gap: 8px;
+}
+
+.workbench-page .card + .card {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 10px;
+}
+
+.workbench-page .chat.card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+.workbench-page .playlist-panel {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+.wb-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  overflow: hidden;
+}
+
+.wb-split .wb-chat {
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.wb-split .chat {
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+}
+
+.room-status-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.room-status-line {
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  gap: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.86rem;
+}
+
+.room-status-actions {
+  display: flex;
+  padding: 0px 2px 0px 2px;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.room-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  min-width: 0;
+}
+
+.room-list-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.room-list-item.active {
+  border-color: var(--pink);
+  background: var(--pink-soft);
+}
+
+.room-list-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.room-list-meta {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-playlist {
+  margin-top: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.compact-input {
+  height: 28px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.wb-right {
+  overflow: hidden;
+}
+
+.wb-right .room-status-card {
+  flex: none;
+}
+
+.wb-right-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  overflow: hidden;
+}
+
+/* DOM order keeps the two cards together; `order` puts Results above Mappool. */
+.wb-right-split > .results-panel {
+  order: 1;
+}
+
+.wb-right-split > .row-resizer {
+  order: 2;
+}
+
+.wb-right-split > .mappool-panel {
+  order: 3;
+}
+
+.wb-right-split .panel-scroll {
+  padding: 0 4px;
+}
+
+.wb-right-split .panel-scroll .pool-search {
+  margin-bottom: 8px;
+}

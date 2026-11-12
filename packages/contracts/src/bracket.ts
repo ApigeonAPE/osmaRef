@@ -9,10 +9,11 @@ import {
   type MappoolSlot,
   type Match,
   type MatchFlow,
-  type Round,
+  type Stage,
   type RulesetId,
   type Team,
   type Tournament,
+  type TournamentMode,
 } from './tournament';
 
 /**
@@ -50,6 +51,7 @@ const BracketTeamSchema = z
     FullName: z.string().nullish(),
     FlagName: z.string().nullish(),
     Acronym: z.string().nullish(),
+    Seed: z.union([z.string(), z.number()]).nullish(),
     Players: z.array(BracketPlayerSchema).nullish(),
   })
   .passthrough();
@@ -120,6 +122,7 @@ export const BracketSchema = z
       .passthrough()
       .nullish(),
     Teams: z.array(BracketTeamSchema).nullish(),
+    PlayersPerTeam: z.number().int().nullish(),
     Rounds: z.array(BracketRoundSchema),
     Matches: z.array(BracketMatchSchema),
   })
@@ -142,12 +145,18 @@ export interface BracketConversionResult {
   notes: string[];
 }
 
-const RULESET_NAMES: Record<string, RulesetId> = {
-  osu: 0,
-  standard: 0,
+const RULESET_MODES: Record<string, TournamentMode> = {
+  osu: 'osu',
+  standard: 'osu',
+  taiko: 'taiko',
+  catch: 'catch',
+  fruits: 'catch',
+  mania: 'mania',
+};
+const RULESET_ID_MODES: TournamentMode[] = ['osu', 'taiko', 'catch', 'mania'];
+const MODE_RULESET: Record<Exclude<TournamentMode, 'multi' | 'osu'>, RulesetId> = {
   taiko: 1,
   catch: 2,
-  fruits: 2,
   mania: 3,
 };
 
@@ -173,20 +182,17 @@ export function convertBracketToTournament(
   tournament.id = createTournamentId();
   tournament.abbreviation =
     normalizeAbbreviation(options.abbreviation ?? name) || 'BRK';
-  tournament.rulesetId = resolveRulesetId(bracket.Ruleset, notes);
-  tournament.defaultMatchType = 'team_versus';
+  tournament.mode = resolveTournamentMode(bracket.Ruleset, notes);
+  tournament.teamSize = normalizeTeamSize(bracket.PlayersPerTeam, notes);
   tournament.revision = 1;
   tournament.source = null;
 
-  const teamLookup = new Map<string, string>();
-  const usedTeamIds = new Set<string>();
+  const teamLookup = new Map<string, number>();
   const teams: Team[] = [];
   (bracket.Teams ?? []).forEach((raw, index) => {
+    const id = index;
     const acronym = (raw.Acronym ?? '').trim() || (raw.FlagName ?? '').trim();
     const displayName = (raw.FullName ?? '').trim() || acronym || `Team ${index + 1}`;
-    const acronymSlug = slugify(acronym);
-    const baseId = acronymSlug ? `team_${acronymSlug}` : `team_${index + 1}`;
-    const id = uniqueId(baseId, usedTeamIds);
     const members: Team['members'] = [];
     const seenUserIds = new Set<number>();
     for (const player of raw.Players ?? []) {
@@ -203,43 +209,60 @@ export function convertBracketToTournament(
       members.push({
         userId,
         username: (player.Username ?? '').slice(0, 64),
-        captain: false,
       });
     }
-    teams.push({ id, name: displayName.slice(0, 64), members });
+    const rawSeed = raw.Seed;
+    const parsedSeed =
+      rawSeed === null || rawSeed === undefined || rawSeed === '' ? Number.NaN : Number(rawSeed);
+    teams.push({
+      id,
+      name: displayName.slice(0, 64),
+      captainUserId: null,
+      members,
+      seed: Number.isInteger(parsedSeed) && parsedSeed >= 0 ? parsedSeed : null,
+    });
     for (const alias of [raw.Acronym, raw.FlagName]) {
       const key = alias?.trim().toUpperCase();
       if (key && !teamLookup.has(key)) teamLookup.set(key, id);
     }
   });
 
-  const usedRoundIds = new Set<string>();
-  const rounds: Round[] = [];
-  const roundByMatchId = new Map<number, Round>();
-  const roundStartTimes = new Map<string, number>();
+  const usedStageIds = new Set<string>();
+  const stages: Stage[] = [];
+  const stageByMatchId = new Map<number, Stage>();
+  const stageStartTimes = new Map<string, number>();
   (bracket.Rounds ?? []).forEach((raw, index) => {
-    const roundName = ((raw.Name ?? '').trim() || `Round ${index + 1}`).slice(0, 64);
-    const id = uniqueId(`round_${slugify(roundName) || index + 1}`, usedRoundIds);
-    const bestOf = normalizeBestOf(raw.BestOf ?? undefined, roundName, notes);
-    const round: Round = {
+    const stageName = ((raw.Name ?? '').trim() || `Stage ${index + 1}`).slice(0, 64);
+    const id = uniqueId(`stage_${slugify(stageName) || index + 1}`, usedStageIds);
+    const bestOf = normalizeBestOf(raw.BestOf ?? undefined, stageName, notes);
+    const stage: Stage = {
       id,
-      name: roundName,
+      name: stageName,
       order: index,
+      type: 'knockout',
+      groups: [],
       bestOf,
-      slots: buildSlots(raw.Beatmaps ?? [], id, roundName, tournament.rulesetId, notes),
-      flow: buildFlow(id, roundName, bestOf, raw.BanCount ?? undefined, notes),
+      slots: buildSlots(raw.Beatmaps ?? [], id, stageName, tournament.mode, notes),
+      flow: buildFlow(id, stageName, bestOf, raw.BanCount ?? undefined, notes),
+      scoringScheme: {
+        id: `score_${id}`,
+        name: 'Score V2',
+        winCondition: 'score_v2',
+        aggregation: 'sum',
+        modMultipliers: {},
+      },
+      matches: [],
     };
-    rounds.push(round);
+    stages.push(stage);
 
     const start = raw.StartDate ? Date.parse(raw.StartDate) : Number.NaN;
-    if (Number.isFinite(start)) roundStartTimes.set(id, start);
+    if (Number.isFinite(start)) stageStartTimes.set(id, start);
     for (const matchId of raw.Matches ?? []) {
-      if (!roundByMatchId.has(matchId)) roundByMatchId.set(matchId, round);
+      if (!stageByMatchId.has(matchId)) stageByMatchId.set(matchId, stage);
     }
   });
 
   const usedMatchIds = new Set<string>();
-  const matches: Match[] = [];
   /** Matches whose participants are still TBD (`null` acronyms). */
   const undecided: number[] = [];
   for (const raw of bracket.Matches) {
@@ -251,7 +274,7 @@ export function convertBracketToTournament(
     }
     const teamOneId = lookupTeam(teamLookup, acronymOne);
     const teamTwoId = lookupTeam(teamLookup, acronymTwo);
-    if (!teamOneId || !teamTwoId) {
+    if (teamOneId === undefined || teamTwoId === undefined) {
       notes.push(
         `Bracket match #${raw.ID} references a team that is not in the bracket (${describeTeams(
           acronymOne,
@@ -265,45 +288,48 @@ export function convertBracketToTournament(
       continue;
     }
 
-    const scheduledAt =
-      raw.Date && Number.isFinite(Date.parse(raw.Date))
-        ? new Date(raw.Date).toISOString()
-        : null;
-    if (raw.Date && scheduledAt === null) {
-      notes.push(`Bracket match #${raw.ID} has an unreadable date; its schedule was cleared.`);
+    const hasValidDate = raw.Date && Number.isFinite(Date.parse(raw.Date));
+    const scheduledAt = hasValidDate ? new Date(raw.Date!).toISOString() : new Date().toISOString();
+    if (!hasValidDate) {
+      notes.push(`Bracket match #${raw.ID} has no readable date; the import time was used.`);
     }
 
-    let round = roundByMatchId.get(raw.ID);
-    if (!round) {
-      round = roundForDate(scheduledAt, rounds, roundStartTimes);
-      if (round) {
+    let stage = stageByMatchId.get(raw.ID);
+    if (!stage) {
+      stage = stageForDate(scheduledAt, stages, stageStartTimes);
+      if (stage) {
         notes.push(
-          `Bracket match #${raw.ID} is not listed in a round; it was assigned to "${round.name}" by date.`,
+          `Bracket match #${raw.ID} is not listed in a stage; it was assigned to "${stage.name}" by date.`,
         );
       }
     }
-    if (!round) {
-      notes.push(`Bracket match #${raw.ID} has no round to belong to; the match was skipped.`);
+    if (!stage) {
+      notes.push(`Bracket match #${raw.ID} has no stage to belong to; the match was skipped.`);
       continue;
     }
 
-    const teamOne = teams.find((team) => team.id === teamOneId);
-    const teamTwo = teams.find((team) => team.id === teamTwoId);
-    if (!teamOne || !teamTwo) continue;
+    const teamRed = teams.find((team) => team.id === teamOneId);
+    const teamBlue = teams.find((team) => team.id === teamTwoId);
+    if (!teamRed || !teamBlue) continue;
 
-    const initialBeatmapId = firstPickedBeatmap(raw, round);
-    matches.push({
+    const initialBeatmapId = firstPickedBeatmap(raw, stage);
+    stage.matches.push({
       id: uniqueId(`match_${raw.ID}`, usedMatchIds),
-      name: `${teamOne.name} vs ${teamTwo.name}`.slice(0, 128),
-      roundId: round.id,
-      teamOneId,
-      teamTwoId,
+      type: 'match',
+      name: `${teamRed.name} vs ${teamBlue.name}`.slice(0, 128),
+      groupId: null,
+      teamRedId: teamOneId,
+      teamBlueId: teamTwoId,
       refereeIds: [],
       transport: 'irc',
-      scoringId: 'score_default',
+      scheduledAt,
+      result: {
+        scoreRed: Number.isInteger(raw.Team1Score) ? Math.max(0, raw.Team1Score!) : 0,
+        scoreBlue: Number.isInteger(raw.Team2Score) ? Math.max(0, raw.Team2Score!) : 0,
+      },
+      roomMode: 'team_versus',
       roomNameTemplate: '{tournament}: ({team_one}) vs ({team_two})',
       initialBeatmapId,
-      scheduledAt,
       notes: matchNote(raw).slice(0, 1000),
     });
   }
@@ -318,17 +344,7 @@ export function convertBracketToTournament(
   }
 
   tournament.teams = teams;
-  tournament.rounds = rounds;
-  tournament.scoringSchemes = [
-    {
-      id: 'score_default',
-      name: 'Score V2',
-      winCondition: 'score_v2',
-      aggregation: 'sum',
-      modMultipliers: {},
-    },
-  ];
-  tournament.matches = matches;
+  tournament.stages = stages;
   tournament.automation = [];
 
   const validated = TournamentSchema.safeParse(tournament);
@@ -338,33 +354,42 @@ export function convertBracketToTournament(
   return { tournament: validated.data, notes };
 }
 
-function resolveRulesetId(
+function resolveTournamentMode(
   ruleset: BracketRuleset,
   notes: string[],
-): RulesetId {
+): TournamentMode {
   const online = ruleset?.OnlineID;
   if (typeof online === 'number' && Number.isInteger(online) && online >= 0 && online <= 3) {
-    return online as RulesetId;
+    return RULESET_ID_MODES[online]!;
   }
   const shortName = ruleset?.ShortName?.trim().toLowerCase();
-  const byName = shortName ? RULESET_NAMES[shortName] : undefined;
+  const byName = shortName ? RULESET_MODES[shortName] : undefined;
   if (byName !== undefined) return byName;
   notes.push('The bracket has no known ruleset; osu!standard was assumed.');
-  return 0;
+  return 'osu';
 }
 
-function normalizeBestOf(value: number | undefined, roundName: string, notes: string[]): number {
+function normalizeTeamSize(value: number | null | undefined, notes: string[]): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 1) return 4;
+  const size = Math.min(16, Math.round(value));
+  if (size !== value) {
+    notes.push(`PlayersPerTeam ${value} was clamped to ${size}.`);
+  }
+  return size;
+}
+
+function normalizeBestOf(value: number | undefined, stageName: string, notes: string[]): number {
   const raw = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : 9;
   let bestOf = Math.min(31, Math.max(1, raw));
   if (bestOf !== raw) {
     notes.push(
-      `Round "${roundName}" has best-of ${raw}; ${bestOf} is used because the format allows 1–31.`,
+      `Stage "${stageName}" has best-of ${raw}; ${bestOf} is used because the format allows 1–31.`,
     );
   }
   if (bestOf % 2 === 0) {
     const adjusted = bestOf >= 31 ? 31 : bestOf + 1;
     notes.push(
-      `Round "${roundName}" has best-of ${bestOf}; ${adjusted} is used because a best-of must be odd.`,
+      `Stage "${stageName}" has best-of ${bestOf}; ${adjusted} is used because a best-of must be odd.`,
     );
     bestOf = adjusted;
   }
@@ -373,9 +398,9 @@ function normalizeBestOf(value: number | undefined, roundName: string, notes: st
 
 function buildSlots(
   beatmaps: BracketBeatmap[],
-  roundId: string,
-  roundName: string,
-  rulesetId: RulesetId,
+  stageId: string,
+  stageName: string,
+  mode: TournamentMode,
   notes: string[],
 ): MappoolSlot[] {
   const slots: MappoolSlot[] = [];
@@ -386,11 +411,11 @@ function buildSlots(
   for (const raw of beatmaps) {
     const beatmapId = raw.BeatmapInfo?.OnlineID ?? raw.ID;
     if (beatmapId === undefined || beatmapId === null || beatmapId <= 0) {
-      notes.push(`Round "${roundName}" contains a beatmap without a valid id; it was skipped.`);
+      notes.push(`Stage "${stageName}" contains a beatmap without a valid id; it was skipped.`);
       continue;
     }
     if (usedBeatmaps.has(beatmapId)) {
-      notes.push(`Round "${roundName}" lists beatmap ${beatmapId} twice; the duplicate was skipped.`);
+      notes.push(`Stage "${stageName}" lists beatmap ${beatmapId} twice; the duplicate was skipped.`);
       continue;
     }
 
@@ -398,7 +423,7 @@ function buildSlots(
     const code = rawCode === 'TB' ? 'TB' : sanitizeCategory(rawCode);
     if (rawCode && rawCode !== 'TB' && code !== rawCode) {
       notes.push(
-        `Round "${roundName}" uses mod code "${rawCode}"; it was normalised to "${code}".`,
+        `Stage "${stageName}" uses mod code "${rawCode}"; it was normalised to "${code}".`,
       );
     }
     let label: string;
@@ -412,7 +437,7 @@ function buildSlots(
       const limit = 99;
       if (next > limit) {
         notes.push(
-          `Round "${roundName}" has more than ${limit} "${code}" beatmaps; the extras were skipped.`,
+          `Stage "${stageName}" has more than ${limit} "${code}" beatmaps; the extras were skipped.`,
         );
         continue;
       }
@@ -424,7 +449,7 @@ function buildSlots(
     const normalizedLabel = label.toUpperCase();
     if (usedLabels.has(normalizedLabel)) {
       notes.push(
-        `Round "${roundName}" would have produced the duplicate slot label "${label}"; the beatmap was skipped.`,
+        `Stage "${stageName}" would have produced the duplicate slot label "${label}"; the beatmap was skipped.`,
       );
       continue;
     }
@@ -433,14 +458,16 @@ function buildSlots(
 
     const slotRuleset = raw.BeatmapInfo?.Ruleset?.OnlineID;
     slots.push({
-      id: `${roundId}_${label.toLowerCase()}`,
+      id: `${stageId}_${label.toLowerCase()}`,
       label,
       category,
       beatmapId,
       rulesetId:
         typeof slotRuleset === 'number' && slotRuleset >= 0 && slotRuleset <= 3
           ? (slotRuleset as RulesetId)
-          : rulesetId,
+          : mode === 'multi' || mode === 'osu'
+            ? null
+            : MODE_RULESET[mode],
       ...modsForCategory(category),
       winCondition: null,
       winConditionWinner: null,
@@ -450,8 +477,8 @@ function buildSlots(
 }
 
 function buildFlow(
-  roundId: string,
-  roundName: string,
+  stageId: string,
+  stageName: string,
   bestOf: number,
   banCount: number | undefined,
   notes: string[],
@@ -461,52 +488,52 @@ function buildFlow(
   const bans = Math.min(10, Math.max(0, requestedBans));
   if (bans !== requestedBans) {
     notes.push(
-      `Round "${roundName}" has ${requestedBans} bans per team; the flow step is capped to ${bans}.`,
+      `Stage "${stageName}" has ${requestedBans} bans per team; the flow step is capped to ${bans}.`,
     );
   }
   if (bans > 0) {
-    steps.push({ id: `step_ban_${roundId}`, kind: 'ban', count: bans, side: 'both' });
+    steps.push({ id: `step_ban_${stageId}`, kind: 'ban', count: bans });
   }
   const picksNeeded = Math.ceil(bestOf / 2);
   const picks = Math.min(10, Math.max(1, picksNeeded));
   if (picks !== picksNeeded) {
     notes.push(
-      `Round "${roundName}" needs ${picksNeeded} picks per team; the flow step is capped at 10.`,
+      `Stage "${stageName}" needs ${picksNeeded} picks per team; the flow step is capped at 10.`,
     );
   }
-  steps.push({ id: `step_pick_${roundId}`, kind: 'pick', count: picks, side: 'both' });
-  return { id: `flow_${roundId}`, name: `${roundName} flow`.slice(0, 64), steps, triggers: [] };
+  steps.push({ id: `step_pick_${stageId}`, kind: 'pick', count: picks });
+  return { id: `flow_${stageId}`, name: `${stageName} flow`.slice(0, 64), steps, triggers: [] };
 }
 
-function roundForDate(
-  scheduledAt: string | null,
-  rounds: Round[],
+function stageForDate(
+  scheduledAt: string,
+  stages: Stage[],
   startTimes: Map<string, number>,
-): Round | undefined {
+): Stage | undefined {
   const at = scheduledAt ? Date.parse(scheduledAt) : Number.NaN;
-  if (!Number.isFinite(at)) return rounds[0];
-  let chosen: Round | undefined;
+  if (!Number.isFinite(at)) return stages[0];
+  let chosen: Stage | undefined;
   let chosenStart = Number.NEGATIVE_INFINITY;
-  for (const round of rounds) {
-    const start = startTimes.get(round.id);
+  for (const stage of stages) {
+    const start = startTimes.get(stage.id);
     if (start === undefined || start > at) continue;
     if (!chosen || start >= chosenStart) {
-      chosen = round;
+      chosen = stage;
       chosenStart = start;
     }
   }
-  return chosen ?? rounds[0];
+  return chosen ?? stages[0];
 }
 
-function firstPickedBeatmap(match: BracketMatch, round: Round): number | null {
-  const pool = new Set(round.slots.map((slot) => slot.beatmapId));
+function firstPickedBeatmap(match: BracketMatch, stage: Stage): number | null {
+  const pool = new Set(stage.slots.map((slot) => slot.beatmapId));
   for (const entry of match.PicksBans ?? []) {
     if ((entry.Type ?? '').toLowerCase() !== 'pick') continue;
     if (typeof entry.BeatmapID === 'number' && pool.has(entry.BeatmapID)) {
       return entry.BeatmapID;
     }
   }
-  return round.slots[0]?.beatmapId ?? null;
+  return stage.slots[0]?.beatmapId ?? null;
 }
 
 function matchNote(match: BracketMatch): string {
@@ -527,7 +554,10 @@ function describeTeams(teamOne: string | null | undefined, teamTwo: string | nul
     .join(' vs ');
 }
 
-function lookupTeam(lookup: Map<string, string>, acronym: string | null | undefined): string | undefined {
+function lookupTeam(
+  lookup: Map<string, number>,
+  acronym: string | null | undefined,
+): number | undefined {
   const key = acronym?.trim().toUpperCase();
   return key ? lookup.get(key) : undefined;
 }
@@ -551,10 +581,15 @@ function modsForCategory(category: string): {
   }
 }
 
-/** Short letter-only pool code that can prefix a slot label such as `HB2`. */
+/**
+ * Short pool code that can prefix a slot label.
+ *
+ * Key-count codes such as `4K`/`7K` are preserved: stripping the digit would
+ * merge different key modes into one `K` pool.
+ */
 function sanitizeCategory(raw: string): string {
-  const cleaned = raw.replace(/[^A-Z]/g, '').slice(0, 4);
-  return cleaned || 'NM';
+  const cleaned = raw.replace(/[^A-Z0-9]/g, '').slice(0, 4);
+  return /[A-Z]/.test(cleaned) ? cleaned : 'NM';
 }
 
 function uniqueId(base: string, used: Set<string>): string {

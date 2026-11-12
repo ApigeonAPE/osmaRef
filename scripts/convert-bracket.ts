@@ -26,7 +26,8 @@ if (!parsed.success) {
 mkdirSync(dirname(outputPath), { recursive: true });
 writeFileSync(outputPath, JSON.stringify(parsed.data, null, 2), 'utf8');
 for (const note of notes) console.warn(`note: ${note}`);
+const matchCount = parsed.data.stages.reduce((total, stage) => total + stage.matches.length, 0);
 console.log(
   `wrote ${outputPath}: ${parsed.data.teams.length} teams, ` +
-    `${parsed.data.rounds.length} rounds, ${parsed.data.matches.length} matches`,
+    `${parsed.data.stages.length} stages, ${matchCount} matches`,
 );

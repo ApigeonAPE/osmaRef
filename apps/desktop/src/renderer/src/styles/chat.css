@@ -1,0 +1,93 @@
+/*
+ * chat.css — Chat panel.
+ */
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: calc(100vh - 120px);
+  min-height: 520px;
+  padding: 14px;
+}
+
+.chat-log {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0px;
+  border: 0px solid var(--line-soft);
+  background: rgba(16, 12, 14, 0.7);
+}
+
+.chat-line {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: inherit;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.chat-time {
+  color: var(--muted);
+  font-size: 0.82em;
+  flex: none;
+}
+
+.chat-author {
+  color: #c7b7c0;
+  font-weight: 600;
+  flex: none;
+}
+
+.chat-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.chat-line.self {
+  background: rgba(255, 102, 170, 0.07);
+}
+
+.chat-line.system {
+  color: #ffd27a;
+  background: rgba(255, 196, 92, 0.06);
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.chat-line.bot {
+  color: #ffd27a;
+  background: rgba(255, 196, 92, 0.06);
+}
+
+.chat-input {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 0px 2px 8px 2px;
+}
+
+.chat-send {
+  width: 42px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.chat-send-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  background-color: currentColor;
+  -webkit-mask: url('@assets/HarmonyOS_Icons/ic_public_email_send.svg') center / contain no-repeat;
+  mask: url('@assets/HarmonyOS_Icons/ic_public_email_send.svg') center / contain no-repeat;
+}

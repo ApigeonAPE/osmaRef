@@ -7,6 +7,7 @@ import {
   IPC,
   OpenRoomInputSchema,
   AddPlaylistBeatmapInputSchema,
+  SelectBeatmapInputSchema,
   JoinRoomInputSchema,
   PlaylistModsInputSchema,
   PlayerActionInputSchema,
@@ -182,6 +183,9 @@ export function registerIpc(ctx: IpcContext): void {
   );
   handle(IPC.sessionsSetPlaylistMods, (input) =>
     ctx.connections.setPlaylistMods(parse(PlaylistModsInputSchema, input, 'playlist mods')),
+  );
+  handle(IPC.sessionsSelectBeatmap, (input) =>
+    ctx.connections.selectBeatmap(parse(SelectBeatmapInputSchema, input, 'beatmap selection')),
   );
   handle(IPC.sessionsAddPlaylistBeatmap, (input) =>
     ctx.connections.addPlaylistBeatmap(

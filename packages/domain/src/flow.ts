@@ -3,9 +3,9 @@ import type { MatchFlow, PendingAction, TeamSide } from '@osmaref/contracts';
 /**
  * Expands a declarative flow into a flat, ordered action queue.
  *
- * `side: 'both'` alternates team one / team two for each repetition, which is
- * how most osu! tournaments describe "one ban each" style steps. A flow can
- * still spell out asymmetric rounds by using consecutive team-specific steps.
+ * Every pick/ban/protect step involves both teams: `count` is the number of
+ * actions per team, and each repetition alternates team one / team two. That is
+ * how tournaments describe "one ban each" or "five picks each" style flows.
  */
 export function buildActionQueue(
   flow: MatchFlow,
@@ -14,15 +14,9 @@ export function buildActionQueue(
 ): PendingAction[] {
   const actions: PendingAction[] = [];
   for (const step of flow.steps) {
-    if (step.side === 'both') {
-      for (let index = 1; index <= step.count; index += 1) {
-        actions.push(makeAction(step.id, step.kind, 'team_one', index, step.count, teamOneId, teamTwoId));
-        actions.push(makeAction(step.id, step.kind, 'team_two', index, step.count, teamOneId, teamTwoId));
-      }
-      continue;
-    }
     for (let index = 1; index <= step.count; index += 1) {
-      actions.push(makeAction(step.id, step.kind, step.side, index, step.count, teamOneId, teamTwoId));
+      actions.push(makeAction(step.id, step.kind, 'team_one', index, step.count, teamOneId, teamTwoId));
+      actions.push(makeAction(step.id, step.kind, 'team_two', index, step.count, teamOneId, teamTwoId));
     }
   }
   return actions;

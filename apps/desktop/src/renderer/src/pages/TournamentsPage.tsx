@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  TOURNAMENT_MODES,
   WinConditionSchema,
+  matchTeamIds,
   validateTournamentReferences,
-  type AutomationRule,
-  type AutomationTrigger,
   type ImportPreview,
-  type MappoolCategory,
   type Match,
+  type MatchType,
   type RemoteTournamentSummary,
-  type Round,
+  type RulesetId,
+  type Stage,
+  type StageGroup,
   type Team,
   type Tournament,
+  type TournamentMode,
   type WinCondition,
 } from '@osmaref/contracts';
 import { useModel } from '../useOsmaRef';
@@ -19,7 +22,7 @@ import { Field, Modal, Section, formatDateTime } from '../ui';
 import { IdInput } from '../components/IdInput';
 import { Toast } from '../components/Toast';
 
-const CATEGORY_SUGGESTIONS = ['NM', 'HD', 'HR', 'DT', 'FM', 'TB', 'RC', 'LN', 'SV', 'HB'];
+const RULESET_LABELS = ['osu!', 'osu!taiko', 'osu!catch', 'osu!mania'];
 
 export function TournamentsPage() {
   const model = useModel();
@@ -27,7 +30,7 @@ export function TournamentsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Tournament | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [activeRoundId, setActiveRoundId] = useState<string | null>(null);
+  const [activeStageId, setActiveStageId] = useState<string | null>(null);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [remoteList, setRemoteList] = useState<RemoteTournamentSummary[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,6 +38,7 @@ export function TournamentsPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<number>>(new Set());
   const [lookupError, setLookupError] = useState<string | null>(null);
+  const [memberInput, setMemberInput] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (dirty) return;
@@ -45,10 +49,10 @@ export function TournamentsPage() {
     }
     if (selectedId !== target.id) setSelectedId(target.id);
     setDraft(structuredClone(target));
-    setActiveRoundId((previous) =>
-      previous && target.rounds.some((round) => round.id === previous)
+    setActiveStageId((previous) =>
+      previous && target.stages.some((stage) => stage.id === previous)
         ? previous
-        : target.rounds[0]?.id ?? null,
+        : target.stages[0]?.id ?? null,
     );
   }, [model.tournaments, selectedId, dirty]);
 
@@ -75,7 +79,7 @@ export function TournamentsPage() {
       setLookupError(
         t('user lookup failed for #{id}: {message}', {
           id,
-          message: cause instanceof Error ? cause.message : String(cause),
+          message: errorText(cause),
         }),
       );
     } finally {
@@ -91,7 +95,7 @@ export function TournamentsPage() {
     if (dirty && !window.confirm(t('Discard unsaved changes?'))) return;
     setDirty(false);
     setSelectedId(id);
-    setActiveRoundId(null);
+    setActiveStageId(null);
   };
 
   const save = async () => {
@@ -120,6 +124,23 @@ export function TournamentsPage() {
       setDirty(false);
       setSelectedId(created.id);
       setDraft(structuredClone(created));
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeTournament = async () => {
+    if (!draft) return;
+    if (!window.confirm(t('Delete "{name}"? This cannot be undone.', { name: draft.name }))) return;
+    setBusy(true);
+    try {
+      await window.osmaRef.tournaments.remove(draft.id);
+      await model.refreshTournaments();
+      setDirty(false);
+      setSelectedId(null);
+      setDraft(null);
     } catch (cause) {
       setError(errorText(cause));
     } finally {
@@ -172,11 +193,10 @@ export function TournamentsPage() {
     try {
       const saved = await window.osmaRef.tournaments.applyImport(importPreview);
       await model.refreshTournaments();
+      setImportPreview(null);
       setDirty(false);
       setSelectedId(saved.id);
       setDraft(structuredClone(saved));
-      setImportPreview(null);
-      setNotice(t('imported "{name}" (revision {revision})', { name: saved.name, revision: saved.revision }));
     } catch (cause) {
       setError(errorText(cause));
     } finally {
@@ -186,6 +206,8 @@ export function TournamentsPage() {
 
   const exportTournament = async () => {
     if (!draft) return;
+    setError(null);
+    setNotice(null);
     try {
       const path = await window.osmaRef.tournaments.exportFile(draft.id);
       if (path) setNotice(t('exported to {path}', { path }));
@@ -194,20 +216,8 @@ export function TournamentsPage() {
     }
   };
 
-  const removeTournament = async () => {
-    if (!draft) return;
-    if (!window.confirm(t('Delete "{name}"? This cannot be undone.', { name: draft.name }))) return;
-    try {
-      await window.osmaRef.tournaments.remove(draft.id);
-      setDirty(false);
-      setSelectedId(null);
-      await model.refreshTournaments();
-    } catch (cause) {
-      setError(errorText(cause));
-    }
-  };
-
-  const activeRound = draft?.rounds.find((round) => round.id === activeRoundId) ?? draft?.rounds[0] ?? null;
+  const activeStage =
+    draft?.stages.find((stage) => stage.id === activeStageId) ?? draft?.stages[0] ?? null;
 
   return (
     <div className="page">
@@ -240,12 +250,8 @@ export function TournamentsPage() {
       </header>
 
       {error ? <Toast message={error} onClose={() => setError(null)} /> : null}
-      {lookupError ? (
-        <Toast message={lookupError} onClose={() => setLookupError(null)} />
-      ) : null}
-      {notice ? (
-        <Toast kind="success" message={notice} onClose={() => setNotice(null)} />
-      ) : null}
+      {lookupError ? <Toast message={lookupError} onClose={() => setLookupError(null)} /> : null}
+      {notice ? <Toast kind="success" message={notice} onClose={() => setNotice(null)} /> : null}
 
       <div className="split">
         <aside className="list-panel">
@@ -255,44 +261,49 @@ export function TournamentsPage() {
               {t('+ New')}
             </button>
           </div>
-          {model.tournaments.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              className={`list-item${entry.id === selectedId ? ' active' : ''}`}
-              onClick={() => select(entry.id)}
-            >
-              <strong>{entry.name}</strong>
-              <span className="muted small">
-                {entry.abbreviation} · {t('{count} rounds', { count: entry.rounds.length })} · rev{' '}
-                {entry.revision}
-              </span>
-            </button>
-          ))}
-          {model.tournaments.length === 0 ? (
-            <p className="muted small pad">{t('Create a tournament or import an existing configuration.')}</p>
+          <div className="tournament-list">
+            {model.tournaments.length === 0 ? (
+              <p className="muted small">
+                {t('Create a tournament or import an existing configuration.')}
+              </p>
+            ) : null}
+            {model.tournaments.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                className={`tournament-item${entry.id === selectedId ? ' active' : ''}`}
+                onClick={() => select(entry.id)}
+              >
+                <span className="list-name">{entry.name}</span>
+                <span className="muted small">
+                  {entry.abbreviation} · {t('{count} team(s)', { count: entry.teams.length })}
+                </span>
+              </button>
+            ))}
+          </div>
+          {draft ? (
+            <div className="row-actions">
+              <button type="button" className="ghost small danger" onClick={() => void removeTournament()}>
+                {t('Delete tournament')}
+              </button>
+            </div>
           ) : null}
         </aside>
 
-        <div className="editor">
+        <div className="editor-panel">
           {!draft ? (
-            <div className="empty">
-              <strong>{t('No tournament selected')}</strong>
-              <p className="muted">{t('Create one to start configuring teams, rounds and matches.')}</p>
-            </div>
+            <Section title={t('No tournament selected')}>
+              <p className="muted">{t('Create one to start configuring teams and stages.')}</p>
+            </Section>
           ) : (
             <>
-              <Section
-                title={t('Basics')}
-                actions={
-                  <button type="button" className="ghost small danger" onClick={() => void removeTournament()}>
-                    {t('Delete')}
-                  </button>
-                }
-              >
+              <Section title={t('Basics')}>
                 <div className="form-grid">
                   <Field label={t('Name')}>
-                    <input value={draft.name} onChange={(event) => edit((next) => (next.name = event.target.value))} />
+                    <input
+                      value={draft.name}
+                      onChange={(event) => edit((next) => (next.name = event.target.value))}
+                    />
                   </Field>
                   <Field label={t('Abbreviation')}>
                     <input
@@ -306,31 +317,45 @@ export function TournamentsPage() {
                       }
                     />
                   </Field>
-                  <Field label={t('Ruleset')}>
+                  <Field label={t('Mode')}>
                     <select
-                      value={draft.rulesetId}
+                      value={draft.mode}
                       onChange={(event) =>
-                        edit((next) => (next.rulesetId = Number(event.target.value) as 0 | 1 | 2 | 3))
+                        edit((next) => (next.mode = event.target.value as TournamentMode))
                       }
                     >
-                      <option value={0}>osu!</option>
-                      <option value={1}>osu!taiko</option>
-                      <option value={2}>osu!catch</option>
-                      <option value={3}>osu!mania</option>
+                      {TOURNAMENT_MODES.map((mode) => (
+                        <option key={mode} value={mode}>
+                          {modeLabel(mode)}
+                        </option>
+                      ))}
                     </select>
                   </Field>
-                  <Field label={t('Default match type')}>
-                    <select
-                      value={draft.defaultMatchType}
+                  <Field label={t('Team Size')}>
+                    <input
+                      type="number"
+                      min={1}
+                      max={16}
+                      value={draft.teamSize}
                       onChange={(event) =>
                         edit(
-                          (next) => (next.defaultMatchType = event.target.value as 'head_to_head' | 'team_versus'),
+                          (next) =>
+                            (next.teamSize = Math.max(
+                              1,
+                              Math.min(16, Number(event.target.value) || 1),
+                            )),
                         )
                       }
-                    >
-                      <option value="team_versus">{t('Team VS')}</option>
-                      <option value="head_to_head">{t('Head to head')}</option>
-                    </select>
+                    />
+                  </Field>
+                  <Field label={t('Ruleset')}>
+                    <span className="muted small">
+                      {draft.mode === 'osu'
+                        ? t('Native beatmap mode')
+                        : draft.mode === 'multi'
+                          ? t('Per-beatmap mode')
+                          : modeLabel(draft.mode)}
+                    </span>
                   </Field>
                 </div>
                 <p className="muted small">
@@ -346,8 +371,8 @@ export function TournamentsPage() {
                 <div className="banner warn">
                   <strong>{t('Configuration issues')}</strong>
                   <ul>
-                    {issues.slice(0, 12).map((issue, index) => (
-                      <li key={`${issue.path.join('.')}-${index}`}>
+                    {issues.slice(0, 8).map((issue, index) => (
+                      <li key={index}>
                         {issue.path.join('.')}: {issue.message}
                       </li>
                     ))}
@@ -355,24 +380,23 @@ export function TournamentsPage() {
                 </div>
               ) : null}
 
-              <TeamsSection
+              <TeamsEditor
                 draft={draft}
                 edit={edit}
-                resolveName={resolveName}
+                memberInput={memberInput}
+                setMemberInput={setMemberInput}
                 pendingIds={pendingIds}
-                lookupError={lookupError}
+                resolveName={resolveName}
               />
 
-              <RoundsSection
+              <StagesEditor
                 draft={draft}
                 edit={edit}
-                activeRound={activeRound}
-                onSelectRound={setActiveRoundId}
+                activeStage={activeStage}
+                onSelectStage={setActiveStageId}
               />
 
-              <ScoringSection draft={draft} edit={edit} />
-              <MatchesSection draft={draft} edit={edit} />
-              <AutomationSection draft={draft} edit={edit} />
+              <AutomationEditor draft={draft} edit={edit} />
             </>
           )}
         </div>
@@ -394,7 +418,8 @@ export function TournamentsPage() {
           }
         >
           <p>
-            <strong>{importPreview.tournament.name}</strong> · revision {importPreview.tournament.revision} ·{' '}
+            <strong>{importPreview.tournament.name}</strong> · revision{' '}
+            {importPreview.tournament.revision} ·{' '}
             {importPreview.provider === 'http' ? t('from server') : t('from file')}
           </p>
           <p className="muted small">
@@ -429,7 +454,9 @@ export function TournamentsPage() {
 
       {remoteList ? (
         <Modal title={t('Tournaments on the companion server')} onClose={() => setRemoteList(null)}>
-          {remoteList.length === 0 ? <p className="muted">{t('The server has no published tournaments.')}</p> : null}
+          {remoteList.length === 0 ? (
+            <p className="muted">{t('The server has no published tournaments.')}</p>
+          ) : null}
           {remoteList.map((remote) => (
             <div key={remote.id} className="remote-row">
               <div>
@@ -441,7 +468,11 @@ export function TournamentsPage() {
                   })}
                 </span>
               </div>
-              <button type="button" className="ghost small" onClick={() => void previewRemote(remote.id)}>
+              <button
+                type="button"
+                className="ghost small"
+                onClick={() => void previewRemote(remote.id)}
+              >
                 {t('Preview')}
               </button>
             </div>
@@ -452,498 +483,513 @@ export function TournamentsPage() {
   );
 }
 
-type EditFn = (mutator: (tournament: Tournament) => void) => void;
-type ResolveName = (id: number, apply: (username: string) => void) => void;
-
-function TeamsSection({
+function TeamsEditor({
   draft,
   edit,
-  resolveName,
+  memberInput,
+  setMemberInput,
   pendingIds,
-  lookupError,
+  resolveName,
 }: {
   draft: Tournament;
-  edit: EditFn;
-  resolveName: ResolveName;
+  edit: (mutator: (tournament: Tournament) => void) => void;
+  memberInput: Record<number, string>;
+  setMemberInput: (value: Record<number, string>) => void;
   pendingIds: Set<number>;
-  lookupError: string | null;
+  resolveName: (id: number, apply: (username: string) => void) => Promise<void>;
 }) {
   const { t } = useI18n();
-  const [refereeId, setRefereeId] = useState('');
 
-  const userName = (member: { userId: number; username: string }) => {
-    if (member.username) return member.username;
-    return pendingIds.has(member.userId) ? t('Resolving…') : '—';
+  const addTeam = () => {
+    const nextId = draft.teams.reduce((max, team) => Math.max(max, team.id), -1) + 1;
+    edit((next) =>
+      next.teams.push({
+        id: nextId,
+        name: `Team ${nextId + 1}`,
+        captainUserId: null,
+        members: [],
+        seed: null,
+      }),
+    );
+  };
+
+  const addMember = async (team: Team) => {
+    const raw = (memberInput[team.id] ?? '').trim();
+    if (!raw) return;
+    const userId = Number(raw.replace(/^#/, ''));
+    if (!Number.isInteger(userId) || userId <= 0) return;
+    let username = '';
+    await resolveName(userId, (name) => {
+      username = name;
+    });
+    edit((next) => {
+      const target = next.teams.find((entry) => entry.id === team.id);
+      if (!target || target.members.some((member) => member.userId === userId)) return;
+      target.members.push({ userId, username });
+    });
+    setMemberInput({ ...memberInput, [team.id]: '' });
   };
 
   return (
     <Section
-      title={t('Teams and referees')}
+      title={t('Teams and roster')}
       actions={
-        <button
-          type="button"
-          className="ghost small"
-          onClick={() =>
-            edit((next) => {
-              next.teams.push({
-                id: `team_${next.teams.length + 1}_${Date.now().toString(36)}`,
-                name: `Team ${next.teams.length + 1}`,
-                members: [],
-              });
-            })
-          }
-        >
+        <button type="button" className="ghost small" onClick={addTeam}>
           {t('+ Team')}
         </button>
       }
     >
-      <div className="team-grid">
-        {draft.teams.map((team, teamIndex) => (
-          <div className="team-card" key={team.id}>
-            <div className="team-head">
+      {draft.teams.length === 0 ? <p className="muted small">{t('No teams yet.')}</p> : null}
+      <div className="team-editor-list">
+        {draft.teams.map((team) => (
+          <div className="team-editor" key={team.id}>
+            <div className="team-editor-head">
               <input
+                className="team-name-input"
                 value={team.name}
-                onChange={(event) => edit((next) => (next.teams[teamIndex]!.name = event.target.value))}
+                onChange={(event) =>
+                  edit((next) => {
+                    const target = next.teams.find((entry) => entry.id === team.id);
+                    if (target) target.name = event.target.value;
+                  })
+                }
               />
+              <label className="inline-field">
+                {t('Seed')}
+                <input
+                  type="number"
+                  min={0}
+                  value={team.seed ?? ''}
+                  onChange={(event) =>
+                    edit((next) => {
+                      const target = next.teams.find((entry) => entry.id === team.id);
+                      if (!target) return;
+                      const value = event.target.value.trim();
+                      target.seed = value === '' ? null : Math.max(0, Math.floor(Number(value)));
+                    })
+                  }
+                />
+              </label>
+              <label className="inline-field">
+                {t('Captain')}
+                <select
+                  value={team.captainUserId ?? ''}
+                  onChange={(event) =>
+                    edit((next) => {
+                      const target = next.teams.find((entry) => entry.id === team.id);
+                      if (!target) return;
+                      target.captainUserId = event.target.value ? Number(event.target.value) : null;
+                    })
+                  }
+                >
+                  <option value="">—</option>
+                  {team.members.map((member) => (
+                    <option key={member.userId} value={member.userId}>
+                      {member.username || `#${member.userId}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
                 className="ghost small danger"
-                onClick={() => edit((next) => next.teams.splice(teamIndex, 1))}
+                onClick={() => edit((next) => (next.teams = next.teams.filter((entry) => entry.id !== team.id)))}
               >
                 ×
               </button>
             </div>
-
-            {team.members.map((member, memberIndex) => (
-              <div className="member-row" key={`${team.id}-${memberIndex}`}>
-                <IdInput
-                  kind="user"
-                  placeholder={t('user id')}
-                  value={member.userId ? String(member.userId) : ''}
-                  onChange={(value) => {
-                    const userId = Number(value) || 0;
-                    edit((next) => {
-                      const target = next.teams[teamIndex]!.members[memberIndex]!;
-                      target.userId = userId;
-                      target.username = '';
-                    });
-                  }}
-                  onBlur={() => {
-                    const userId = member.userId;
-                    if (userId <= 0) return;
-                    void resolveName(userId, (username) =>
+            <div className="member-chips">
+              {team.members.map((member) => (
+                <span className="member-chip" key={member.userId}>
+                  {member.username || `#${member.userId}`}
+                  <button
+                    type="button"
+                    className="member-remove"
+                    onClick={() =>
                       edit((next) => {
-                        const target = next.teams[teamIndex]?.members[memberIndex];
-                        if (target && target.userId === userId) target.username = username;
-                      }),
-                    );
-                  }}
-                />
-                <span className="member-name" title={member.username || undefined}>
-                  {userName(member)}
-                </span>
-                <label className="inline-field" title={t('captain')}>
-                  <input
-                    type="checkbox"
-                    checked={member.captain}
-                    onChange={(event) =>
-                      edit(
-                        (next) =>
-                          (next.teams[teamIndex]!.members[memberIndex]!.captain = event.target.checked),
-                      )
+                        const target = next.teams.find((entry) => entry.id === team.id);
+                        if (!target) return;
+                        target.members = target.members.filter(
+                          (entry) => entry.userId !== member.userId,
+                        );
+                        if (target.captainUserId === member.userId) target.captainUserId = null;
+                      })
                     }
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="ghost small danger"
-                  onClick={() => edit((next) => next.teams[teamIndex]!.members.splice(memberIndex, 1))}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-
-            <button
-              type="button"
-              className="ghost small"
-              onClick={() =>
-                edit((next) =>
-                  next.teams[teamIndex]!.members.push({ userId: 0, username: '', captain: false }),
-                )
-              }
-            >
-              {t('+ player')}
-            </button>
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <IdInput
+                kind="user"
+                allowUsername
+                className="compact-input"
+                value={memberInput[team.id] ?? ''}
+                onChange={(value) => setMemberInput({ ...memberInput, [team.id]: value })}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+                  event.preventDefault();
+                  void addMember(team);
+                }}
+                placeholder={t('user id')}
+              />
+              <button
+                type="button"
+                className="ghost small"
+                disabled={pendingIds.size > 0 || !(memberInput[team.id] ?? '').trim()}
+                onClick={() => void addMember(team)}
+              >
+                {t('+ player')}
+              </button>
+            </div>
           </div>
         ))}
-      </div>
-
-      <div className="row-actions">
-        <span className="muted small">
-          {t('Referees: {names}', {
-            names:
-              draft.referees.map((referee) => `${referee.username || `#${referee.userId}`}`).join(', ') ||
-              t('none'),
-          })}
-        </span>
-        <IdInput
-          kind="user"
-          placeholder={t('user id')}
-          value={refereeId}
-          onChange={setRefereeId}
-        />
-        <button
-          type="button"
-          className="ghost small"
-          onClick={() => {
-            const id = Number(refereeId);
-            if (!Number.isInteger(id) || id <= 0) return;
-            if (draft.referees.some((referee) => referee.userId === id)) {
-              setRefereeId('');
-              return;
-            }
-            edit((next) => next.referees.push({ userId: id, username: '' }));
-            setRefereeId('');
-            void resolveName(id, (username) =>
-              edit((next) => {
-                const referee = next.referees.find((entry) => entry.userId === id);
-                if (referee) referee.username = username;
-              }),
-            );
-          }}
-        >
-          {t('+ referee')}
-        </button>
-        <button
-          type="button"
-          className="ghost small"
-          onClick={() => {
-            for (const team of draft.teams) {
-              for (const member of team.members) {
-                if (member.userId <= 0) continue;
-                const userId = member.userId;
-                void resolveName(userId, (username) =>
-                  edit((next) => {
-                    for (const candidateTeam of next.teams) {
-                      const target = candidateTeam.members.find((entry) => entry.userId === userId);
-                      if (target) target.username = username;
-                    }
-                  }),
-                );
-              }
-            }
-          }}
-        >
-          {t('Refresh names')}
-        </button>
       </div>
     </Section>
   );
 }
 
-function RoundsSection({
+function StagesEditor({
   draft,
   edit,
-  activeRound,
-  onSelectRound,
+  activeStage,
+  onSelectStage,
 }: {
   draft: Tournament;
-  edit: EditFn;
-  activeRound: Round | null;
-  onSelectRound: (id: string | null) => void;
+  edit: (mutator: (tournament: Tournament) => void) => void;
+  activeStage: Stage | null;
+  onSelectStage: (id: string | null) => void;
 }) {
   const { t } = useI18n();
 
-  const addRound = () => {
-    const id = `round_${Date.now().toString(36)}`;
+  const addStage = () => {
+    const id = `stage_${Date.now().toString(36)}`;
     edit((next) => {
-      const order = next.rounds.length;
-      next.rounds.push({
+      const order = next.stages.length;
+      next.stages.push({
         id,
-        name: `Round ${order + 1}`,
+        name: `Stage ${order + 1}`,
         order,
+        type: 'knockout',
+        groups: [],
         bestOf: 9,
         slots: [],
         flow: {
           id: `flow_${id}`,
-          name: `Round ${order + 1} flow`,
+          name: `Stage ${order + 1} flow`,
           steps: [
-            { id: `step_ban_${id}`, kind: 'ban', count: 1, side: 'both' },
-            { id: `step_pick_${id}`, kind: 'pick', count: 10, side: 'both' },
+            { id: `step_ban_${id}`, kind: 'ban', count: 1 },
+            { id: `step_pick_${id}`, kind: 'pick', count: 10 },
           ],
           triggers: [],
         },
+        scoringScheme: {
+          id: `score_${id}`,
+          name: 'Score V2',
+          winCondition: 'score_v2',
+          aggregation: 'sum',
+          modMultipliers: {},
+        },
+        matches: [],
       });
     });
-    onSelectRound(id);
+    onSelectStage(id);
   };
 
-  const removeRound = () => {
-    if (!activeRound) return;
-    if (draft.matches.some((match) => match.roundId === activeRound.id)) {
-      window.alert(t('This round is used by a match. Change or remove the match first.'));
-      return;
-    }
-    edit((next) => {
-      next.rounds = next.rounds.filter((round) => round.id !== activeRound.id);
-    });
-    onSelectRound(null);
-  };
-
-  const roundIndex = activeRound ? draft.rounds.findIndex((round) => round.id === activeRound.id) : -1;
+  const stageIndex = activeStage
+    ? draft.stages.findIndex((stage) => stage.id === activeStage.id)
+    : -1;
 
   return (
     <Section
-      title={t('Rounds')}
+      title={t('Stages')}
       actions={
-        <>
-          <button type="button" className="ghost small" onClick={addRound}>
-            {t('+ Round')}
-          </button>
-          {activeRound ? (
-            <button type="button" className="ghost small danger" onClick={removeRound}>
-              {t('Delete round')}
-            </button>
-          ) : null}
-        </>
+        <button type="button" className="ghost small" onClick={addStage}>
+          {t('+ Stage')}
+        </button>
       }
     >
-      {draft.rounds.length === 0 ? (
-        <p className="muted small">{t('No rounds yet. Add one to configure its mappool and flow.')}</p>
+      {draft.stages.length === 0 ? (
+        <p className="muted small">{t('No stages yet.')}</p>
       ) : (
         <div className="session-tabs">
-          {draft.rounds.map((round) => (
+          {draft.stages.map((stage) => (
             <button
-              key={round.id}
+              key={stage.id}
               type="button"
-              className={`tab${round.id === activeRound?.id ? ' active' : ''}`}
-              onClick={() => onSelectRound(round.id)}
+              className={`tab${stage.id === activeStage?.id ? ' active' : ''}`}
+              onClick={() => onSelectStage(stage.id)}
             >
-              {round.name}
-              <span className="muted small"> · BO{round.bestOf}</span>
+              {stage.name}
             </button>
           ))}
         </div>
       )}
 
-      {activeRound && roundIndex >= 0 ? (
+      {activeStage && stageIndex >= 0 ? (
         <>
           <div className="form-grid">
-            <Field label={t('Round name')}>
+            <Field label={t('Stage name')}>
               <input
-                value={activeRound.name}
+                value={activeStage.name}
                 onChange={(event) =>
-                  edit((next) => (next.rounds[roundIndex]!.name = event.target.value))
+                  edit((next) => {
+                    next.stages[stageIndex]!.name = event.target.value;
+                  })
                 }
               />
             </Field>
-            <Field label={t('Best of')}>
+            <Field label={t('Stage type')}>
+              <select
+                value={activeStage.type}
+                onChange={(event) =>
+                  edit((next) => {
+                    next.stages[stageIndex]!.type = event.target.value as 'group' | 'knockout';
+                  })
+                }
+              >
+                <option value="group">{t('Group stage')}</option>
+                <option value="knockout">{t('Knockout')}</option>
+              </select>
+            </Field>
+            <Field label={t('best of')}>
               <input
                 type="number"
                 min={1}
                 max={31}
                 step={2}
-                value={activeRound.bestOf}
+                value={activeStage.bestOf}
                 onChange={(event) =>
-                  edit(
-                    (next) =>
-                      (next.rounds[roundIndex]!.bestOf = Math.max(
-                        1,
-                        Math.min(31, Number(event.target.value) || 1),
-                      )),
-                  )
+                  edit((next) => {
+                    next.stages[stageIndex]!.bestOf = Math.max(
+                      1,
+                      Math.min(31, Number(event.target.value) || 1),
+                    );
+                  })
                 }
               />
             </Field>
           </div>
 
-          <RoundPoolEditor draft={draft} edit={edit} round={activeRound} roundIndex={roundIndex} />
-          <FlowEditor draft={draft} edit={edit} round={activeRound} roundIndex={roundIndex} />
+          <div className="row-actions">
+            <button
+              type="button"
+              className="ghost small danger"
+              onClick={() => {
+                edit((next) => {
+                  next.stages = next.stages.filter((stage) => stage.id !== activeStage.id);
+                });
+                onSelectStage(null);
+              }}
+            >
+              {t('Delete stage')}
+            </button>
+          </div>
+
+          {activeStage.type === 'group' ? (
+            <GroupsEditor draft={draft} edit={edit} stage={activeStage} stageIndex={stageIndex} />
+          ) : null}
+
+          <PoolEditor draft={draft} edit={edit} stage={activeStage} stageIndex={stageIndex} />
+          <FlowEditor draft={draft} edit={edit} stage={activeStage} stageIndex={stageIndex} />
+          <ScoringEditor draft={draft} edit={edit} stage={activeStage} stageIndex={stageIndex} />
+          <MatchesEditor draft={draft} edit={edit} stage={activeStage} stageIndex={stageIndex} />
         </>
       ) : null}
     </Section>
   );
 }
 
-function RoundPoolEditor({
+function GroupsEditor({
   draft,
   edit,
-  round,
-  roundIndex,
+  stage,
+  stageIndex,
 }: {
   draft: Tournament;
-  edit: EditFn;
-  round: Round;
-  roundIndex: number;
+  edit: (mutator: (tournament: Tournament) => void) => void;
+  stage: Stage;
+  stageIndex: number;
 }) {
   const { t } = useI18n();
 
+  const addGroup = () => {
+    const id = `group_${Date.now().toString(36)}`;
+    edit((next) =>
+      next.stages[stageIndex]!.groups.push({ id, name: `Group ${stage.groups.length + 1}`, teamIds: [] }),
+    );
+  };
+
+  const toggleTeam = (group: StageGroup, teamId: number) => {
+    edit((next) => {
+      const target = next.stages[stageIndex]!.groups.find((entry) => entry.id === group.id);
+      if (!target) return;
+      target.teamIds = target.teamIds.includes(teamId)
+        ? target.teamIds.filter((id) => id !== teamId)
+        : [...target.teamIds, teamId];
+    });
+  };
+
   return (
-    <div className="pool-editor">
+    <div className="flow-card">
       <div className="row">
-        <strong>{t('Mappool')}</strong>
-        <button
-          type="button"
-          className="ghost small"
-          onClick={() =>
-            edit((next) => {
-              const target = next.rounds[roundIndex]!;
-              const category = 'NM';
-              const used = target.slots
-                .filter((slot) => slot.category === category)
-                .map((slot) => Number(new RegExp(`^${category}(\\d+)$`, 'i').exec(slot.label)?.[1] ?? 0));
-              const nextIndex = Math.max(0, ...used) + 1;
-              target.slots.push({
-                id: `slot_${Date.now().toString(36)}`,
-                label: `${category}${nextIndex}`,
-                category,
-                beatmapId: 1,
-                rulesetId: next.rulesetId,
-                requiredMods: [],
-                allowedMods: [],
-                freestyle: false,
-                winCondition: null,
-                winConditionWinner: null,
-              });
-            })
-          }
-        >
-          {t('+ Slot')}
+        <strong>{t('Groups')}</strong>
+        <button type="button" className="ghost small" onClick={addGroup}>
+          {t('+ Group')}
         </button>
       </div>
-
-      <div className="slot-table">
-        <div className="slot-row slot-head">
-          <span>{t('Label')}</span>
-          <span>{t('Category')}</span>
-          <span>{t('Beatmap')}</span>
-          <span>{t('Ruleset')}</span>
-          <span>{t('Required mods')}</span>
-          <span>{t('Allowed mods')}</span>
-          <span>{t('Win condition')}</span>
-          <span>{t('Winner')}</span>
-          <span />
-        </div>
-        {round.slots.map((slot, slotIndex) => (
-          <div className="slot-row" key={slot.id}>
+      {stage.groups.length === 0 ? <p className="muted small">{t('No groups yet.')}</p> : null}
+      {stage.groups.map((group) => (
+        <div className="group-editor" key={group.id}>
+          <div className="row">
             <input
-              value={slot.label}
+              value={group.name}
               onChange={(event) =>
-                edit((next) => (next.rounds[roundIndex]!.slots[slotIndex]!.label = event.target.value))
+                edit((next) => {
+                  const target = next.stages[stageIndex]!.groups.find(
+                    (entry) => entry.id === group.id,
+                  );
+                  if (target) target.name = event.target.value;
+                })
               }
             />
-            <input
-              list="mappool-categories"
-              value={slot.category}
-              onChange={(event) =>
-                edit(
-                  (next) =>
-                    (next.rounds[roundIndex]!.slots[slotIndex]!.category = event.target
-                      .value as MappoolCategory),
-                )
-              }
-            />
-            <IdInput
-              kind="beatmap"
-              value={slot.beatmapId ? String(slot.beatmapId) : ''}
-              onChange={(value) =>
-                edit(
-                  (next) =>
-                    (next.rounds[roundIndex]!.slots[slotIndex]!.beatmapId = Number(value) || 0),
-                )
-              }
-            />
-            <select
-              value={slot.rulesetId}
-              onChange={(event) =>
-                edit(
-                  (next) =>
-                    (next.rounds[roundIndex]!.slots[slotIndex]!.rulesetId = Number(event.target.value) as
-                      | 0
-                      | 1
-                      | 2
-                      | 3),
-                )
-              }
-            >
-              <option value={0}>osu!</option>
-              <option value={1}>taiko</option>
-              <option value={2}>catch</option>
-              <option value={3}>mania</option>
-            </select>
-            <input
-              value={slot.requiredMods.join(' ')}
-              placeholder="HD HR"
-              onChange={(event) =>
-                edit(
-                  (next) =>
-                    (next.rounds[roundIndex]!.slots[slotIndex]!.requiredMods = parseMods(
-                      event.target.value,
-                    )),
-                )
-              }
-            />
-            <input
-              value={slot.allowedMods.join(' ')}
-              placeholder="HD HR"
-              onChange={(event) =>
-                edit(
-                  (next) =>
-                    (next.rounds[roundIndex]!.slots[slotIndex]!.allowedMods = parseMods(
-                      event.target.value,
-                    )),
-                )
-              }
-            />
-            <select
-              value={slot.winCondition ?? ''}
-              onChange={(event) =>
-                edit(
-                  (next) =>
-                    (next.rounds[roundIndex]!.slots[slotIndex]!.winCondition =
-                      (event.target.value || null) as WinCondition | null),
-                )
-              }
-            >
-              <option value="">{t('auto')}</option>
-              {WinConditionSchema.options.map((condition) => (
-                <option key={condition} value={condition}>
-                  {condition}
-                </option>
-              ))}
-            </select>
-            <select
-              value={slot.winConditionWinner ?? ''}
-              onChange={(event) =>
-                edit(
-                  (next) =>
-                    (next.rounds[roundIndex]!.slots[slotIndex]!.winConditionWinner =
-                      (event.target.value || null) as 'highest' | 'lowest' | null),
-                )
-              }
-            >
-              <option value="">{t('auto')}</option>
-              <option value="highest">{t('highest')}</option>
-              <option value="lowest">{t('lowest')}</option>
-            </select>
             <button
               type="button"
               className="ghost small danger"
               onClick={() =>
-                edit((next) => next.rounds[roundIndex]!.slots.splice(slotIndex, 1))
+                edit((next) => {
+                  next.stages[stageIndex]!.groups = next.stages[stageIndex]!.groups.filter(
+                    (entry) => entry.id !== group.id,
+                  );
+                })
               }
             >
               ×
             </button>
           </div>
-        ))}
+          <div className="member-chips">
+            {draft.teams.map((team) => (
+              <button
+                key={team.id}
+                type="button"
+                className={`team-toggle${group.teamIds.includes(team.id) ? ' active' : ''}`}
+                onClick={() => toggleTeam(group, team.id)}
+              >
+                {team.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PoolEditor({
+  draft,
+  edit,
+  stage,
+  stageIndex,
+}: {
+  draft: Tournament;
+  edit: (mutator: (tournament: Tournament) => void) => void;
+  stage: Stage;
+  stageIndex: number;
+}) {
+  const { t } = useI18n();
+
+  const addSlot = () => {
+    const id = `slot_${Date.now().toString(36)}`;
+    edit((next) => {
+      const target = next.stages[stageIndex]!;
+      const nextIndex = target.slots.length + 1;
+      target.slots.push({
+        id,
+        label: `NM${nextIndex}`,
+        category: 'NM',
+        beatmapId: 1,
+        rulesetId: null,
+        requiredMods: [],
+        allowedMods: [],
+        freestyle: false,
+        winCondition: null,
+        winConditionWinner: null,
+      });
+    });
+  };
+
+  const patchSlot = (index: number, mutator: (slot: Stage['slots'][number]) => void) => {
+    edit((next) => mutator(next.stages[stageIndex]!.slots[index]!));
+  };
+
+  return (
+    <div className="flow-card">
+      <div className="row">
+        <strong>{t('Mappool')}</strong>
+        <button type="button" className="ghost small" onClick={addSlot}>
+          {t('+ Slot')}
+        </button>
       </div>
-      <datalist id="mappool-categories">
-        {CATEGORY_SUGGESTIONS.map((category) => (
-          <option key={category} value={category} />
-        ))}
-      </datalist>
+      {stage.slots.length === 0 ? (
+        <p className="muted small">{t('Create a mappool to add beatmaps.')}</p>
+      ) : (
+        <div className="slot-editor-list">
+          {stage.slots.map((slot, index) => (
+            <div className="slot-editor" key={slot.id}>
+              <input
+                value={slot.label}
+                maxLength={12}
+                onChange={(event) => patchSlot(index, (target) => (target.label = event.target.value))}
+              />
+              <input
+                value={slot.category}
+                maxLength={8}
+                onChange={(event) =>
+                  patchSlot(index, (target) => (target.category = event.target.value.toUpperCase()))
+                }
+              />
+              <input
+                type="number"
+                min={1}
+                value={slot.beatmapId}
+                onChange={(event) =>
+                  patchSlot(index, (target) => (target.beatmapId = Math.max(1, Number(event.target.value) || 1)))
+                }
+              />
+              <select
+                value={slot.rulesetId ?? ''}
+                onChange={(event) =>
+                  patchSlot(
+                    index,
+                    (target) =>
+                      (target.rulesetId = event.target.value
+                        ? (Number(event.target.value) as RulesetId)
+                        : null),
+                  )
+                }
+              >
+                <option value="">{t('Native')}</option>
+                {RULESET_LABELS.map((label, rulesetId) => (
+                  <option key={rulesetId} value={rulesetId}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="ghost small danger"
+                onClick={() =>
+                  edit((next) => {
+                    next.stages[stageIndex]!.slots.splice(index, 1);
+                  })
+                }
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -951,83 +997,77 @@ function RoundPoolEditor({
 function FlowEditor({
   draft,
   edit,
-  round,
-  roundIndex,
+  stage,
+  stageIndex,
 }: {
   draft: Tournament;
-  edit: EditFn;
-  round: Round;
-  roundIndex: number;
+  edit: (mutator: (tournament: Tournament) => void) => void;
+  stage: Stage;
+  stageIndex: number;
 }) {
   const { t } = useI18n();
-  const flow = round.flow;
 
   return (
     <div className="flow-card">
       <div className="row">
         <strong>{t('Pick/Ban flow')}</strong>
+        <button
+          type="button"
+          className="ghost small"
+          onClick={() =>
+            edit((next) => {
+              const target = next.stages[stageIndex]!.flow;
+              target.steps.push({ id: `step_${Date.now()}`, kind: 'pick', count: 1 });
+            })
+          }
+        >
+          {t('+ step')}
+        </button>
       </div>
-      {flow.steps.map((step, stepIndex) => (
+      {stage.flow.steps.map((step, index) => (
         <div className="row" key={step.id}>
           <select
             value={step.kind}
             onChange={(event) =>
-              edit(
-                (next) =>
-                  (next.rounds[roundIndex]!.flow.steps[stepIndex]!.kind = event.target.value as
-                    | 'protect'
-                    | 'ban'
-                    | 'pick'),
-              )
+              edit((next) => {
+                next.stages[stageIndex]!.flow.steps[index]!.kind = event.target.value as
+                  | 'protect'
+                  | 'ban'
+                  | 'pick';
+              })
             }
           >
             <option value="protect">{t('protect')}</option>
             <option value="ban">{t('ban')}</option>
             <option value="pick">{t('pick')}</option>
           </select>
-          <label className="inline-field">
-            {t('count')}
-            <input
-              type="number"
-              min={1}
-              max={10}
-              value={step.count}
-              onChange={(event) =>
-                edit(
-                  (next) =>
-                    (next.rounds[roundIndex]!.flow.steps[stepIndex]!.count = Math.max(
-                      1,
-                      Math.min(10, Number(event.target.value) || 1),
-                    )),
-                )
-              }
-            />
-          </label>
+          <input
+            type="number"
+            min={1}
+            max={10}
+            value={step.count}
+            onChange={(event) =>
+              edit((next) => {
+                next.stages[stageIndex]!.flow.steps[index]!.count = Math.max(
+                  1,
+                  Math.min(10, Number(event.target.value) || 1),
+                );
+              })
+            }
+          />
           <button
             type="button"
             className="ghost small danger"
-            onClick={() => edit((next) => next.rounds[roundIndex]!.flow.steps.splice(stepIndex, 1))}
+            onClick={() =>
+              edit((next) => {
+                next.stages[stageIndex]!.flow.steps.splice(index, 1);
+              })
+            }
           >
             ×
           </button>
         </div>
       ))}
-      <button
-        type="button"
-        className="ghost small"
-        onClick={() =>
-          edit((next) =>
-            next.rounds[roundIndex]!.flow.steps.push({
-              id: `step_${Date.now()}`,
-              kind: 'pick',
-              count: 1,
-              side: 'both',
-            }),
-          )
-        }
-      >
-        {t('+ step')}
-      </button>
 
       <div className="flow-triggers">
         <div className="row">
@@ -1036,111 +1076,72 @@ function FlowEditor({
             type="button"
             className="ghost small"
             onClick={() =>
-              edit((next) =>
-                next.rounds[roundIndex]!.flow.triggers.push({
+              edit((next) => {
+                next.stages[stageIndex]!.flow.triggers.push({
                   id: `trigger_${Date.now()}`,
                   team: 'team_one',
                   threshold: 1,
-                  action: 'ban',
+                  action: 'pick',
                   count: 1,
                   repeatEvery: null,
-                }),
-              )
+                });
+              })
             }
           >
-            {t('+ trigger')}
+            {t('+ Rule')}
           </button>
         </div>
-        {flow.triggers.map((trigger, triggerIndex) => (
+        {stage.flow.triggers.map((trigger, index) => (
           <div className="row" key={trigger.id}>
             <select
               value={trigger.team}
               onChange={(event) =>
-                edit(
-                  (next) =>
-                    (next.rounds[roundIndex]!.flow.triggers[triggerIndex]!.team = event.target.value as
-                      | 'team_one'
-                      | 'team_two'),
-                )
+                edit((next) => {
+                  next.stages[stageIndex]!.flow.triggers[index]!.team = event.target.value as
+                    | 'team_one'
+                    | 'team_two';
+                })
               }
             >
-              <option value="team_one">{t('team one')}</option>
-              <option value="team_two">{t('team two')}</option>
+              <option value="team_one">{t('red team')}</option>
+              <option value="team_two">{t('blue team')}</option>
             </select>
-            <label className="inline-field">
-              {t('threshold')}
-              <input
-                type="number"
-                min={1}
-                max={31}
-                value={trigger.threshold}
-                onChange={(event) =>
-                  edit(
-                    (next) =>
-                      (next.rounds[roundIndex]!.flow.triggers[triggerIndex]!.threshold = Math.max(
-                        1,
-                        Math.min(31, Number(event.target.value) || 1),
-                      )),
-                  )
-                }
-              />
-            </label>
+            <input
+              type="number"
+              min={1}
+              max={31}
+              value={trigger.threshold}
+              onChange={(event) =>
+                edit((next) => {
+                  next.stages[stageIndex]!.flow.triggers[index]!.threshold = Math.max(
+                    1,
+                    Math.min(31, Number(event.target.value) || 1),
+                  );
+                })
+              }
+            />
             <select
               value={trigger.action}
               onChange={(event) =>
-                edit(
-                  (next) =>
-                    (next.rounds[roundIndex]!.flow.triggers[triggerIndex]!.action = event.target
-                      .value as 'protect' | 'ban' | 'pick'),
-                )
+                edit((next) => {
+                  next.stages[stageIndex]!.flow.triggers[index]!.action = event.target.value as
+                    | 'ban'
+                    | 'protect'
+                    | 'pick';
+                })
               }
             >
               <option value="protect">{t('protect')}</option>
               <option value="ban">{t('ban')}</option>
               <option value="pick">{t('pick')}</option>
             </select>
-            <label className="inline-field">
-              {t('count')}
-              <input
-                type="number"
-                min={1}
-                max={10}
-                value={trigger.count}
-                onChange={(event) =>
-                  edit(
-                    (next) =>
-                      (next.rounds[roundIndex]!.flow.triggers[triggerIndex]!.count = Math.max(
-                        1,
-                        Math.min(10, Number(event.target.value) || 1),
-                      )),
-                  )
-                }
-              />
-            </label>
-            <label className="inline-field">
-              {t('repeat every')}
-              <input
-                type="number"
-                min={1}
-                max={31}
-                value={trigger.repeatEvery ?? ''}
-                placeholder="—"
-                onChange={(event) =>
-                  edit(
-                    (next) =>
-                      (next.rounds[roundIndex]!.flow.triggers[triggerIndex]!.repeatEvery =
-                        event.target.value === ''
-                          ? null
-                          : Math.max(1, Math.min(31, Number(event.target.value) || 1))),
-                  )
-                }
-              />
-            </label>
             <button
               type="button"
               className="ghost small danger"
               onClick={() =>
-                edit((next) => next.rounds[roundIndex]!.flow.triggers.splice(triggerIndex, 1))
+                edit((next) => {
+                  next.stages[stageIndex]!.flow.triggers.splice(index, 1);
+                })
               }
             >
               ×
@@ -1152,302 +1153,356 @@ function FlowEditor({
   );
 }
 
-function ScoringSection({ draft, edit }: { draft: Tournament; edit: EditFn }) {
+function ScoringEditor({
+  edit,
+  stage,
+  stageIndex,
+}: {
+  draft: Tournament;
+  edit: (mutator: (tournament: Tournament) => void) => void;
+  stage: Stage;
+  stageIndex: number;
+}) {
   const { t } = useI18n();
+
   return (
-    <Section
-      title={t('Scoring')}
-      subtitle={t('Multipliers apply to score-based win conditions only.')}
-      actions={
-        <button
-          type="button"
-          className="ghost small"
-          onClick={() =>
-            edit((next) => {
-              if (next.scoringSchemes.length >= 10) return;
-              next.scoringSchemes.push({
-                id: `score_${Date.now().toString(36)}`,
-                name: `Scheme ${next.scoringSchemes.length + 1}`,
-                winCondition: 'score_v2',
-                aggregation: 'sum',
-                modMultipliers: {},
-              });
-            })
-          }
-        >
-          {t('+ Scheme')}
-        </button>
-      }
-    >
-      {draft.scoringSchemes.map((scheme, index) => (
-        <div className="row" key={scheme.id}>
-          <input
-            value={scheme.name}
-            onChange={(event) => edit((next) => (next.scoringSchemes[index]!.name = event.target.value))}
-          />
+    <div className="flow-card">
+      <strong>{t('Scoring')}</strong>
+      <div className="form-grid">
+        <Field label={t('Win condition')}>
           <select
-            value={scheme.winCondition}
+            value={stage.scoringScheme.winCondition}
             onChange={(event) =>
-              edit(
-                (next) =>
-                  (next.scoringSchemes[index]!.winCondition = event.target.value as WinCondition),
-              )
+              edit((next) => {
+                next.stages[stageIndex]!.scoringScheme.winCondition = event.target.value as WinCondition;
+              })
             }
           >
             {WinConditionSchema.options.map((condition) => (
               <option key={condition} value={condition}>
-                {condition}
+                {t(condition)}
               </option>
             ))}
           </select>
-          <select
-            value={scheme.aggregation}
-            onChange={(event) =>
-              edit(
-                (next) =>
-                  (next.scoringSchemes[index]!.aggregation = event.target.value as
-                    | 'sum'
-                    | 'average'
-                    | 'max'),
-              )
-            }
-          >
-            <option value="sum">{t('sum')}</option>
-            <option value="average">{t('average')}</option>
-            <option value="max">{t('max')}</option>
-          </select>
-          <input
-            placeholder="HD=1.06, HR=1.1"
-            value={Object.entries(scheme.modMultipliers)
-              .map(([mod, value]) => `${mod}=${value}`)
-              .join(', ')}
-            onChange={(event) =>
-              edit(
-                (next) =>
-                  (next.scoringSchemes[index]!.modMultipliers = parseMultipliers(
-                    event.target.value,
-                  )),
-              )
-            }
-          />
-          <button
-            type="button"
-            className="ghost small danger"
-            onClick={() => edit((next) => next.scoringSchemes.splice(index, 1))}
-          >
-            ×
-          </button>
-        </div>
-      ))}
-    </Section>
+        </Field>
+      </div>
+    </div>
   );
 }
 
-function MatchesSection({ draft, edit }: { draft: Tournament; edit: EditFn }) {
+function MatchesEditor({
+  draft,
+  edit,
+  stage,
+  stageIndex,
+}: {
+  draft: Tournament;
+  edit: (mutator: (tournament: Tournament) => void) => void;
+  stage: Stage;
+  stageIndex: number;
+}) {
   const { t } = useI18n();
-  const canAdd =
-    draft.teams.length >= 2 && draft.rounds.length > 0 && draft.scoringSchemes.length > 0;
+
+  const addMatch = (type: 'lobby' | 'match') => {
+    const id = `match_${Date.now().toString(36)}`;
+    edit((next) => {
+      const target = next.stages[stageIndex]!;
+      const base = {
+        id,
+        name: type === 'lobby' ? 'Lobby' : 'Match',
+        groupId: target.groups[0]?.id ?? null,
+        refereeIds: [],
+        transport: 'irc' as const,
+        scheduledAt: new Date().toISOString(),
+        result: { scoreRed: 0, scoreBlue: 0 },
+        roomNameTemplate: '{tournament}: ({team_one}) vs ({team_two})',
+        initialBeatmapId: target.slots[0]?.beatmapId ?? null,
+        notes: undefined,
+      };
+      if (type === 'lobby') {
+        target.matches.push({
+          ...base,
+          type: 'lobby',
+          teamIds: next.teams.slice(0, 3).map((team) => team.id),
+          roomMode: 'head_to_head',
+        });
+      } else {
+        target.matches.push({
+          ...base,
+          type: 'match',
+          teamRedId: next.teams[0]?.id ?? 0,
+          teamBlueId: next.teams[1]?.id ?? 0,
+          roomMode: 'team_versus',
+        });
+      }
+    });
+  };
+
+  const patchMatch = (index: number, mutator: (match: Match) => void) => {
+    edit((next) => mutator(next.stages[stageIndex]!.matches[index]!));
+  };
 
   return (
-    <Section
-      title={t('Matches')}
-      actions={
-        <button
-          type="button"
-          className="ghost small"
-          disabled={!canAdd}
-          title={canAdd ? undefined : t('Add two teams, one round and one scoring scheme first.')}
-          onClick={() =>
-            edit((next) => {
-              const round = next.rounds[0];
-              const teamOne = next.teams[0];
-              const teamTwo = next.teams[1];
-              const scoring = next.scoringSchemes[0];
-              if (!round || !teamOne || !teamTwo || !scoring) return;
-              const match: Match = {
-                id: `match_${Date.now().toString(36)}`,
-                name: `${teamOne.name} vs ${teamTwo.name}`,
-                roundId: round.id,
-                teamOneId: teamOne.id,
-                teamTwoId: teamTwo.id,
-                refereeIds: next.referees.map((referee) => referee.userId),
-                transport: 'irc',
-                scoringId: scoring.id,
-                roomNameTemplate: '{tournament}: ({team_one}) vs ({team_two})',
-                initialBeatmapId: round.slots[0]?.beatmapId ?? null,
-                scheduledAt: null,
-              };
-              next.matches.push(match);
-            })
-          }
-        >
+    <div className="flow-card">
+      <div className="row">
+        <strong>{t('Matches')}</strong>
+        <button type="button" className="ghost small" onClick={() => addMatch('match')}>
           {t('+ Match')}
         </button>
-      }
-    >
-      {!canAdd ? (
-        <p className="muted small">{t('Add two teams, one round and one scoring scheme first.')}</p>
-      ) : null}
-      {draft.matches.length === 0 ? (
+        <button type="button" className="ghost small" onClick={() => addMatch('lobby')}>
+          {t('+ Lobby')}
+        </button>
+      </div>
+      {stage.matches.length === 0 ? (
         <p className="muted small">{t('Add a match to open a room from the workbench.')}</p>
       ) : null}
-      {draft.matches.map((match, index) => (
-        <div className="match-card" key={match.id}>
-          <div className="row">
-            <input
-              value={match.name}
-              onChange={(event) => edit((next) => (next.matches[index]!.name = event.target.value))}
-            />
-            <select
-              value={match.transport}
-              onChange={(event) =>
-                edit(
-                  (next) =>
-                    (next.matches[index]!.transport = event.target.value as
-                      | 'irc'
-                      | 'referee_hub'),
-                )
-              }
-            >
-              <option value="irc">{t('Bancho IRC')}</option>
-              <option value="referee_hub">{t('Referee Hub')}</option>
-            </select>
-            <button
-              type="button"
-              className="ghost small danger"
-              onClick={() => edit((next) => next.matches.splice(index, 1))}
-            >
-              ×
-            </button>
-          </div>
-          <div className="match-grid">
-            <label className="inline-field">
-              {t('round')}
-              <select
-                value={match.roundId}
-                onChange={(event) => edit((next) => (next.matches[index]!.roundId = event.target.value))}
-              >
-                {draft.rounds.map((round) => (
-                  <option key={round.id} value={round.id}>
-                    {round.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="inline-field">
-              {t('team one')}
-              <select
-                value={match.teamOneId}
-                onChange={(event) => edit((next) => (next.matches[index]!.teamOneId = event.target.value))}
-              >
-                {draft.teams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="inline-field">
-              {t('team two')}
-              <select
-                value={match.teamTwoId}
-                onChange={(event) => edit((next) => (next.matches[index]!.teamTwoId = event.target.value))}
-              >
-                {draft.teams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="inline-field">
-              {t('scoring')}
-              <select
-                value={match.scoringId}
-                onChange={(event) => edit((next) => (next.matches[index]!.scoringId = event.target.value))}
-              >
-                {draft.scoringSchemes.map((scheme) => (
-                  <option key={scheme.id} value={scheme.id}>
-                    {scheme.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="inline-field">
-              {t('initial beatmap')}
-              <IdInput
-                kind="beatmap"
-                value={match.initialBeatmapId ? String(match.initialBeatmapId) : ''}
-                placeholder={t('from pool')}
-                onChange={(value) =>
-                  edit(
-                    (next) =>
-                      (next.matches[index]!.initialBeatmapId =
-                        Number(value) > 0 ? Number(value) : null),
-                  )
-                }
+      <div className="match-editor-list">
+        {stage.matches.map((match, index) => (
+          <div className="match-editor" key={match.id}>
+            <div className="row">
+              <span className={`pill ${match.type}`}>{match.type === 'match' ? t('Match') : t('Lobby')}</span>
+              <input
+                value={match.name}
+                onChange={(event) => patchMatch(index, (target) => (target.name = event.target.value))}
               />
-            </label>
+              <select
+                value={match.groupId ?? ''}
+                onChange={(event) =>
+                  patchMatch(index, (target) => (target.groupId = event.target.value || null))
+                }
+              >
+                <option value="">—</option>
+                {stage.groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="ghost small danger"
+                onClick={() =>
+                  edit((next) => {
+                    next.stages[stageIndex]!.matches.splice(index, 1);
+                  })
+                }
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="form-grid">
+              {match.type === 'match' ? (
+                <>
+                  <Field label={t('Red team')}>
+                    <select
+                      value={match.teamRedId}
+                      onChange={(event) =>
+                        patchMatch(
+                          index,
+                          (target) => target.type === 'match' && (target.teamRedId = Number(event.target.value)),
+                        )
+                      }
+                    >
+                      {draft.teams.map((team) => (
+                        <option key={team.id} value={team.id}>
+                          {team.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label={t('Blue team')}>
+                    <select
+                      value={match.teamBlueId}
+                      onChange={(event) =>
+                        patchMatch(
+                          index,
+                          (target) => target.type === 'match' && (target.teamBlueId = Number(event.target.value)),
+                        )
+                      }
+                    >
+                      {draft.teams.map((team) => (
+                        <option key={team.id} value={team.id}>
+                          {team.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </>
+              ) : (
+                <Field label={t('Teams')} wide>
+                  <div className="member-chips">
+                    {draft.teams.map((team) => (
+                      <button
+                        key={team.id}
+                        type="button"
+                        className={`team-toggle${matchTeamIds(match).includes(team.id) ? ' active' : ''}`}
+                        onClick={() =>
+                          patchMatch(index, (target) => {
+                            if (target.type !== 'lobby') return;
+                            target.teamIds = target.teamIds.includes(team.id)
+                              ? target.teamIds.filter((id) => id !== team.id)
+                              : [...target.teamIds, team.id];
+                          })
+                        }
+                      >
+                        {team.name}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+              )}
+              <Field label={t('Time (UTC)')}>
+                <input
+                  type="datetime-local"
+                  value={toUtcInput(match.scheduledAt)}
+                  onChange={(event) =>
+                    patchMatch(index, (target) => {
+                      const date = new Date(`${event.target.value}:00.000Z`);
+                      target.scheduledAt = Number.isNaN(date.getTime())
+                        ? target.scheduledAt
+                        : date.toISOString();
+                    })
+                  }
+                />
+              </Field>
+              <Field label={t('Room mode')}>
+                <select
+                  value={match.roomMode}
+                  onChange={(event) =>
+                    patchMatch(index, (target) => (target.roomMode = event.target.value as MatchType))
+                  }
+                >
+                  <option value="team_versus">{t('Team VS')}</option>
+                  <option value="head_to_head">{t('Head to head')}</option>
+                </select>
+              </Field>
+              <Field label={t('Transport')}>
+                <select
+                  value={match.transport}
+                  onChange={(event) =>
+                    patchMatch(
+                      index,
+                      (target) => (target.transport = event.target.value as 'irc' | 'referee_hub'),
+                    )
+                  }
+                >
+                  <option value="irc">IRC</option>
+                  <option value="referee_hub">Referee Hub</option>
+                </select>
+              </Field>
+              <Field label={t('Referees (user ids)')}>
+                <input
+                  value={match.refereeIds.join(', ')}
+                  onChange={(event) =>
+                    patchMatch(index, (target) => {
+                      target.refereeIds = event.target.value
+                        .split(/[\s,]+/)
+                        .map((value) => Number(value))
+                        .filter((value) => Number.isInteger(value) && value > 0);
+                    })
+                  }
+                />
+              </Field>
+              <Field label={t('initial beatmap')}>
+                <input
+                  type="number"
+                  min={0}
+                  value={match.initialBeatmapId ?? ''}
+                  onChange={(event) =>
+                    patchMatch(index, (target) => {
+                      const value = event.target.value.trim();
+                      target.initialBeatmapId = value === '' ? null : Math.max(1, Number(value));
+                    })
+                  }
+                />
+              </Field>
+              {match.type === 'match' ? (
+                <>
+                  <Field label={t('Red score')}>
+                    <input
+                      type="number"
+                      min={0}
+                      value={match.result.scoreRed}
+                      onChange={(event) =>
+                        patchMatch(index, (target) => {
+                          target.result.scoreRed = Math.max(0, Math.floor(Number(event.target.value) || 0));
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label={t('Blue score')}>
+                    <input
+                      type="number"
+                      min={0}
+                      value={match.result.scoreBlue}
+                      onChange={(event) =>
+                        patchMatch(index, (target) => {
+                          target.result.scoreBlue = Math.max(0, Math.floor(Number(event.target.value) || 0));
+                        })
+                      }
+                    />
+                  </Field>
+                </>
+              ) : null}
+            </div>
           </div>
-          <label className="inline-field wide">
-            {t('room name template')}
-            <input
-              value={match.roomNameTemplate}
-              onChange={(event) => edit((next) => (next.matches[index]!.roomNameTemplate = event.target.value))}
-            />
-          </label>
-        </div>
-      ))}
-    </Section>
+        ))}
+      </div>
+    </div>
   );
 }
 
-function AutomationSection({ draft, edit }: { draft: Tournament; edit: EditFn }) {
+function AutomationEditor({
+  draft,
+  edit,
+}: {
+  draft: Tournament;
+  edit: (mutator: (tournament: Tournament) => void) => void;
+}) {
   const { t } = useI18n();
   return (
-    <Section
-      title={t('Message triggers')}
-      actions={
+    <div className="flow-card">
+      <div className="row">
+        <strong>{t('Message triggers')}</strong>
         <button
           type="button"
           className="ghost small"
           onClick={() =>
-            edit((next) => {
-              const rule: AutomationRule = {
-                id: `rule_${Date.now().toString(36)}`,
-                name: 'Result message',
+            edit((next) =>
+              next.automation.push({
+                id: `rule_${Date.now()}`,
+                name: 'Rule',
                 trigger: 'beatmap_completed',
                 slotLabel: null,
-                actions: [
-                  {
-                    type: 'chat',
-                    template: '{{ team_one }} {{ score_one }} - {{ score_two }} {{ team_two }}',
-                  },
-                ],
+                actions: [{ type: 'chat', template: '{{ team_one }} {{ score_one }} - {{ score_two }} {{ team_two }} ({{ slot }})' }],
                 enabled: true,
-              };
-              next.automation.push(rule);
-            })
+              }),
+            )
           }
         >
           {t('+ Rule')}
         </button>
-      }
-    >
+      </div>
+      {draft.automation.length === 0 ? (
+        <p className="muted small">{t('No message triggers yet.')}</p>
+      ) : null}
       {draft.automation.map((rule, index) => (
         <div className="row" key={rule.id}>
           <input
-            type="checkbox"
-            checked={rule.enabled}
-            onChange={(event) => edit((next) => (next.automation[index]!.enabled = event.target.checked))}
+            value={rule.name}
+            onChange={(event) =>
+              edit((next) => {
+                next.automation[index]!.name = event.target.value;
+              })
+            }
           />
           <select
             value={rule.trigger}
             onChange={(event) =>
-              edit(
-                (next) =>
-                  (next.automation[index]!.trigger = event.target.value as AutomationTrigger),
-              )
+              edit((next) => {
+                next.automation[index]!.trigger = event.target.value as typeof rule.trigger;
+              })
             }
           >
             <option value="match_created">{t('match created')}</option>
@@ -1456,25 +1511,6 @@ function AutomationSection({ draft, edit }: { draft: Tournament; edit: EditFn })
             <option value="match_finished">{t('match finished')}</option>
             <option value="action_applied">{t('action applied')}</option>
           </select>
-          <input
-            placeholder={t('slot filter (optional)')}
-            value={rule.slotLabel ?? ''}
-            onChange={(event) =>
-              edit((next) => (next.automation[index]!.slotLabel = event.target.value || null))
-            }
-          />
-          <input
-            className="grow"
-            value={rule.actions[0]?.type === 'chat' ? rule.actions[0].template : ''}
-            onChange={(event) =>
-              edit(
-                (next) =>
-                  (next.automation[index]!.actions = [
-                    { type: 'chat', template: event.target.value },
-                  ]),
-              )
-            }
-          />
           <button
             type="button"
             className="ghost small danger"
@@ -1484,26 +1520,20 @@ function AutomationSection({ draft, edit }: { draft: Tournament; edit: EditFn })
           </button>
         </div>
       ))}
-    </Section>
+    </div>
   );
 }
 
-function parseMods(value: string): string[] {
-  return value
-    .split(/[\s,]+/)
-    .map((mod) => mod.trim().toUpperCase())
-    .filter(Boolean);
+function modeLabel(mode: TournamentMode): string {
+  if (mode === 'multi') return 'Multi';
+  if (mode === 'osu') return 'osu!';
+  return RULESET_LABELS[mode === 'taiko' ? 1 : mode === 'catch' ? 2 : 3] ?? mode;
 }
 
-function parseMultipliers(value: string): Record<string, number> {
-  const result: Record<string, number> = {};
-  for (const pair of value.split(',')) {
-    const [key, raw] = pair.split('=');
-    if (!key || raw === undefined) continue;
-    const parsed = Number(raw.trim());
-    if (Number.isFinite(parsed) && parsed > 0) result[key.trim().toUpperCase()] = parsed;
-  }
-  return result;
+function toUtcInput(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 16);
 }
 
 function errorText(cause: unknown): string {

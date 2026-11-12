@@ -3,6 +3,7 @@ import {
   findRound,
   findMatch,
   findSlotByLabel,
+  findStageForMatch,
   normalizeSlotLabel,
   type MappoolSlot,
   type PlaylistEntry,
@@ -90,7 +91,7 @@ export function WorkbenchPage({
     session && (session.tournamentId.startsWith('adhoc_') || tournament?.id.startsWith('adhoc_')),
   );
   const match = session && tournament ? findMatch(tournament, session.matchId) ?? null : null;
-  const round = session && tournament && match ? findRound(tournament, match.roundId) ?? null : null;
+  const round = session && tournament && match ? findStageForMatch(tournament, match.id) ?? null : null;
   const pool = round ? { slots: round.slots } : null;
   const pending = session ? session.queue[session.cursor] ?? null : null;
   const lastAction = session?.actions.at(-1) ?? null;
@@ -201,7 +202,7 @@ export function WorkbenchPage({
   }, [beatmapKey]);
 
   const teamName = (id: string | null | undefined): string =>
-    (tournament?.teams.find((team) => team.id === id)?.name ?? id ?? '—') as string;
+    (tournament?.teams.find((team) => String(team.id) === id)?.name ?? id ?? '—') as string;
 
   const rosterName = (userId: number): string | undefined =>
     tournament?.teams
@@ -311,8 +312,19 @@ export function WorkbenchPage({
     );
   };
 
+  const isLobby = session?.matchKind === 'lobby';
+
   const applySlot = (slot: MappoolSlot) => {
     if (!session) return;
+    if (isLobby) {
+      void run('select', () =>
+        window.osmaRef.sessions.selectBeatmap({
+          sessionId: session.id,
+          slotLabel: slot.label,
+        }),
+      );
+      return;
+    }
     if (!isQuickRoom && !session.firstTeamsSet) {
       setFirstTeamsOpen(true);
       return;
@@ -480,7 +492,7 @@ export function WorkbenchPage({
       const haystack = [
         slot.label,
         String(slot.beatmapId),
-        rulesetName(slot.rulesetId),
+        rulesetName(slot.rulesetId ?? 0),
         info?.title ?? '',
         info?.artist ?? '',
         info?.difficultyName ?? '',
@@ -621,6 +633,7 @@ export function WorkbenchPage({
               <div className="wb-panel">
                 <Section
                   title={t('Players')}
+                  className="section-with-invite"
                   actions={
                     <div className="player-invite">
                       <IdInput
@@ -735,8 +748,8 @@ export function WorkbenchPage({
                 <div
                   className={`flat-team red${pending?.side === 'team_one' ? ' active' : ''}`}
                   role="group"
-                  title={t('left click +1') + ' / ' + t('right click -1')}
-                  onClick={() => adjustScore('team_one', 1)}
+                  title={isLobby ? undefined : t('left click +1') + ' / ' + t('right click -1')}
+                  onClick={() => { if (!isLobby) adjustScore('team_one', 1); }}
                   onContextMenu={(event) => {
                     event.preventDefault();
                     adjustScore('team_one', -1);
@@ -751,8 +764,8 @@ export function WorkbenchPage({
                 <div
                   className={`flat-team blue${pending?.side === 'team_two' ? ' active' : ''}`}
                   role="group"
-                  title={t('left click +1') + ' / ' + t('right click -1')}
-                  onClick={() => adjustScore('team_two', 1)}
+                  title={isLobby ? undefined : t('left click +1') + ' / ' + t('right click -1')}
+                  onClick={() => { if (!isLobby) adjustScore('team_two', 1); }}
                   onContextMenu={(event) => {
                     event.preventDefault();
                     adjustScore('team_two', -1);
@@ -764,7 +777,7 @@ export function WorkbenchPage({
                 {pending?.side === 'team_two' ? (
                   <span className="score-action right">{actionLabel}</span>
                 ) : null}
-                {session.phase === 'playing' && session.currentSlotLabel ? (
+                {!isLobby && session.phase === 'playing' && session.currentSlotLabel ? (
                   <button
                     type="button"
                     className="primary score-result"
@@ -1104,7 +1117,7 @@ export function WorkbenchPage({
                                 : `Beatmap #${slot.beatmapId}`}
                             </div>
                             <div className="beatmap-meta">
-                              {info ? modeLabel(info.mode, slot.rulesetId) : rulesetName(slot.rulesetId)} #
+                              {info ? modeLabel(info.mode, slot.rulesetId ?? 0) : rulesetName(slot.rulesetId ?? 0)} #
                               {slot.beatmapId}
                               {info?.difficultyName ? ` [${info.difficultyName}]` : ''} -{' '}
                               {info?.mapper || '—'}
