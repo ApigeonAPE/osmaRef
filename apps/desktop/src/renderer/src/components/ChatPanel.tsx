@@ -1,0 +1,252 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ChatMessage } from '@osmaref/contracts';
+import { useModel } from '../useOsmaRef';
+import { useI18n } from '../i18n';
+import { formatTime } from '../ui';
+
+export function ChatPanel({ sessionId, transport }: { sessionId: string; transport: 'irc' | 'referee_hub' }) {
+  const model = useModel();
+  const { t } = useI18n();
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<ChatMessage[]>([]);
+  const [inputHistory, setInputHistory] = useState<string[]>([]);
+  const inputHistoryIndex = useRef(-1);
+  const inputDraft = useRef('');
+  const [appearance, setAppearance] = useState({
+    fontFamily: 'Cascadia Mono, Consolas, monospace',
+    fontSize: 13,
+    lineHeight: 1.35,
+  });
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const stickToBottom = useRef(true);
+  // IRC sessions chat over Bancho; hub sessions chat over the osu!web API.
+  const chatConnected =
+    model.state?.connections.find(
+      (entry) => entry.kind === (transport === 'irc' ? 'irc' : 'chat'),
+    )?.status === 'connected';
+
+  useEffect(() => {
+    void window.osmaRef.app.getSettings().then((settings) => {
+      setAppearance({
+        fontFamily: settings.chatFontFamily,
+        fontSize: settings.chatFontSize,
+        lineHeight: settings.chatLineHeight,
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setHistory([]);
+    void (async () => {
+      try {
+        const loaded = await window.osmaRef.chat.history(sessionId, 100);
+        if (!cancelled) setHistory(loaded);
+      } catch {
+        // History is best effort; live messages still work.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, chatConnected, transport]);
+
+  const messages = useMemo(() => {
+    const byId = new Map<string, ChatMessage>();
+    for (const message of history) byId.set(message.id, message);
+    for (const message of model.messages) {
+      if (message.sessionId === sessionId) byId.set(message.id, message);
+    }
+    const all = [...byId.values()].sort((a, b) => a.at.localeCompare(b.at));
+    // Drop the optimistic echo once the server copy of the same message arrives.
+    return all
+      .filter(
+        (message) =>
+          !(
+            message.id.startsWith('local:') &&
+            all.some(
+              (other) =>
+                other.id !== message.id &&
+                other.self &&
+                other.text === message.text &&
+                Math.abs(Date.parse(other.at) - Date.parse(message.at)) < 30_000,
+            )
+          ),
+      )
+      .slice(-200);
+  }, [history, model.messages, sessionId]);
+
+  useEffect(() => {
+    stickToBottom.current = true;
+  }, [sessionId]);
+
+  useEffect(() => {
+    inputHistoryIndex.current = -1;
+    inputDraft.current = '';
+    try {
+      const raw = window.localStorage.getItem(`osmaRef.chat.input.${sessionId}`);
+      const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+      setInputHistory(
+        Array.isArray(parsed)
+          ? parsed.filter((value): value is string => typeof value === 'string').slice(-50)
+          : [],
+      );
+    } catch {
+      setInputHistory([]);
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    const element = listRef.current;
+    if (element && stickToBottom.current) {
+      element.scrollTop = element.scrollHeight;
+    }
+  }, [messages]);
+
+  const submit = async () => {
+    const value = text.trim();
+    if (!value || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      await model.sendChat(sessionId, value);
+      const next = [...inputHistory, value].slice(-50);
+      setInputHistory(next);
+      inputHistoryIndex.current = -1;
+      inputDraft.current = '';
+      try {
+        window.localStorage.setItem(
+          `osmaRef.chat.input.${sessionId}`,
+          JSON.stringify(next),
+        );
+      } catch {
+        // Input history is best effort.
+      }
+      setText('');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const walkHistory = (direction: 1 | -1) => {
+    if (inputHistory.length === 0) return;
+    if (direction === 1) {
+      if (inputHistoryIndex.current === -1) {
+        inputDraft.current = text;
+      }
+      const next = Math.min(inputHistory.length - 1, inputHistoryIndex.current + 1);
+      inputHistoryIndex.current = next;
+      setText(inputHistory[inputHistory.length - 1 - next]!);
+      return;
+    }
+    if (inputHistoryIndex.current === -1) return;
+    const next = inputHistoryIndex.current - 1;
+    inputHistoryIndex.current = next;
+    setText(next < 0 ? inputDraft.current : inputHistory[inputHistory.length - 1 - next]!);
+  };
+
+  return (
+    <section className="chat card">
+      <div
+        className="chat-log"
+        ref={listRef}
+        onScroll={(event) => {
+          const element = event.currentTarget;
+          stickToBottom.current =
+            element.scrollHeight - element.scrollTop - element.clientHeight < 40;
+        }}
+      >
+        {messages.length === 0 ? <p className="muted small pad">{t('No messages yet.')}</p> : null}
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={`chat-line${message.system ? ' system' : ''}${
+              message.username === 'BanchoBot' ? ' bot' : ''
+            }${message.self ? ' self' : ''}`}
+            style={{
+              fontFamily: appearance.fontFamily,
+              fontSize: `${appearance.fontSize}px`,
+              lineHeight: appearance.lineHeight,
+            }}
+          >
+            <span style={{ minWidth: 0 }}>
+              <span className="chat-time">{formatTime(message.at)}</span>{' '}
+              <span className="chat-author">
+                &lt;{message.system ? 'osmaRef' : message.username}&gt;:
+              </span>{' '}
+              <span className="chat-text">
+                {message.action ? <ActionText text={message.text} /> : message.text}
+              </span>
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {error ? <div className="banner error small">{error}</div> : null}
+
+      <form
+        className="chat-input"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}
+      >
+        <input
+          value={text}
+          onChange={(event) => {
+            setText(event.target.value);
+            inputHistoryIndex.current = -1;
+            inputDraft.current = event.target.value;
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowUp' && inputHistory.length > 0) {
+              event.preventDefault();
+              walkHistory(1);
+            } else if (event.key === 'ArrowDown' && inputHistory.length > 0) {
+              event.preventDefault();
+              walkHistory(-1);
+            }
+          }}
+          placeholder={t('Message or !mp command')}
+          disabled={sending}
+        />
+        <button
+          type="submit"
+          className="primary chat-send"
+          disabled={sending || text.trim().length === 0}
+          aria-label={t('Send')}
+          title={t('Send')}
+        >
+          <span className="chat-send-icon" aria-hidden="true" />
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function ActionText({ text }: { text: string }) {
+  const match = /^(.+?)\s+\[(https?:\/\/\S+)\s+(.+)\]\s*(.*)$/i.exec(text);
+  if (!match) return <em>{text}</em>;
+  const [, verb, url, title, suffix] = match;
+  return (
+    <>
+      <em>{verb}</em> [
+      <a
+        href={url}
+        style={{ color: '#73b9ff', textDecoration: 'underline', cursor: 'pointer' }}
+        onClick={(event) => {
+          event.preventDefault();
+          void window.osmaRef.app.openExternal(url!);
+        }}
+      >
+        {title}
+      </a>
+      ]
+      {suffix?.trim() ? ` ${suffix.trim()}` : ''}
+    </>
+  );
+}

@@ -1,0 +1,17 @@
+node_modules/
+.npm-cache/
+dist/
+out/
+release/
+*.log
+.env
+.env.local
+data/
+.DS_Store
+Thumbs.db
+coverage/
+*.tsbuildinfo
+.vitest-cache/
+smoke-package/
+smoke-data/
+*.tmp

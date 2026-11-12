@@ -1,0 +1,1001 @@
+{
+  "schemaVersion": 2,
+  "id": "eejd85",
+  "name": "bracket",
+  "abbreviation": "BRACKET",
+  "rulesetId": 3,
+  "defaultMatchType": "team_versus",
+  "teams": [
+    {
+      "id": "team_tfs",
+      "name": "Team Falcoms",
+      "members": [
+        {
+          "userId": 32739668,
+          "username": "AkizukiKanna225",
+          "captain": false
+        },
+        {
+          "userId": 30174043,
+          "username": "Sikari_Fracture",
+          "captain": false
+        },
+        {
+          "userId": 34215813,
+          "username": "linjiu09",
+          "captain": false
+        },
+        {
+          "userId": 39243177,
+          "username": "Fareeda030",
+          "captain": false
+        }
+      ]
+    },
+    {
+      "id": "team_idk",
+      "name": "我不到啊",
+      "members": [
+        {
+          "userId": 14502713,
+          "username": "Ph4nt0mx",
+          "captain": false
+        },
+        {
+          "userId": 15889545,
+          "username": "chenziao",
+          "captain": false
+        },
+        {
+          "userId": 37668413,
+          "username": "STARROAD",
+          "captain": false
+        },
+        {
+          "userId": 36148388,
+          "username": "zxingtsai",
+          "captain": false
+        }
+      ]
+    },
+    {
+      "id": "team_xkt",
+      "name": "插奈特幼儿园",
+      "members": [
+        {
+          "userId": 20126778,
+          "username": "adzuki",
+          "captain": false
+        },
+        {
+          "userId": 38607428,
+          "username": "cminusa",
+          "captain": false
+        },
+        {
+          "userId": 16424668,
+          "username": "Tianzyu",
+          "captain": false
+        },
+        {
+          "userId": 38902659,
+          "username": "Yumekui",
+          "captain": false
+        }
+      ]
+    },
+    {
+      "id": "team_smw",
+      "name": "白毛红瞳双马尾",
+      "members": [
+        {
+          "userId": 12031289,
+          "username": "beta dust",
+          "captain": false
+        },
+        {
+          "userId": 38271402,
+          "username": "kasanagi",
+          "captain": false
+        },
+        {
+          "userId": 37803200,
+          "username": "NiJiKa11",
+          "captain": false
+        },
+        {
+          "userId": 37941525,
+          "username": "Lingyan",
+          "captain": false
+        }
+      ]
+    },
+    {
+      "id": "team_stf",
+      "name": "巧克甜恋",
+      "members": [
+        {
+          "userId": 34455976,
+          "username": "[Crz]weweqe",
+          "captain": false
+        },
+        {
+          "userId": 18468376,
+          "username": "Cornet",
+          "captain": false
+        },
+        {
+          "userId": 20425841,
+          "username": "Suzurin",
+          "captain": false
+        },
+        {
+          "userId": 32541500,
+          "username": "Kamiina Botan",
+          "captain": false
+        }
+      ]
+    }
+  ],
+  "referees": [],
+  "rounds": [
+    {
+      "id": "round_1",
+      "name": "资格赛",
+      "order": 0,
+      "bestOf": 5,
+      "slots": [
+        {
+          "id": "round_1_hb1",
+          "label": "HB1",
+          "category": "HB",
+          "beatmapId": 3958820,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_1_hb2",
+          "label": "HB2",
+          "category": "HB",
+          "beatmapId": 3610288,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_1_ln1",
+          "label": "LN1",
+          "category": "LN",
+          "beatmapId": 5881754,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_1_ln2",
+          "label": "LN2",
+          "category": "LN",
+          "beatmapId": 4986115,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_1_rc1",
+          "label": "RC1",
+          "category": "RC",
+          "beatmapId": 5363577,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_1_rc2",
+          "label": "RC2",
+          "category": "RC",
+          "beatmapId": 4373685,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_1_rc3",
+          "label": "RC3",
+          "category": "RC",
+          "beatmapId": 5036665,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_1_sv1",
+          "label": "SV1",
+          "category": "SV",
+          "beatmapId": 5776110,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        }
+      ],
+      "flow": {
+        "id": "flow_round_1",
+        "name": "资格赛 flow",
+        "steps": [
+          {
+            "id": "step_ban_round_1",
+            "kind": "ban",
+            "count": 1,
+            "side": "both"
+          },
+          {
+            "id": "step_pick_round_1",
+            "kind": "pick",
+            "count": 3,
+            "side": "both"
+          }
+        ],
+        "triggers": []
+      }
+    },
+    {
+      "id": "round_2",
+      "name": "半决赛",
+      "order": 1,
+      "bestOf": 9,
+      "slots": [
+        {
+          "id": "round_2_ac1",
+          "label": "AC1",
+          "category": "AC",
+          "beatmapId": 3273376,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_2_hb1",
+          "label": "HB1",
+          "category": "HB",
+          "beatmapId": 4954309,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_2_hb2",
+          "label": "HB2",
+          "category": "HB",
+          "beatmapId": 4141642,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_2_ln1",
+          "label": "LN1",
+          "category": "LN",
+          "beatmapId": 4798172,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_2_ln2",
+          "label": "LN2",
+          "category": "LN",
+          "beatmapId": 4954287,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_2_rc1",
+          "label": "RC1",
+          "category": "RC",
+          "beatmapId": 4368305,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_2_rc2",
+          "label": "RC2",
+          "category": "RC",
+          "beatmapId": 4333065,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_2_rc3",
+          "label": "RC3",
+          "category": "RC",
+          "beatmapId": 5187408,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_2_rc4",
+          "label": "RC4",
+          "category": "RC",
+          "beatmapId": 5211828,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_2_rc5",
+          "label": "RC5",
+          "category": "RC",
+          "beatmapId": 4369837,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_2_rc6",
+          "label": "RC6",
+          "category": "RC",
+          "beatmapId": 3760855,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_2_sv1",
+          "label": "SV1",
+          "category": "SV",
+          "beatmapId": 3207557,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_2_tb",
+          "label": "TB",
+          "category": "TB",
+          "beatmapId": 4692822,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        }
+      ],
+      "flow": {
+        "id": "flow_round_2",
+        "name": "半决赛 flow",
+        "steps": [
+          {
+            "id": "step_ban_round_2",
+            "kind": "ban",
+            "count": 1,
+            "side": "both"
+          },
+          {
+            "id": "step_pick_round_2",
+            "kind": "pick",
+            "count": 5,
+            "side": "both"
+          }
+        ],
+        "triggers": []
+      }
+    },
+    {
+      "id": "round_3",
+      "name": "决赛",
+      "order": 2,
+      "bestOf": 11,
+      "slots": [
+        {
+          "id": "round_3_ac1",
+          "label": "AC1",
+          "category": "AC",
+          "beatmapId": 3105666,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_3_ac2",
+          "label": "AC2",
+          "category": "AC",
+          "beatmapId": 4262161,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_3_hb1",
+          "label": "HB1",
+          "category": "HB",
+          "beatmapId": 3871106,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_3_hb2",
+          "label": "HB2",
+          "category": "HB",
+          "beatmapId": 3402879,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_3_ln1",
+          "label": "LN1",
+          "category": "LN",
+          "beatmapId": 4974163,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_3_ln2",
+          "label": "LN2",
+          "category": "LN",
+          "beatmapId": 4226448,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_3_rc1",
+          "label": "RC1",
+          "category": "RC",
+          "beatmapId": 4983634,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_3_rc2",
+          "label": "RC2",
+          "category": "RC",
+          "beatmapId": 4245674,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_3_rc3",
+          "label": "RC3",
+          "category": "RC",
+          "beatmapId": 3919581,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_3_rc4",
+          "label": "RC4",
+          "category": "RC",
+          "beatmapId": 5187697,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_3_rc5",
+          "label": "RC5",
+          "category": "RC",
+          "beatmapId": 4661716,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_3_rc6",
+          "label": "RC6",
+          "category": "RC",
+          "beatmapId": 3422101,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_3_sv1",
+          "label": "SV1",
+          "category": "SV",
+          "beatmapId": 3971246,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_3_sv2",
+          "label": "SV2",
+          "category": "SV",
+          "beatmapId": 3989898,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_3_tb",
+          "label": "TB",
+          "category": "TB",
+          "beatmapId": 4226439,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        }
+      ],
+      "flow": {
+        "id": "flow_round_3",
+        "name": "决赛 flow",
+        "steps": [
+          {
+            "id": "step_ban_round_3",
+            "kind": "ban",
+            "count": 1,
+            "side": "both"
+          },
+          {
+            "id": "step_pick_round_3",
+            "kind": "pick",
+            "count": 6,
+            "side": "both"
+          }
+        ],
+        "triggers": []
+      }
+    },
+    {
+      "id": "round_4",
+      "name": "总决赛",
+      "order": 3,
+      "bestOf": 13,
+      "slots": [
+        {
+          "id": "round_4_ac1",
+          "label": "AC1",
+          "category": "AC",
+          "beatmapId": 2840685,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_4_ac2",
+          "label": "AC2",
+          "category": "AC",
+          "beatmapId": 4242535,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_4_ac3",
+          "label": "AC3",
+          "category": "AC",
+          "beatmapId": 4621573,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_4_hb1",
+          "label": "HB1",
+          "category": "HB",
+          "beatmapId": 5224161,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_4_hb2",
+          "label": "HB2",
+          "category": "HB",
+          "beatmapId": 3400503,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_4_ln1",
+          "label": "LN1",
+          "category": "LN",
+          "beatmapId": 4031878,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_4_ln2",
+          "label": "LN2",
+          "category": "LN",
+          "beatmapId": 4853515,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_4_ln3",
+          "label": "LN3",
+          "category": "LN",
+          "beatmapId": 5730659,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_4_rc1",
+          "label": "RC1",
+          "category": "RC",
+          "beatmapId": 4545255,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_4_rc2",
+          "label": "RC2",
+          "category": "RC",
+          "beatmapId": 3181691,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_4_rc3",
+          "label": "RC3",
+          "category": "RC",
+          "beatmapId": 4750475,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_4_rc4",
+          "label": "RC4",
+          "category": "RC",
+          "beatmapId": 5881767,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_4_rc5",
+          "label": "RC5",
+          "category": "RC",
+          "beatmapId": 1281033,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_4_rc6",
+          "label": "RC6",
+          "category": "RC",
+          "beatmapId": 2856150,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_4_sv1",
+          "label": "SV1",
+          "category": "SV",
+          "beatmapId": 4266321,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_4_sv2",
+          "label": "SV2",
+          "category": "SV",
+          "beatmapId": 5965244,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "round_4_tb",
+          "label": "TB",
+          "category": "TB",
+          "beatmapId": 5826030,
+          "rulesetId": 3,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        }
+      ],
+      "flow": {
+        "id": "flow_round_4",
+        "name": "总决赛 flow",
+        "steps": [
+          {
+            "id": "step_ban_round_4",
+            "kind": "ban",
+            "count": 1,
+            "side": "both"
+          },
+          {
+            "id": "step_pick_round_4",
+            "kind": "pick",
+            "count": 7,
+            "side": "both"
+          }
+        ],
+        "triggers": []
+      }
+    }
+  ],
+  "scoringSchemes": [
+    {
+      "id": "score_default",
+      "name": "Score V2",
+      "winCondition": "score_v2",
+      "aggregation": "sum",
+      "modMultipliers": {}
+    }
+  ],
+  "matches": [
+    {
+      "id": "match_1",
+      "name": "Team Falcoms vs 白毛红瞳双马尾",
+      "roundId": "round_2",
+      "teamOneId": "team_tfs",
+      "teamTwoId": "team_smw",
+      "refereeIds": [],
+      "transport": "irc",
+      "scoringId": "score_default",
+      "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
+      "initialBeatmapId": 3273376,
+      "scheduledAt": "2026-10-17T13:00:00.000Z",
+      "notes": "osu! bracket match #1 · score 2-5 · completed · winners bracket"
+    },
+    {
+      "id": "match_4",
+      "name": "我不到啊 vs 插奈特幼儿园",
+      "roundId": "round_2",
+      "teamOneId": "team_idk",
+      "teamTwoId": "team_xkt",
+      "refereeIds": [],
+      "transport": "irc",
+      "scoringId": "score_default",
+      "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
+      "initialBeatmapId": 3273376,
+      "scheduledAt": "2026-10-18T12:00:00.000Z",
+      "notes": "osu! bracket match #4 · score 5-3 · completed · winners bracket"
+    },
+    {
+      "id": "match_5",
+      "name": "Team Falcoms vs 插奈特幼儿园",
+      "roundId": "round_3",
+      "teamOneId": "team_tfs",
+      "teamTwoId": "team_xkt",
+      "refereeIds": [],
+      "transport": "irc",
+      "scoringId": "score_default",
+      "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
+      "initialBeatmapId": 3105666,
+      "scheduledAt": "2026-10-25T13:00:00.000Z",
+      "notes": "osu! bracket match #5 · score 6-4 · completed · losers bracket"
+    },
+    {
+      "id": "match_2",
+      "name": "白毛红瞳双马尾 vs 我不到啊",
+      "roundId": "round_3",
+      "teamOneId": "team_smw",
+      "teamTwoId": "team_idk",
+      "refereeIds": [],
+      "transport": "irc",
+      "scoringId": "score_default",
+      "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
+      "initialBeatmapId": 3989898,
+      "scheduledAt": "2026-10-25T13:00:00.000Z",
+      "notes": "osu! bracket match #2 · score 5-6 · completed · winners bracket"
+    },
+    {
+      "id": "match_3",
+      "name": "我不到啊 vs Team Falcoms",
+      "roundId": "round_4",
+      "teamOneId": "team_idk",
+      "teamTwoId": "team_tfs",
+      "refereeIds": [],
+      "transport": "irc",
+      "scoringId": "score_default",
+      "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
+      "initialBeatmapId": 5965244,
+      "scheduledAt": "2026-11-01T12:00:00.000Z",
+      "notes": "osu! bracket match #3 · score 7-5 · completed · winners bracket"
+    },
+    {
+      "id": "match_6",
+      "name": "白毛红瞳双马尾 vs Team Falcoms",
+      "roundId": "round_4",
+      "teamOneId": "team_smw",
+      "teamTwoId": "team_tfs",
+      "refereeIds": [],
+      "transport": "irc",
+      "scoringId": "score_default",
+      "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
+      "initialBeatmapId": 5965244,
+      "scheduledAt": "2026-10-31T13:00:00.000Z",
+      "notes": "osu! bracket match #6 · score 5-7 · completed · losers bracket"
+    },
+    {
+      "id": "match_7",
+      "name": "插奈特幼儿园 vs 巧克甜恋",
+      "roundId": "round_4",
+      "teamOneId": "team_xkt",
+      "teamTwoId": "team_stf",
+      "refereeIds": [],
+      "transport": "irc",
+      "scoringId": "score_default",
+      "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
+      "initialBeatmapId": 2840685,
+      "scheduledAt": "2026-10-31T13:00:00.000Z",
+      "notes": "osu! bracket match #7 · score 7-4 · completed · winners bracket"
+    }
+  ],
+  "automation": [],
+  "revision": 1,
+  "createdAt": "2026-11-12T05:53:12.114Z",
+  "updatedAt": "2026-11-12T05:53:12.114Z",
+  "source": null
+}

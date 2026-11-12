@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": false,
+    "baseUrl": ".",
+    "paths": {
+      "@osmaref/contracts": ["packages/contracts/src/index.ts"],
+      "@osmaref/contracts/*": ["packages/contracts/src/*"],
+      "@osmaref/domain": ["packages/domain/src/index.ts"],
+      "@osmaref/domain/*": ["packages/domain/src/*"],
+      "@osmaref/adapters": ["packages/adapters/src/index.ts"],
+      "@osmaref/adapters/*": ["packages/adapters/src/*"]
+    }
+  }
+}

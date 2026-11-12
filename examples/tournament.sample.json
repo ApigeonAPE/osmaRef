@@ -1,0 +1,244 @@
+{
+  "schemaVersion": 2,
+  "id": "t_osmaRef_invitational_vc8z12",
+  "name": "osmaRef Invitational",
+  "abbreviation": "OI",
+  "rulesetId": 0,
+  "defaultMatchType": "team_versus",
+  "teams": [
+    {
+      "id": "team_one",
+      "name": "Aster",
+      "members": [
+        {
+          "userId": 1001,
+          "username": "Aster",
+          "captain": true
+        },
+        {
+          "userId": 1002,
+          "username": "Birch",
+          "captain": false
+        }
+      ]
+    },
+    {
+      "id": "team_two",
+      "name": "Cedar",
+      "members": [
+        {
+          "userId": 1003,
+          "username": "Cedar",
+          "captain": true
+        },
+        {
+          "userId": 1004,
+          "username": "Dahlia",
+          "captain": false
+        }
+      ]
+    }
+  ],
+  "referees": [
+    {
+      "userId": 9001,
+      "username": "Referee"
+    }
+  ],
+  "rounds": [
+    {
+      "id": "round_1",
+      "name": "Round 1",
+      "order": 0,
+      "bestOf": 9,
+      "slots": [
+        {
+          "id": "slot_nm1",
+          "label": "NM1",
+          "category": "NM",
+          "beatmapId": 101,
+          "rulesetId": 0,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "slot_nm2",
+          "label": "NM2",
+          "category": "NM",
+          "beatmapId": 102,
+          "rulesetId": 0,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "slot_nm3",
+          "label": "NM3",
+          "category": "NM",
+          "beatmapId": 103,
+          "rulesetId": 0,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "slot_hd1",
+          "label": "HD1",
+          "category": "HD",
+          "beatmapId": 104,
+          "rulesetId": 0,
+          "requiredMods": [
+            "HD"
+          ],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "slot_hr1",
+          "label": "HR1",
+          "category": "HR",
+          "beatmapId": 105,
+          "rulesetId": 0,
+          "requiredMods": [
+            "HR"
+          ],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "slot_dt1",
+          "label": "DT1",
+          "category": "DT",
+          "beatmapId": 106,
+          "rulesetId": 0,
+          "requiredMods": [
+            "DT"
+          ],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "slot_dt2",
+          "label": "DT2",
+          "category": "DT",
+          "beatmapId": 107,
+          "rulesetId": 0,
+          "requiredMods": [
+            "DT"
+          ],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "slot_fm1",
+          "label": "FM1",
+          "category": "FM",
+          "beatmapId": 108,
+          "rulesetId": 0,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": true,
+          "winCondition": null,
+          "winConditionWinner": null
+        },
+        {
+          "id": "slot_tb",
+          "label": "TB",
+          "category": "TB",
+          "beatmapId": 109,
+          "rulesetId": 0,
+          "requiredMods": [],
+          "allowedMods": [],
+          "freestyle": false,
+          "winCondition": null,
+          "winConditionWinner": null
+        }
+      ],
+      "flow": {
+        "id": "flow_round_1",
+        "name": "Protect, ban, pick",
+        "steps": [
+          {
+            "id": "step_protect",
+            "kind": "protect",
+            "count": 1,
+            "side": "both"
+          },
+          {
+            "id": "step_ban",
+            "kind": "ban",
+            "count": 1,
+            "side": "both"
+          },
+          {
+            "id": "step_pick",
+            "kind": "pick",
+            "count": 10,
+            "side": "both"
+          }
+        ],
+        "triggers": []
+      }
+    }
+  ],
+  "scoringSchemes": [
+    {
+      "id": "score_default",
+      "name": "Score V2",
+      "winCondition": "score_v2",
+      "aggregation": "sum",
+      "modMultipliers": {}
+    }
+  ],
+  "matches": [
+    {
+      "id": "match_grand_final",
+      "name": "Aster vs Cedar",
+      "roundId": "round_1",
+      "teamOneId": "team_one",
+      "teamTwoId": "team_two",
+      "refereeIds": [
+        9001
+      ],
+      "transport": "referee_hub",
+      "scoringId": "score_default",
+      "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
+      "initialBeatmapId": 101,
+      "scheduledAt": null
+    }
+  ],
+  "automation": [
+    {
+      "id": "rule_score_line",
+      "name": "Score line",
+      "trigger": "beatmap_completed",
+      "slotLabel": null,
+      "actions": [
+        {
+          "type": "chat",
+          "template": "{{ team_one }} {{ score_one }} - {{ score_two }} {{ team_two }} ({{ slot }})"
+        }
+      ],
+      "enabled": true
+    }
+  ],
+  "revision": 1,
+  "createdAt": "2026-11-10T09:35:14.139Z",
+  "updatedAt": "2026-11-10T09:35:14.139Z",
+  "source": null
+}

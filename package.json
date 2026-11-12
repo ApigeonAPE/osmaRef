@@ -1,0 +1,36 @@
+{
+  "name": "osmaref",
+  "version": "0.1.0",
+  "private": true,
+  "description": "osu! referee client for Bancho IRC and Referee Hub",
+  "license": "MIT",
+  "author": "A-pigeon",
+  "type": "commonjs",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @osmaref/desktop",
+    "dev:server": "npm run dev -w @osmaref/server",
+    "build": "npm run build -w @osmaref/desktop && npm run build -w @osmaref/server",
+    "build:desktop": "npm run build -w @osmaref/desktop",
+    "build:server": "npm run build -w @osmaref/server",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc -p tsconfig.tests.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "smoke": "npm run build -w @osmaref/desktop && node scripts/smoke.mjs",
+    "analyze:irc": "tsx scripts/analyze-irc-log.ts",
+    "convert:bracket": "tsx scripts/convert-bracket.ts",
+    "package": "npm run package -w @osmaref/desktop",
+    "start:server": "npm run start -w @osmaref/server"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  }
+}
