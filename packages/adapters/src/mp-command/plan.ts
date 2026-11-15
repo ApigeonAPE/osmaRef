@@ -343,7 +343,9 @@ function planStart(seconds: number | null, ctx: MpContext): PlanResult {
     if (room.players.length === 0) {
       return err('MP_NOT_READY', 'cannot start: no players are in the room');
     }
-    const notReady = room.players.filter((player) => player.status !== 'ready');
+    const notReady = room.players.filter(
+      (player) => player.status !== 'ready' && !room.referees.includes(player.userId),
+    );
     if (notReady.length > 0) {
       const names = notReady
         .map((player) => player.username ?? `#${player.userId}`)

@@ -1,8 +1,9 @@
 {
-  "schemaVersion": 3,
-  "id": "1bntww",
+  "schemaVersion": 4,
+  "id": "3qprvb",
   "name": "bracket",
   "abbreviation": "BRACKET",
+  "platform": "stable",
   "mode": "mania",
   "teamSize": 4,
   "teams": [
@@ -135,6 +136,8 @@
       "type": "knockout",
       "groups": [],
       "bestOf": 5,
+      "bans": 1,
+      "protects": 0,
       "slots": [
         {
           "id": "stage_1_hb1",
@@ -236,16 +239,20 @@
       "flow": {
         "id": "flow_stage_1",
         "name": "资格赛 flow",
-        "steps": [
+        "phases": [
           {
-            "id": "step_ban_stage_1",
-            "kind": "ban",
-            "count": 1
+            "id": "phase_ban_stage_1",
+            "action": "ban",
+            "countPerTeam": 1,
+            "useStageCount": true,
+            "phaseOrder": "alternate"
           },
           {
-            "id": "step_pick_stage_1",
-            "kind": "pick",
-            "count": 3
+            "id": "phase_pick_stage_1",
+            "action": "pick",
+            "countPerTeam": null,
+            "useStageCount": false,
+            "phaseOrder": "alternate"
           }
         ],
         "triggers": []
@@ -266,6 +273,8 @@
       "type": "knockout",
       "groups": [],
       "bestOf": 9,
+      "bans": 1,
+      "protects": 0,
       "slots": [
         {
           "id": "stage_2_ac1",
@@ -427,16 +436,20 @@
       "flow": {
         "id": "flow_stage_2",
         "name": "半决赛 flow",
-        "steps": [
+        "phases": [
           {
-            "id": "step_ban_stage_2",
-            "kind": "ban",
-            "count": 1
+            "id": "phase_ban_stage_2",
+            "action": "ban",
+            "countPerTeam": 1,
+            "useStageCount": true,
+            "phaseOrder": "alternate"
           },
           {
-            "id": "step_pick_stage_2",
-            "kind": "pick",
-            "count": 5
+            "id": "phase_pick_stage_2",
+            "action": "pick",
+            "countPerTeam": null,
+            "useStageCount": false,
+            "phaseOrder": "alternate"
           }
         ],
         "triggers": []
@@ -451,17 +464,14 @@
       "matches": [
         {
           "id": "match_1",
-          "name": "Team Falcoms vs 白毛红瞳双马尾",
           "groupId": null,
           "refereeIds": [],
-          "transport": "irc",
           "scheduledAt": "2026-10-17T13:00:00.000Z",
           "result": {
             "scoreRed": 2,
             "scoreBlue": 5
           },
-          "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
-          "initialBeatmapId": 3273376,
+          "winCondition": "score_v2",
           "notes": "osu! bracket match #1 · score 2-5 · completed · winners bracket",
           "type": "match",
           "teamRedId": 0,
@@ -470,17 +480,14 @@
         },
         {
           "id": "match_4",
-          "name": "我不到啊 vs 插奈特幼儿园",
           "groupId": null,
           "refereeIds": [],
-          "transport": "irc",
           "scheduledAt": "2026-10-18T12:00:00.000Z",
           "result": {
             "scoreRed": 5,
             "scoreBlue": 3
           },
-          "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
-          "initialBeatmapId": 3273376,
+          "winCondition": "score_v2",
           "notes": "osu! bracket match #4 · score 5-3 · completed · winners bracket",
           "type": "match",
           "teamRedId": 1,
@@ -496,6 +503,8 @@
       "type": "knockout",
       "groups": [],
       "bestOf": 11,
+      "bans": 1,
+      "protects": 0,
       "slots": [
         {
           "id": "stage_3_ac1",
@@ -681,16 +690,20 @@
       "flow": {
         "id": "flow_stage_3",
         "name": "决赛 flow",
-        "steps": [
+        "phases": [
           {
-            "id": "step_ban_stage_3",
-            "kind": "ban",
-            "count": 1
+            "id": "phase_ban_stage_3",
+            "action": "ban",
+            "countPerTeam": 1,
+            "useStageCount": true,
+            "phaseOrder": "alternate"
           },
           {
-            "id": "step_pick_stage_3",
-            "kind": "pick",
-            "count": 6
+            "id": "phase_pick_stage_3",
+            "action": "pick",
+            "countPerTeam": null,
+            "useStageCount": false,
+            "phaseOrder": "alternate"
           }
         ],
         "triggers": []
@@ -705,17 +718,14 @@
       "matches": [
         {
           "id": "match_5",
-          "name": "Team Falcoms vs 插奈特幼儿园",
           "groupId": null,
           "refereeIds": [],
-          "transport": "irc",
           "scheduledAt": "2026-10-25T13:00:00.000Z",
           "result": {
             "scoreRed": 6,
             "scoreBlue": 4
           },
-          "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
-          "initialBeatmapId": 3105666,
+          "winCondition": "score_v2",
           "notes": "osu! bracket match #5 · score 6-4 · completed · losers bracket",
           "type": "match",
           "teamRedId": 0,
@@ -724,17 +734,14 @@
         },
         {
           "id": "match_2",
-          "name": "白毛红瞳双马尾 vs 我不到啊",
           "groupId": null,
           "refereeIds": [],
-          "transport": "irc",
           "scheduledAt": "2026-10-25T13:00:00.000Z",
           "result": {
             "scoreRed": 5,
             "scoreBlue": 6
           },
-          "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
-          "initialBeatmapId": 3989898,
+          "winCondition": "score_v2",
           "notes": "osu! bracket match #2 · score 5-6 · completed · winners bracket",
           "type": "match",
           "teamRedId": 3,
@@ -750,6 +757,8 @@
       "type": "knockout",
       "groups": [],
       "bestOf": 13,
+      "bans": 1,
+      "protects": 0,
       "slots": [
         {
           "id": "stage_4_ac1",
@@ -959,16 +968,20 @@
       "flow": {
         "id": "flow_stage_4",
         "name": "总决赛 flow",
-        "steps": [
+        "phases": [
           {
-            "id": "step_ban_stage_4",
-            "kind": "ban",
-            "count": 1
+            "id": "phase_ban_stage_4",
+            "action": "ban",
+            "countPerTeam": 1,
+            "useStageCount": true,
+            "phaseOrder": "alternate"
           },
           {
-            "id": "step_pick_stage_4",
-            "kind": "pick",
-            "count": 7
+            "id": "phase_pick_stage_4",
+            "action": "pick",
+            "countPerTeam": null,
+            "useStageCount": false,
+            "phaseOrder": "alternate"
           }
         ],
         "triggers": []
@@ -983,17 +996,14 @@
       "matches": [
         {
           "id": "match_3",
-          "name": "我不到啊 vs Team Falcoms",
           "groupId": null,
           "refereeIds": [],
-          "transport": "irc",
           "scheduledAt": "2026-11-01T12:00:00.000Z",
           "result": {
             "scoreRed": 7,
             "scoreBlue": 5
           },
-          "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
-          "initialBeatmapId": 5965244,
+          "winCondition": "score_v2",
           "notes": "osu! bracket match #3 · score 7-5 · completed · winners bracket",
           "type": "match",
           "teamRedId": 1,
@@ -1002,17 +1012,14 @@
         },
         {
           "id": "match_6",
-          "name": "白毛红瞳双马尾 vs Team Falcoms",
           "groupId": null,
           "refereeIds": [],
-          "transport": "irc",
           "scheduledAt": "2026-10-31T13:00:00.000Z",
           "result": {
             "scoreRed": 5,
             "scoreBlue": 7
           },
-          "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
-          "initialBeatmapId": 5965244,
+          "winCondition": "score_v2",
           "notes": "osu! bracket match #6 · score 5-7 · completed · losers bracket",
           "type": "match",
           "teamRedId": 3,
@@ -1021,17 +1028,14 @@
         },
         {
           "id": "match_7",
-          "name": "插奈特幼儿园 vs 巧克甜恋",
           "groupId": null,
           "refereeIds": [],
-          "transport": "irc",
           "scheduledAt": "2026-10-31T13:00:00.000Z",
           "result": {
             "scoreRed": 7,
             "scoreBlue": 4
           },
-          "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
-          "initialBeatmapId": 2840685,
+          "winCondition": "score_v2",
           "notes": "osu! bracket match #7 · score 7-4 · completed · winners bracket",
           "type": "match",
           "teamRedId": 2,
@@ -1041,9 +1045,15 @@
       ]
     }
   ],
-  "automation": [],
+  "automation": {
+    "match_created": [],
+    "beatmap_started": [],
+    "beatmap_completed": [],
+    "match_finished": [],
+    "action_applied": []
+  },
   "revision": 1,
-  "createdAt": "2026-11-12T19:46:20.243Z",
-  "updatedAt": "2026-11-12T19:46:20.243Z",
+  "createdAt": "2026-11-13T07:34:20.850Z",
+  "updatedAt": "2026-11-13T07:34:20.850Z",
   "source": null
 }

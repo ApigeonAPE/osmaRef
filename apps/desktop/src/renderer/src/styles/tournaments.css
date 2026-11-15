@@ -127,6 +127,62 @@
   min-width: 0;
 }
 
+.workspace-grid {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.workspace-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: 18px;
+  padding-right: 10px;
+  border-right: 1px solid var(--line-soft);
+}
+
+.workspace-nav-item {
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+}
+
+.workspace-nav-item:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--panel);
+}
+
+.workspace-nav-item.active {
+  color: var(--text);
+  font-weight: 650;
+  background: var(--pink-soft);
+  border-left-color: var(--pink);
+}
+
+.workspace-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.stage-view-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
 .tournament-list {
   display: flex;
   flex-direction: column;
@@ -157,6 +213,132 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.management-layout {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.management-sidebar {
+  position: sticky;
+  top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-right: 14px;
+  border-right: 1px solid var(--line-soft);
+}
+
+.management-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.management-group-title {
+  padding: 0 10px 6px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.management-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-left: 2px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.management-item:hover {
+  color: var(--text);
+  background: var(--panel);
+}
+
+.management-item.active {
+  color: var(--text);
+  background: var(--pink-soft);
+  border-color: rgba(255, 102, 170, 0.3);
+  border-left-color: var(--pink);
+}
+
+.management-count {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.management-content {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(26, 20, 23, 0.55);
+}
+
+.management-content-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.management-content-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.management-content .tournament-list {
+  gap: 6px;
+}
+
+.management-content .tournament-item {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(26, 20, 23, 0.45);
+}
+
+.management-content .tournament-item:hover {
+  background: var(--panel);
+}
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.detail-head h1 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.import-options button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .team-editor-list,
@@ -255,13 +437,20 @@
 
 .slot-editor {
   display: grid;
-  grid-template-columns: 96px 80px 140px 150px 34px;
+  grid-template-columns: 96px 80px 130px 130px minmax(0, 1fr) 34px;
   gap: 8px;
   align-items: center;
 }
 
 .slot-editor > button {
   width: 100%;
+  padding: 6px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot-editor > button.danger {
   padding: 0;
 }
 
@@ -287,4 +476,93 @@
 .pill.lobby {
   border-color: rgba(120, 190, 255, 0.4);
   color: #8ec8ff;
+}
+
+.match-summary-row {
+  display: grid;
+  grid-template-columns: 26px 40px minmax(0, 1fr) auto minmax(0, 1fr) 32px;
+  gap: 8px;
+  align-items: center;
+}
+
+.match-summary-row .match-expand {
+  width: 26px;
+  padding: 0;
+}
+
+.match-summary-row .match-number {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.match-summary-row .match-team {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match-summary-row .match-team.red {
+  color: #ffa0b4;
+  text-align: right;
+}
+
+.match-summary-row .match-team.blue {
+  color: #9cc8ff;
+}
+
+.match-summary-row .match-score {
+  min-width: 64px;
+  text-align: center;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.match-summary-row > button:last-child {
+  width: 100%;
+  padding: 0;
+}
+
+.automation-head {
+  justify-content: space-between;
+}
+
+.help-button {
+  width: 26px;
+  padding: 0;
+}
+
+.automation-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.automation-group-head {
+  justify-content: space-between;
+}
+
+.automation-timing {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.reference-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reference-list li {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.reference-list code {
+  color: var(--pink);
 }

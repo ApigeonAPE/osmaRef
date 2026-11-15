@@ -12,6 +12,8 @@ import {
   createBanchoRoomState,
   formatIrcLoginFailure,
   ircConnectTargets,
+  IrcMatchTransport,
+  type TransportEvent,
 } from '@osmaref/adapters';
 
 describe('IRC line parsing', () => {
@@ -86,6 +88,43 @@ describe('IRC endpoints', () => {
       { port: 6667, useTls: false },
       { port: 6697, useTls: true },
     ]);
+  });
+});
+
+describe('IRC countdown events', () => {
+  // `!mp start 10` is answered twice: "Queued the match to start in 10 seconds"
+  // and "Match starts in 10 seconds". Both describe the same countdown.
+  it('collapses the queued and the countdown announcement into one event', () => {
+    const transport = new IrcMatchTransport({
+      host: 'irc.ppy.sh',
+      port: 6667,
+      username: 'referee',
+      password: 'token',
+    });
+    const internal = transport as unknown as {
+      rooms: Map<string, ReturnType<typeof createBanchoRoomState>>;
+      handleBotMessage: (from: string, target: string, text: string) => void;
+    };
+    internal.rooms.set('123', createBanchoRoomState('123'));
+    const events: TransportEvent[] = [];
+    transport.onEvent((event) => events.push(event));
+
+    internal.handleBotMessage('BanchoBot', '#mp_123', 'Queued the match to start in 10 seconds');
+    internal.handleBotMessage('BanchoBot', '#mp_123', 'Match starts in 10 seconds');
+    internal.handleBotMessage('BanchoBot', '#mp_123', 'Match starts in 5 seconds');
+    internal.handleBotMessage('BanchoBot', '#mp_123', 'Match starts in 4 seconds');
+    internal.handleBotMessage('BanchoBot', '#mp_123', 'Match starts in 3 seconds');
+    internal.handleBotMessage('BanchoBot', '#mp_123', 'The match has started!');
+    internal.handleBotMessage('BanchoBot', '#mp_123', 'Aborted the match');
+
+    expect(events.filter((event) => event.type === 'countdown')).toEqual([
+      { type: 'countdown', roomId: '123', seconds: 10, kind: 'match_start' },
+      { type: 'countdown', roomId: '123', seconds: 5, kind: 'match_start' },
+      { type: 'countdown', roomId: '123', seconds: 4, kind: 'match_start' },
+      { type: 'countdown', roomId: '123', seconds: 3, kind: 'match_start' },
+    ]);
+    expect(events.filter((event) => event.type === 'match_started')).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'match_aborted')).toHaveLength(1);
   });
 });
 

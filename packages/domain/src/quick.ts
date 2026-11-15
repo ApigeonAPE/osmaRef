@@ -1,7 +1,9 @@
 import {
   TournamentSchema,
+  emptyAutomationMessages,
   type Match,
   type MatchFlow,
+  type Platform,
   type ScoringScheme,
   type Stage,
   type Tournament,
@@ -28,45 +30,51 @@ const RULESET_MODES: TournamentMode[] = ['osu', 'taiko', 'catch', 'mania'];
  *
  * The room has no stored tournament, so the session keeps this snapshot. It
  * deliberately contains only what a referee needs before players arrive: one
- * beatmap, a picks-only flow and score-v2 scoring. Everything else can be
- * changed later through normal room commands.
+ * beatmap, an auto-sized picks-only flow and score-v2 scoring.
  */
 export function buildQuickTournament(options: QuickRoomOptions): Tournament {
   const now = (options.now ?? new Date()).toISOString();
   const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const bestOf = normalizeBestOf(options.bestOf);
-  const matchType = options.matchType;
   const beatmapId =
     options.beatmapId && options.beatmapId > 0 ? Math.round(options.beatmapId) : null;
   const mode = RULESET_MODES[options.rulesetId] ?? 'osu';
+  const platform: Platform = options.transport === 'referee_hub' ? 'lazer' : 'stable';
+  const roomWinCondition: 'score' | 'score_v2' =
+    platform === 'lazer' ? 'score' : 'score_v2';
 
   const flow: MatchFlow = {
     id: 'flow_quick',
     name: 'Quick picks',
-    steps: [{ id: 'step_quick_pick', kind: 'pick', count: 10 }],
+    phases: [
+      {
+        id: 'phase_quick_pick',
+        action: 'pick',
+        countPerTeam: null,
+        useStageCount: false,
+        phaseOrder: 'alternate',
+      },
+    ],
     triggers: [],
   };
   const scoring: ScoringScheme = {
     id: 'score_quick',
-    name: 'Score V2',
-    winCondition: 'score_v2',
+    name: roomWinCondition === 'score_v2' ? 'Score V2' : 'Score',
+    winCondition: roomWinCondition,
     aggregation: 'sum',
     modMultipliers: {},
   };
   const match: Match = {
     id: 'match_quick',
     type: 'match',
-    name: options.name,
     groupId: null,
     teamRedId: 0,
     teamBlueId: 1,
     refereeIds: options.referee ? [options.referee.userId] : [],
-    transport: options.transport,
     scheduledAt: now,
     result: { scoreRed: 0, scoreBlue: 0 },
-    roomMode: matchType,
-    roomNameTemplate: '{tournament}',
-    initialBeatmapId: beatmapId,
+    roomMode: options.matchType,
+    winCondition: roomWinCondition,
   };
   const stage: Stage = {
     id: 'stage_quick',
@@ -75,6 +83,8 @@ export function buildQuickTournament(options: QuickRoomOptions): Tournament {
     type: 'knockout',
     groups: [],
     bestOf,
+    bans: 0,
+    protects: 0,
     slots: beatmapId
       ? [
           {
@@ -98,10 +108,11 @@ export function buildQuickTournament(options: QuickRoomOptions): Tournament {
   };
 
   const tournament: Tournament = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     id: `adhoc_${suffix}`,
     name: options.name,
     abbreviation: 'QUICK',
+    platform,
     mode,
     teamSize: 4,
     teams: [
@@ -109,7 +120,7 @@ export function buildQuickTournament(options: QuickRoomOptions): Tournament {
       { id: 1, name: 'Team 2', captainUserId: null, members: [], seed: null },
     ],
     stages: [stage],
-    automation: [],
+    automation: emptyAutomationMessages(),
     revision: 1,
     createdAt: now,
     updatedAt: now,

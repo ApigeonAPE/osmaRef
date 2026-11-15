@@ -271,7 +271,6 @@ export const ConnectIrcInputSchema = z.object({
 export const OpenRoomInputSchema = z.object({
   tournamentId: z.string().min(1).max(128),
   matchId: z.string().min(1).max(128),
-  transport: z.enum(['irc', 'referee_hub']).optional(),
 });
 
 export const JoinRoomInputSchema = z.object({
@@ -417,7 +416,7 @@ export interface DesktopApi {
   sessions: {
     list(): Promise<MatchSession[]>;
     get(id: string): Promise<MatchSession | null>;
-    open(input: { tournamentId: string; matchId: string; transport?: 'irc' | 'referee_hub' }): Promise<MatchSession>;
+    open(input: { tournamentId: string; matchId: string }): Promise<MatchSession>;
     /** Creates a room without any stored tournament or match. */
     openQuick(input: QuickRoomInput): Promise<MatchSession>;
     /** Joins an existing IRC/Hub room without creating a new one. */

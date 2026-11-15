@@ -8,6 +8,7 @@ import {
   evaluateBeatmap,
   setFirstTeams,
   recordResult,
+  reopenRoomSession,
   undoLast,
   DomainError,
   buildActionQueue,
@@ -17,6 +18,7 @@ import {
   type EvaluateInput,
 } from '@osmaref/domain';
 import {
+  MatchSessionSchema,
   requiredWins,
   type BeatmapResult,
   type CreateSessionInput,
@@ -31,9 +33,21 @@ const TEAM_TWO = 'team_blue';
 const flow: MatchFlow = {
   id: 'flow_test',
   name: 'Test flow',
-  steps: [
-    { id: 'step_ban', kind: 'ban', count: 1 },
-    { id: 'step_pick', kind: 'pick', count: 10 },
+  phases: [
+    {
+      id: 'phase_ban',
+      action: 'ban',
+      countPerTeam: 1,
+      useStageCount: false,
+      phaseOrder: 'alternate',
+    },
+    {
+      id: 'phase_pick',
+      action: 'pick',
+      countPerTeam: null,
+      useStageCount: false,
+      phaseOrder: 'alternate',
+    },
   ],
   triggers: [],
 };
@@ -116,28 +130,78 @@ function result(winner: 'team_one' | 'team_two', slot: string, second: number): 
 }
 
 describe('flow expansion', () => {
-  it('alternates both teams for every step', () => {
-    const queue = buildActionQueue(flow, TEAM_ONE, TEAM_TWO);
+  it('alternates both teams for every phase', () => {
+    const queue = buildActionQueue(flow, 3, TEAM_ONE, TEAM_TWO, { bans: 1, protects: 0 });
     expect(queue.slice(0, 2).map((action) => action.side)).toEqual(['team_one', 'team_two']);
     expect(queue[0]?.kind).toBe('ban');
     expect(queue[2]?.kind).toBe('pick');
   });
 
-  it('treats count as actions per team', () => {
+  it('derives pick counts from the best-of', () => {
+    const queue = buildActionQueue(flow, 5, TEAM_ONE, TEAM_TWO, { bans: 1, protects: 0 });
+    const picks = queue.filter((action) => action.kind === 'pick');
+    expect(picks).toHaveLength(6);
+    expect(picks[0]?.count).toBe(3);
+    expect(picks.map((action) => action.side)).toEqual([
+      'team_one',
+      'team_two',
+      'team_one',
+      'team_two',
+      'team_one',
+      'team_two',
+    ]);
+  });
+
+  it('takes ban counts from the stage when a phase asks for them', () => {
+    const queue = buildActionQueue(
+      {
+        id: 'stage-count',
+        name: 'stage count',
+        phases: [
+          {
+            id: 'b',
+            action: 'ban',
+            countPerTeam: 1,
+            useStageCount: true,
+            phaseOrder: 'alternate',
+          },
+        ],
+        triggers: [],
+      },
+      9,
+      TEAM_ONE,
+      TEAM_TWO,
+      { bans: 2, protects: 0 },
+    );
+    expect(queue.filter((action) => action.kind === 'ban')).toHaveLength(4);
+    expect(queue[0]?.count).toBe(2);
+  });
+
+  it('supports per-team counts and sequential ordering', () => {
     const queue = buildActionQueue(
       {
         id: 'f',
         name: 'f',
-        steps: [{ id: 's', kind: 'protect', count: 2 }],
+        phases: [
+          {
+            id: 'p',
+            action: 'protect',
+            countPerTeam: 2,
+            useStageCount: false,
+            phaseOrder: 'sequential',
+          },
+        ],
         triggers: [],
       },
+      3,
       TEAM_ONE,
       TEAM_TWO,
+      { bans: 0, protects: 0 },
     );
     expect(queue.map((action) => action.side)).toEqual([
       'team_one',
-      'team_two',
       'team_one',
+      'team_two',
       'team_two',
     ]);
   });
@@ -177,6 +241,34 @@ describe('match state machine', () => {
     const state = recordResult(session(), result('team_one', 'NM1', 1));
     expect(state.results).toHaveLength(1);
     expect(state.wins.team_one).toBe(1);
+  });
+
+  it('records lobby results without wins, review, or finishing', () => {
+    const lobby = MatchSessionSchema.parse({
+      ...session(3),
+      id: 'session_lobby',
+      matchKind: 'lobby',
+      participantIds: [TEAM_ONE, TEAM_TWO, 'team_third'],
+      currentSlotLabel: 'HB1',
+      currentBeatmapId: 5,
+      phase: 'lobby',
+    });
+    const lobbyResult = {
+      ...result('team_one', 'HB1', 1),
+      winner: null,
+      teamValues: { team_one: null, team_two: null },
+    };
+    const once = recordResult(lobby, lobbyResult);
+    expect(once.results).toHaveLength(1);
+    expect(once.wins).toEqual({ team_one: 0, team_two: 0 });
+    expect(once.needsReview).toEqual([]);
+    expect(once.status).toBe('active');
+    expect(once.currentSlotLabel).toBeNull();
+    expect(once.currentBeatmapId).toBeNull();
+
+    const twice = recordResult(once, { ...lobbyResult, id: 'HB1-2' });
+    expect(twice.results).toHaveLength(2);
+    expect(twice.status).toBe('active');
   });
 
   it('never blocks recording another result for the same slot', () => {
@@ -427,7 +519,15 @@ describe('match state machine', () => {
     const shortFlow: MatchFlow = {
       id: 'short',
       name: 'short',
-      steps: [{ id: 'p', kind: 'pick', count: 1 }],
+      phases: [
+        {
+          id: 'p',
+          action: 'pick',
+          countPerTeam: null,
+          useStageCount: false,
+          phaseOrder: 'alternate',
+        },
+      ],
       triggers: [],
     };
     let state = createSession(
@@ -442,7 +542,7 @@ describe('match state machine', () => {
         rulesetId: 0,
         matchType: 'team_versus',
         transport: 'referee_hub',
-        bestOf: 5,
+        bestOf: 1,
         now: at(0),
       },
       shortFlow,
@@ -456,7 +556,11 @@ describe('match state machine', () => {
       byUserId: 1,
       at: at(1),
     });
-    state = recordResult(state, result('team_one', 'NM1', 2));
+    state = recordResult(state, {
+      ...result('team_one', 'NM1', 2),
+      winner: null,
+      teamValues: { team_one: 0, team_two: 0 },
+    });
     state = applyAction(state, {
       kind: 'pick',
       teamId: TEAM_TWO,
@@ -465,7 +569,11 @@ describe('match state machine', () => {
       byUserId: 2,
       at: at(3),
     });
-    state = recordResult(state, result('team_two', 'NM2', 4));
+    state = recordResult(state, {
+      ...result('team_two', 'NM2', 4),
+      winner: null,
+      teamValues: { team_one: 0, team_two: 0 },
+    });
     expect(state.status).toBe('finished');
     expect(state.needsReview.join(' ')).toMatch(/flow ended/);
   });
@@ -564,9 +672,28 @@ describe('scoring', () => {
     const protectFlow: MatchFlow = {
       id: 'protect_flow',
       name: 'protect flow',
-      steps: [
-        { id: 'p', kind: 'protect', count: 1 },
-        { id: 'b', kind: 'ban', count: 1 },
+      phases: [
+        {
+          id: 'p',
+          action: 'protect',
+          countPerTeam: 1,
+          useStageCount: false,
+          phaseOrder: 'alternate',
+        },
+        {
+          id: 'b',
+          action: 'ban',
+          countPerTeam: 1,
+          useStageCount: false,
+          phaseOrder: 'alternate',
+        },
+        {
+          id: 'pick',
+          action: 'pick',
+          countPerTeam: null,
+          useStageCount: false,
+          phaseOrder: 'alternate',
+        },
       ],
       triggers: [],
     };
@@ -637,23 +764,33 @@ describe('scoring', () => {
     const triggerFlow: MatchFlow = {
       id: 'trigger_flow',
       name: 'trigger flow',
-      steps: [{ id: 'p', kind: 'pick', count: 5 }],
+      phases: [
+        {
+          id: 'p',
+          action: 'pick',
+          countPerTeam: null,
+          useStageCount: false,
+          phaseOrder: 'alternate',
+        },
+      ],
       triggers: [
         {
           id: 't1',
-          team: 'team_one',
+          subject: 'team_one',
           threshold: 1,
           action: 'ban',
           count: 2,
           repeatEvery: null,
+          grantTo: 'opponent',
         },
         {
           id: 't2',
-          team: 'team_one',
+          subject: 'team_one',
           threshold: 2,
           action: 'protect',
           count: 1,
           repeatEvery: 1,
+          grantTo: 'subject',
         },
       ],
     };
@@ -686,25 +823,33 @@ describe('scoring', () => {
     state = recordResult(state, result('team_one', 'NM1', 2));
 
     expect(state.triggerCounts.t1).toBe(1);
-    expect(state.queue[state.cursor]).toMatchObject({ kind: 'ban', side: 'team_one' });
+    expect(state.queue[state.cursor]).toMatchObject({ kind: 'ban', side: 'team_two' });
     expect(state.queue.filter((action) => action.stepId === 'trigger:t1')).toHaveLength(2);
   });
 
   it('renders templates without executing code', () => {
-    expect(renderTemplate('{{ team_one }} {{score_one}}', { team_one: 'Red', score_one: 2 })).toBe(
-      'Red 2',
-    );
+    expect(
+      renderTemplate('{{team_red}} {{score_red}}', { team_red: 'Red', score_red: 2 }),
+    ).toBe('Red 2');
     expect(renderTemplate('{{constructor}}', {})).toBe('{{constructor}}');
   });
 });
 describe('closing a room', () => {
-  it('marks the session closed and drops room references', () => {
+  it('marks the session closed and keeps the room association', () => {
     const opened = { ...session(), roomId: '1001', roomName: 'Final' };
     const closed = closeRoomSession(opened, at(9));
     expect(closed.status).toBe('closed');
-    expect(closed.roomId).toBeNull();
-    expect(closed.roomName).toBeNull();
+    expect(closed.roomId).toBe('1001');
+    expect(closed.roomName).toBe('Final');
     expect(closed.phase).toBe('aborted');
+  });
+
+  it('reopens a closed session when its room is joined again', () => {
+    const closed = closeRoomSession({ ...session(), roomId: '1001', roomName: 'Final' }, at(9));
+    const opened = reopenRoomSession(closed, at(10));
+    expect(opened.status).toBe('active');
+    expect(opened.phase).toBe('ban');
+    expect(opened.roomId).toBe('1001');
   });
 });
 
@@ -719,8 +864,8 @@ describe('manual score and first teams', () => {
 
   it('alternates each step from the selected first team', () => {
     const state = setFirstTeams(session(), [
-      { stepId: 'step_ban', teamId: TEAM_TWO },
-      { stepId: 'step_pick', teamId: TEAM_ONE },
+      { stepId: 'phase_ban', teamId: TEAM_TWO },
+      { stepId: 'phase_pick', teamId: TEAM_ONE },
     ]);
     expect(state.firstTeamsSet).toBe(true);
     expect(state.queue[0]?.side).toBe('team_two');

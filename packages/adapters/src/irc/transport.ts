@@ -21,9 +21,37 @@ import type {
   TransportEvent,
   UserRef,
 } from '../types';
-import type { TransportKind } from '@osmaref/contracts';
+import type { MatchType, RoomWinCondition, TransportKind } from '@osmaref/contracts';
 
 const BANCHO_BOT = 'BanchoBot';
+const TEAM_MODE_NUMBER: Record<MatchType, number> = {
+  head_to_head: 0,
+  tag_coop: 1,
+  team_versus: 2,
+  tag_team_versus: 3,
+};
+
+const WIN_CONDITION_NUMBER: Record<RoomWinCondition, number> = {
+  score: 0,
+  accuracy: 1,
+  combo: 2,
+  score_v2: 3,
+};
+
+const WIN_CONDITION_LABEL: Record<RoomWinCondition, string> = {
+  score: 'Score',
+  accuracy: 'Accuracy',
+  combo: 'Combo',
+  score_v2: 'ScoreV2',
+};
+
+function winConditionFromLabel(label: string | null): RoomWinCondition {
+  const normalized = (label ?? '').replace(/\s+/g, '').toLowerCase();
+  if (normalized === 'accuracy') return 'accuracy';
+  if (normalized === 'combo') return 'combo';
+  if (normalized === 'scorev2' || normalized === 'scorev2.0') return 'score_v2';
+  return 'score';
+}
 
 export interface IrcTransportOptions extends IrcClientOptions {
   channels?: string[];
@@ -46,6 +74,15 @@ export class IrcMatchTransport implements MatchTransport {
     reject: (error: Error) => void;
   }[] = [];
   private readonly joinedChannels = new Set<string>();
+  /**
+   * `!mp start <n>` is answered with both "Queued the match to start in <n>
+   * seconds" and "Match starts in <n> seconds"; they describe one countdown,
+   * so an identical repeat right after the first line is dropped.
+   */
+  private readonly lastCountdown = new Map<
+    string,
+    { kind: 'match_start' | 'timer'; seconds: number; at: number }
+  >();
   /** Last BanchoBot lines, used to explain a failed `!mp make`. */
   private readonly botLines: string[] = [];
   private manualClose = false;
@@ -180,10 +217,10 @@ export class IrcMatchTransport implements MatchTransport {
     client.privmsg(BANCHO_BOT, `!mp make ${request.name}`);
     const roomId = await created;
     client.join(channelForRoom(roomId));
-    client.privmsg(channelForRoom(roomId), `!mp set ${request.matchType === 'team_versus' ? 2 : 0}`);
-    if (request.maxParticipants > 0) {
-      client.privmsg(channelForRoom(roomId), `!mp size ${request.maxParticipants}`);
-    }
+    const teamValue = TEAM_MODE_NUMBER[request.teamMode];
+    const winValue = WIN_CONDITION_NUMBER[request.winCondition];
+    const size = request.maxParticipants > 0 ? ` ${request.maxParticipants}` : '';
+    client.privmsg(channelForRoom(roomId), `!mp set ${teamValue} ${winValue}${size}`);
     if (request.beatmapId && request.beatmapId > 0) {
       client.privmsg(channelForRoom(roomId), `!mp map ${request.beatmapId} ${request.rulesetId}`);
     }
@@ -191,7 +228,8 @@ export class IrcMatchTransport implements MatchTransport {
     const state = createBanchoRoomState(roomId);
     state.name = request.name;
     state.size = request.maxParticipants;
-    state.matchType = request.matchType;
+    state.matchType = request.teamMode;
+    state.winCondition = WIN_CONDITION_LABEL[request.winCondition];
     state.beatmapId = request.beatmapId && request.beatmapId > 0 ? request.beatmapId : null;
     this.rooms.set(roomId, state);
 
@@ -249,16 +287,28 @@ export class IrcMatchTransport implements MatchTransport {
     if (patch.maxParticipants !== undefined) {
       this.sendToRoom(roomId, `!mp size ${patch.maxParticipants}`);
     }
-    if (patch.matchType !== undefined) {
-      this.sendToRoom(roomId, `!mp set ${patch.matchType === 'team_versus' ? 2 : 0}`);
-    }
 
     // Bancho applies these silently, so refresh the local snapshot immediately;
     // `!mp settings` can still correct any server-side filtering later.
     const state = this.rooms.get(roomId);
+    if (patch.teamMode !== undefined || patch.winCondition !== undefined) {
+      const teamMode = patch.teamMode ?? state?.matchType ?? 'head_to_head';
+      const winCondition =
+        patch.winCondition ?? winConditionFromLabel(state?.winCondition ?? null);
+      const size =
+        patch.maxParticipants ?? state?.size ?? 0;
+      this.sendToRoom(
+        roomId,
+        `!mp set ${TEAM_MODE_NUMBER[teamMode]} ${WIN_CONDITION_NUMBER[winCondition]}${size > 0 ? ` ${size}` : ''}`,
+      );
+    }
+
     if (state) {
       if (patch.name !== undefined) state.name = patch.name;
-      if (patch.matchType !== undefined) state.matchType = patch.matchType;
+      if (patch.teamMode !== undefined) state.matchType = patch.teamMode;
+      if (patch.winCondition !== undefined) {
+        state.winCondition = WIN_CONDITION_LABEL[patch.winCondition];
+      }
       if (patch.maxParticipants !== undefined) state.size = patch.maxParticipants;
       this.emit({ type: 'room_updated', snapshot: this.snapshot(roomId) });
     }
@@ -273,9 +323,11 @@ export class IrcMatchTransport implements MatchTransport {
       const mods =
         patch.requiredMods && patch.requiredMods.length > 0
           ? patch.requiredMods
-          : patch.allowedMods && patch.allowedMods.length > 0
-            ? ['Freemod']
-            : [];
+          : patch.allowedMods && patch.allowedMods.length > 0 && !patch.freestyle
+            ? patch.allowedMods
+            : patch.allowedMods && patch.allowedMods.length > 0
+              ? ['Freemod']
+              : [];
       this.sendToRoom(roomId, mods.length === 0 ? '!mp mods None' : `!mp mods ${mods.join(' ')}`);
     }
 
@@ -403,13 +455,14 @@ export class IrcMatchTransport implements MatchTransport {
 
     switch (event.kind) {
       case 'countdown':
-        this.emit({ type: 'countdown', roomId, seconds: event.seconds, kind: event.label });
+      case 'match_starting': {
+        const kind = event.kind === 'countdown' ? event.label : 'match_start';
+        if (this.repeatsCountdown(roomId, kind, event.seconds)) break;
+        this.emit({ type: 'countdown', roomId, seconds: event.seconds, kind });
         break;
+      }
       case 'countdown_stopped':
         this.emit({ type: 'countdown_stopped', roomId });
-        break;
-      case 'match_starting':
-        this.emit({ type: 'countdown', roomId, seconds: event.seconds, kind: 'match_start' });
         break;
       case 'match_started':
         this.emit({ type: 'match_started', roomId, playlistItemId: null });
@@ -431,6 +484,7 @@ export class IrcMatchTransport implements MatchTransport {
         break;
       case 'match_closed':
         this.rooms.delete(roomId);
+        this.lastCountdown.delete(roomId);
         this.emit({ type: 'room_closed', roomId });
         break;
       default:
@@ -443,6 +497,23 @@ export class IrcMatchTransport implements MatchTransport {
   private roomFromContext(): string | null {
     if (this.rooms.size === 1) return [...this.rooms.keys()][0] ?? null;
     return null;
+  }
+
+  /** True when Bancho repeats a countdown it already announced moments ago. */
+  private repeatsCountdown(
+    roomId: string,
+    kind: 'match_start' | 'timer',
+    seconds: number,
+  ): boolean {
+    const now = Date.now();
+    const previous = this.lastCountdown.get(roomId);
+    this.lastCountdown.set(roomId, { kind, seconds, at: now });
+    return (
+      previous !== undefined &&
+      previous.kind === kind &&
+      previous.seconds === seconds &&
+      now - previous.at < 2000
+    );
   }
 
   private sendToRoom(roomId: string, command: string): void {

@@ -9,7 +9,7 @@ import {
   type PendingAction,
   type RoomPlayer,
 } from '@osmaref/contracts';
-import { buildActionQueue, describePendingAction, sideOfTeam } from './flow';
+import { buildActionQueue, describePendingAction, oppositeSide, sideOfTeam } from './flow';
 
 export type DomainErrorCode =
   | 'SESSION_NOT_ACTIVE'
@@ -33,7 +33,10 @@ export class DomainError extends Error {
 }
 
 export function createSession(input: CreateSessionInput, flow: MatchFlow): MatchSession {
-  const queue = buildActionQueue(flow, input.teamOneId, input.teamTwoId);
+  const queue = buildActionQueue(flow, input.bestOf, input.teamOneId, input.teamTwoId, {
+    bans: input.bans ?? 0,
+    protects: input.protects ?? 0,
+  });
   const session: MatchSession = {
     id: input.id,
     tournamentId: input.tournamentId,
@@ -167,6 +170,16 @@ export function recordResult(
   if (session.status !== 'active') {
     throw new DomainError('SESSION_NOT_ACTIVE', `session is ${session.status}`);
   }
+  if (session.matchKind === 'lobby') {
+    return MatchSessionSchema.parse({
+      ...session,
+      results: [...session.results, result],
+      updatedAt: at,
+      phase: session.phase === 'playing' ? 'lobby' : session.phase,
+      currentSlotLabel: null,
+      currentBeatmapId: null,
+    });
+  }
   const next: MatchSession = {
     ...session,
     results: [...session.results, result],
@@ -274,7 +287,7 @@ function applyScoreTriggers(session: MatchSession): {
 
   for (const trigger of session.flowTriggers) {
     const score =
-      trigger.team === 'team_one' ? session.wins.team_one : session.wins.team_two;
+      trigger.subject === 'team_one' ? session.wins.team_one : session.wins.team_two;
     if (score < trigger.threshold) continue;
 
     const desired = trigger.repeatEvery
@@ -283,13 +296,15 @@ function applyScoreTriggers(session: MatchSession): {
     const fired = counts[trigger.id] ?? 0;
     if (desired <= fired) continue;
 
+    const side =
+      trigger.grantTo === 'subject' ? trigger.subject : oppositeSide(trigger.subject);
     for (let round = fired; round < desired; round += 1) {
       for (let index = 1; index <= trigger.count; index += 1) {
         granted.push({
           id: `${session.id}:trigger:${trigger.id}:${round}:${index}`,
           stepId: `trigger:${trigger.id}`,
           kind: trigger.action,
-          side: trigger.team,
+          side,
           index,
           count: trigger.count,
         });
@@ -389,13 +404,23 @@ export function closeRoomSession(session: MatchSession, at: string): MatchSessio
     ...session,
     status: 'closed',
     phase: 'aborted',
-    roomId: null,
-    roomName: null,
     currentSlotLabel: null,
     currentBeatmapId: null,
     updatedAt: at,
   };
   return MatchSessionSchema.parse(next);
+}
+
+/** Re-opens a room whose session was closed while the room still exists. */
+export function reopenRoomSession(session: MatchSession, at: string): MatchSession {
+  if (session.status !== 'closed') return session;
+  return MatchSessionSchema.parse({
+    ...session,
+    status: 'active',
+    phase:
+      session.matchKind === 'lobby' ? 'lobby' : (session.queue[session.cursor]?.kind ?? 'pick'),
+    updatedAt: at,
+  });
 }
 
 export function linkRoom(

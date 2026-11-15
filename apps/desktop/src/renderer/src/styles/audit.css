@@ -170,6 +170,61 @@
   flex: 1;
 }
 
+.match-info {
+  display: grid;
+  gap: 14px;
+}
+
+.match-info-teams {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.match-info-team {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+  font-weight: 600;
+}
+
+.match-info-team.red {
+  color: #ffa0b4;
+}
+
+.match-info-team.blue {
+  color: #9cc8ff;
+}
+
+.match-info-vs {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.match-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.match-info-grid > div {
+  display: grid;
+  gap: 4px;
+}
+
+.match-info-grid dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.match-info-grid dd {
+  margin: 0;
+}
+
 .session-tabs {
   display: flex;
   gap: 8px;

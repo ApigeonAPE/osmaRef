@@ -111,6 +111,41 @@ describe('logging persistence', () => {
     }
   });
 
+  it('keeps IRC chat channels out of room logs', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'osmaref-log-'));
+    const store = await createAppStore(dir);
+    try {
+      const channel = MatchSessionSchema.parse({
+        ...session(),
+        id: 'channel-session',
+        matchName: '#osu',
+        roomId: '#osu',
+        roomName: '#osu',
+        transport: 'irc',
+        chatOnly: true,
+        status: 'active',
+      });
+      store.saveSession(channel);
+      store.upsertLobbyLogSession(toLobbyLogSession(channel));
+      store.appendEvent(
+        SessionEventSchema.parse({
+          id: 'chat:channel-session:m1',
+          sessionId: 'channel-session',
+          at: '2026-01-01T00:10:00.000Z',
+          type: 'chat_message',
+          category: 'chat',
+          summary: 'Player: hello',
+        }),
+      );
+
+      expect(store.listLobbyLogs()).toEqual([]);
+      expect(store.listEvents('channel-session')).toHaveLength(1);
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('backfills log metadata for sessions created before this feature', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'osmaref-log-'));
     const store = await createAppStore(dir);

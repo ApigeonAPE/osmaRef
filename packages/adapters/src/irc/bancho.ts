@@ -45,7 +45,7 @@ export type BanchoEvent =
   | { kind: 'room_name'; name: string }
   | {
       kind: 'room_settings';
-      matchType?: 'head_to_head' | 'team_versus' | null;
+      matchType?: import('@osmaref/contracts').MatchType | null;
       winCondition?: string;
       slots?: number;
       players?: number;
@@ -308,7 +308,7 @@ export interface BanchoRoomState {
   roomId: string;
   name: string | null;
   size: number | null;
-  matchType: 'head_to_head' | 'team_versus' | null;
+  matchType: import('@osmaref/contracts').MatchType | null;
   winCondition: string | null;
   playerCount: number | null;
   locked: boolean;
@@ -464,10 +464,12 @@ export function parseModClauses(line: string): ModClause[] | null {
   return clauses.length > 0 ? clauses : null;
 }
 
-export function normalizeMatchType(value: string): 'head_to_head' | 'team_versus' | null {
+export function normalizeMatchType(value: string): import('@osmaref/contracts').MatchType | null {
   const normalized = value.replace(/\s+/g, '').toLowerCase();
   if (normalized === 'headtohead') return 'head_to_head';
+  if (normalized === 'tagcoop') return 'tag_coop';
   if (normalized === 'teamvs') return 'team_versus';
+  if (normalized === 'tagteamvs') return 'tag_team_versus';
   return null;
 }
 

@@ -1,15 +1,17 @@
 import { useState } from 'react';
-import type { PlaylistEntry } from '@osmaref/contracts';
+import type { Platform, PlaylistEntry } from '@osmaref/contracts';
 import { useI18n } from '../i18n';
 import { Modal } from '../ui';
 import { ModSelector } from './ModSelector';
 
 export function PlaylistModsDialog({
   entry,
+  platform,
   onClose,
   onSave,
 }: {
   entry: PlaylistEntry;
+  platform: Platform;
   onClose: () => void;
   onSave: (input: {
     requiredMods: string[];
@@ -18,11 +20,15 @@ export function PlaylistModsDialog({
   }) => Promise<void>;
 }) {
   const { t } = useI18n();
+  const stable = platform === 'stable';
   const [mods, setMods] = useState({
-    required: entry.requiredMods,
-    allowed: entry.allowedMods,
-    freestyle: entry.freestyle,
+    required: stable
+      ? [...new Set([...entry.requiredMods, ...entry.allowedMods])]
+      : entry.requiredMods,
+    allowed: stable ? [] : entry.allowedMods,
+    freestyle: stable ? false : entry.freestyle,
   });
+  const freestyle = platform === 'stable' ? false : mods.freestyle;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,7 +54,8 @@ export function PlaylistModsDialog({
       <ModSelector
         required={mods.required}
         allowed={mods.allowed}
-        freestyle={mods.freestyle}
+        freestyle={freestyle}
+        platform={platform}
         onChange={setMods}
       />
       {error ? <p className="error small">{error}</p> : null}

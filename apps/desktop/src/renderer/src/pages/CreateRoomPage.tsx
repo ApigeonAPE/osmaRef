@@ -3,6 +3,7 @@ import { useModel } from '../useOsmaRef';
 import { useI18n } from '../i18n';
 import { Field, Section } from '../ui';
 import { IdInput } from '../components/IdInput';
+import { MatchInfo } from '../components/MatchInfo';
 import { Toast } from '../components/Toast';
 
 export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) => void }) {
@@ -11,7 +12,6 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
   const [mode, setMode] = useState<'configured' | 'quick'>('configured');
   const [tournamentId, setTournamentId] = useState('');
   const [matchId, setMatchId] = useState('');
-  const [transport, setTransport] = useState<'irc' | 'referee_hub'>('irc');
 
   const [quickName, setQuickName] = useState('Quick room');
   const [quickBeatmap, setQuickBeatmap] = useState('');
@@ -26,9 +26,11 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
   const selectedTournament = model.tournaments.find((entry) => entry.id === tournamentId) ?? null;
   const selectedMatches = selectedTournament
     ? selectedTournament.stages.flatMap((stage) =>
-        stage.matches.map((match) => ({ stage, match })),
+        stage.matches.map((match, index) => ({ stage, match, index })),
       )
     : [];
+  const selectedMatch =
+    selectedMatches.find((entry) => entry.match.id === matchId) ?? null;
 
   useEffect(() => {
     if (!tournamentId && model.tournaments[0]) setTournamentId(model.tournaments[0].id);
@@ -41,7 +43,6 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
       return;
     }
     if (match.id !== matchId) setMatchId(match.id);
-    setTransport(match.transport);
   }, [selectedMatches, matchId]);
 
   const run = async (label: string, action: () => Promise<unknown>) => {
@@ -59,7 +60,7 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
   const openRoom = async () => {
     if (!tournamentId || !matchId) return;
     await run('open', async () => {
-      const created = await window.osmaRef.sessions.open({ tournamentId, matchId, transport });
+      const created = await window.osmaRef.sessions.open({ tournamentId, matchId });
       await model.refreshSessions();
       onCreated(created.id);
     });
@@ -69,7 +70,7 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
     const beatmapId = Number(quickBeatmap);
     const hasBeatmap = Number.isInteger(beatmapId) && beatmapId > 0;
     if (!hasBeatmap && quickTransport === 'referee_hub') {
-      setError(t('The Referee Hub needs a beatmap id.'));
+      setError(t('lazer needs a beatmap id.'));
       return;
     }
     await run('quick', async () => {
@@ -131,21 +132,26 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
               </Field>
               <Field label={t('Match')}>
                 <select value={matchId} onChange={(event) => setMatchId(event.target.value)}>
-                  {selectedMatches.map(({ stage, match: entry }) => (
-                    <option key={entry.id} value={entry.id}>
-                      {stage.name} · {entry.name}
-                    </option>
-                  ))}
+                  {selectedMatches.map(({ stage, match: entry, index }) => {
+                    const red =
+                      entry.type === 'match'
+                        ? selectedTournament?.teams.find((team) => team.id === entry.teamRedId)?.name
+                        : null;
+                    const blue =
+                      entry.type === 'match'
+                        ? selectedTournament?.teams.find((team) => team.id === entry.teamBlueId)?.name
+                        : null;
+                    return (
+                      <option key={entry.id} value={entry.id}>
+                        {stage.name} · #{index + 1}{' '}
+                        {entry.type === 'match' ? `${red ?? '?'} vs ${blue ?? '?'}` : t('Lobby')}
+                      </option>
+                    );
+                  })}
                 </select>
               </Field>
-              <Field label={t('Transport')}>
-                <select
-                  value={transport}
-                  onChange={(event) => setTransport(event.target.value as 'irc' | 'referee_hub')}
-                >
-                  <option value="irc">{t('Bancho IRC')}</option>
-                  <option value="referee_hub">{t('Referee Hub')}</option>
-                </select>
+              <Field label={t('Platform')}>
+                <span className="muted small">{selectedTournament?.platform ?? 'stable'}</span>
               </Field>
               <button
                 type="button"
@@ -188,13 +194,13 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
                   <option value={3}>osu!mania</option>
                 </select>
               </Field>
-              <Field label={t('Transport')}>
+              <Field label={t('Platform')}>
                 <select
                   value={quickTransport}
                   onChange={(event) => setQuickTransport(event.target.value as 'irc' | 'referee_hub')}
                 >
-                  <option value="irc">{t('Bancho IRC')}</option>
-                  <option value="referee_hub">{t('Referee Hub')}</option>
+                  <option value="irc">stable</option>
+                  <option value="referee_hub">lazer</option>
                 </select>
               </Field>
             </div>
@@ -220,6 +226,13 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
           </>
         )}
       </Section>
+      {mode === 'configured' && selectedTournament && selectedMatch ? (
+        <MatchInfo
+          tournament={selectedTournament}
+          stage={selectedMatch.stage}
+          match={selectedMatch.match}
+        />
+      ) : null}
     </div>
   );
 }

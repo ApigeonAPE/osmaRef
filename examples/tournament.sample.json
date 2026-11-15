@@ -1,8 +1,9 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "id": "revsv0",
   "name": "osmaRef Invitational",
   "abbreviation": "OI",
+  "platform": "stable",
   "mode": "osu",
   "teamSize": 4,
   "teams": [
@@ -61,15 +62,22 @@
         {
           "id": "group_a",
           "name": "Group A",
-          "teamIds": [0, 1]
+          "teamIds": [
+            0,
+            1
+          ]
         },
         {
           "id": "group_b",
           "name": "Group B",
-          "teamIds": [2]
+          "teamIds": [
+            2
+          ]
         }
       ],
       "bestOf": 9,
+      "bans": 1,
+      "protects": 0,
       "slots": [
         {
           "id": "slot_nm1",
@@ -89,7 +97,9 @@
           "category": "HD",
           "beatmapId": 1010102,
           "rulesetId": null,
-          "requiredMods": ["HD"],
+          "requiredMods": [
+            "HD"
+          ],
           "allowedMods": [],
           "freestyle": false,
           "winCondition": null,
@@ -110,11 +120,22 @@
       ],
       "flow": {
         "id": "flow_group",
-        "name": "Protect, ban, pick",
-        "steps": [
-          { "id": "step_protect", "kind": "protect", "count": 1 },
-          { "id": "step_ban", "kind": "ban", "count": 1 },
-          { "id": "step_pick", "kind": "pick", "count": 10 }
+        "name": "Ban, pick",
+        "phases": [
+          {
+            "id": "phase_ban",
+            "action": "ban",
+            "countPerTeam": 1,
+            "useStageCount": true,
+            "phaseOrder": "alternate"
+          },
+          {
+            "id": "phase_pick",
+            "action": "pick",
+            "countPerTeam": null,
+            "useStageCount": false,
+            "phaseOrder": "alternate"
+          }
         ],
         "triggers": []
       },
@@ -128,32 +149,38 @@
       "matches": [
         {
           "id": "match_group_1",
-          "type": "match",
-          "name": "Aster vs Cedar",
           "groupId": "group_a",
+          "refereeIds": [
+            9001
+          ],
+          "scheduledAt": "2026-12-01T12:00:00.000Z",
+          "result": {
+            "scoreRed": 5,
+            "scoreBlue": 3
+          },
+          "winCondition": "score_v2",
+          "type": "match",
           "teamRedId": 0,
           "teamBlueId": 1,
-          "refereeIds": [9001],
-          "transport": "irc",
-          "scheduledAt": "2026-12-01T12:00:00.000Z",
-          "result": { "scoreRed": 5, "scoreBlue": 3 },
-          "roomMode": "team_versus",
-          "roomNameTemplate": "{tournament}: ({team_one}) vs ({team_two})",
-          "initialBeatmapId": 1010101
+          "roomMode": "team_versus"
         },
         {
           "id": "match_group_lobby",
-          "type": "lobby",
-          "name": "Group A lobby",
           "groupId": null,
-          "teamIds": [0, 1, 2],
           "refereeIds": [],
-          "transport": "referee_hub",
           "scheduledAt": "2026-12-02T12:00:00.000Z",
-          "result": { "scoreRed": 0, "scoreBlue": 0 },
-          "roomMode": "head_to_head",
-          "roomNameTemplate": "{tournament}: lobby",
-          "initialBeatmapId": 1010101
+          "result": {
+            "scoreRed": 0,
+            "scoreBlue": 0
+          },
+          "winCondition": "score",
+          "type": "lobby",
+          "teamIds": [
+            0,
+            1,
+            2
+          ],
+          "roomMode": "head_to_head"
         }
       ]
     },
@@ -164,6 +191,8 @@
       "type": "knockout",
       "groups": [],
       "bestOf": 11,
+      "bans": 1,
+      "protects": 1,
       "slots": [
         {
           "id": "slot_nm1_ko",
@@ -183,7 +212,9 @@
           "category": "DT",
           "beatmapId": 2020202,
           "rulesetId": null,
-          "requiredMods": ["DT"],
+          "requiredMods": [
+            "DT"
+          ],
           "allowedMods": [],
           "freestyle": false,
           "winCondition": null,
@@ -204,19 +235,39 @@
       ],
       "flow": {
         "id": "flow_knockout",
-        "name": "Ban, pick",
-        "steps": [
-          { "id": "step_ban_ko", "kind": "ban", "count": 1 },
-          { "id": "step_pick_ko", "kind": "pick", "count": 10 }
+        "name": "Protect, ban, pick",
+        "phases": [
+          {
+            "id": "phase_protect_ko",
+            "action": "protect",
+            "countPerTeam": 1,
+            "useStageCount": true,
+            "phaseOrder": "alternate"
+          },
+          {
+            "id": "phase_ban_ko",
+            "action": "ban",
+            "countPerTeam": 1,
+            "useStageCount": true,
+            "phaseOrder": "alternate"
+          },
+          {
+            "id": "phase_pick_ko",
+            "action": "pick",
+            "countPerTeam": null,
+            "useStageCount": false,
+            "phaseOrder": "alternate"
+          }
         ],
         "triggers": [
           {
             "id": "trigger_match_point",
-            "team": "team_one",
+            "subject": "team_one",
             "threshold": 5,
+            "repeatEvery": null,
+            "grantTo": "opponent",
             "action": "protect",
-            "count": 1,
-            "repeatEvery": null
+            "count": 1
           }
         ]
       },
@@ -230,37 +281,34 @@
       "matches": [
         {
           "id": "match_final",
-          "type": "match",
-          "name": "Final",
           "groupId": null,
+          "refereeIds": [
+            9001,
+            9002
+          ],
+          "scheduledAt": "2026-12-10T12:00:00.000Z",
+          "result": {
+            "scoreRed": 0,
+            "scoreBlue": 0
+          },
+          "winCondition": "score_v2",
+          "type": "match",
           "teamRedId": 0,
           "teamBlueId": 2,
-          "refereeIds": [9001, 9002],
-          "transport": "referee_hub",
-          "scheduledAt": "2026-12-10T12:00:00.000Z",
-          "result": { "scoreRed": 0, "scoreBlue": 0 },
-          "roomMode": "team_versus",
-          "roomNameTemplate": "{tournament}: {stage} final",
-          "initialBeatmapId": 2020201
+          "roomMode": "team_versus"
         }
       ]
     }
   ],
-  "automation": [
-    {
-      "id": "rule_score",
-      "name": "Post score after each map",
-      "trigger": "beatmap_completed",
-      "slotLabel": null,
-      "actions": [
-        {
-          "type": "chat",
-          "template": "{{ team_one }} {{ score_one }} - {{ score_two }} {{ team_two }} ({{ slot }})"
-        }
-      ],
-      "enabled": true
-    }
-  ],
+  "automation": {
+    "match_created": [],
+    "beatmap_started": [],
+    "beatmap_completed": [
+      "{{team_red}} {{score_red}} - {{score_blue}} {{team_blue}} ({{slot}})"
+    ],
+    "match_finished": [],
+    "action_applied": []
+  },
   "revision": 1,
   "createdAt": "2026-11-01T00:00:00.000Z",
   "updatedAt": "2026-11-01T00:00:00.000Z",

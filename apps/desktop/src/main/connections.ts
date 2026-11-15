@@ -7,9 +7,12 @@ import {
   findStageForMatch,
   findTeam,
   matchTeamIds,
-  renderRoomName,
+  buildRoomName,
+  matchSessionName,
   type AppState,
+  type AutomationTrigger,
   type BeatmapInfo,
+  type BeatmapResult,
   type ChatMessage,
   type ConnectionKind,
   type ConnectionState,
@@ -39,11 +42,13 @@ import {
   createSession,
   diffRoomSnapshots,
   evaluateBeatmap,
+  automationMessagesFor,
   expandAutomationMessages,
+  type TemplateContext,
   linkRoom,
   normalizeBestOf,
   recordResult as recordSessionResult,
-  selectAutomationRules,
+  reopenRoomSession,
   setFirstTeams as setSessionFirstTeams,
   undoLast,
 } from '@osmaref/domain';
@@ -115,6 +120,10 @@ export class ConnectionManager {
   /** IRC and osu!web chat are independent and may both be online. */
   private webChatReady = false;
   private webChatError: string | null = null;
+  private chatReconnectTimer: NodeJS.Timeout | null = null;
+  private chatReconnectAttempt = 0;
+  private chatReconnectEnabled = false;
+  private chatGeneration = 0;
   private chatPollTimer: NodeJS.Timeout | null = null;
   private chatPolling = false;
   private webChatPollError: string | null = null;
@@ -133,6 +142,8 @@ export class ConnectionManager {
   private readonly joinedChannels = new Set<string>();
   private readonly unsubscribers: (() => void)[] = [];
   private readonly statuses = new Map<ConnectionKind, ConnectionState>();
+  private readonly closingSessions = new Set<string>();
+  private readonly verifyingRooms = new Set<string>();
 
   private activeSessionId: string | null = null;
   private serverUser: { userId: number; username: string } | null = null;
@@ -143,6 +154,7 @@ export class ConnectionManager {
     Map<string, { score: number; passed: boolean }>
   >();
   private readonly beatmapCache = new Map<number, BeatmapInfo>();
+  private readonly automationQueues = new Map<string, Promise<void>>();
 
   constructor(deps: ConnectionManagerDeps) {
     this.store = deps.store;
@@ -179,7 +191,7 @@ export class ConnectionManager {
       },
       connections: [...this.statuses.values()],
       rooms: sessions
-        .filter((session) => session.roomId !== null)
+        .filter((session) => session.status === 'active' && session.roomId !== null)
         .map((session) => ({
           sessionId: session.id,
           roomId: session.roomId!,
@@ -358,8 +370,105 @@ export class ConnectionManager {
     return 'wss://notify.ppy.sh';
   }
 
+  private async startWebChatSocket(): Promise<boolean> {
+    if (!this.webChat) return false;
+    const generation = ++this.chatGeneration;
+    if (this.socket) {
+      this.socket.close();
+      this.socket = null;
+    }
+    const socket = new OsuChatSocket({
+      url: await this.chatWebsocketUrl(),
+      getAccessToken: () => this.server.accessToken(),
+      onMessage: (payload) => this.webChat?.ingest(payload),
+      onStatus: (socketStatus, detail) => {
+        if (this.socket !== socket || this.chatGeneration !== generation) return;
+        if (socketStatus === 'open') {
+          this.webChatReady = true;
+          this.webChatError = null;
+          this.chatReconnectAttempt = 0;
+        } else if (socketStatus === 'closed' || socketStatus === 'error') {
+          this.webChatReady = false;
+          this.webChatError = detail ?? socketStatus;
+          this.scheduleChatReconnect();
+        } else {
+          this.webChatReady = false;
+        }
+        this.refreshChatStatus();
+      },
+    });
+    this.socket = socket;
+    try {
+      await socket.connect();
+      if (this.chatGeneration !== generation || this.socket !== socket) return false;
+      this.webChatReady = true;
+      this.webChatError = null;
+      this.chatReconnectAttempt = 0;
+      this.refreshChatStatus();
+      return true;
+    } catch (error) {
+      if (this.chatGeneration !== generation) return false;
+      if (this.socket === socket) this.socket = null;
+      try {
+        socket.close();
+      } catch {
+        // the socket is already gone
+      }
+      this.webChatReady = false;
+      this.webChatError = errorMessage(error);
+      this.refreshChatStatus();
+      this.scheduleChatReconnect();
+      return false;
+    }
+  }
+
+  private scheduleChatReconnect(delayOverride?: number): void {
+    if (!this.chatReconnectEnabled || this.chatReconnectTimer) return;
+    const delay =
+      delayOverride ?? Math.min(30_000, 1_000 * 2 ** Math.min(this.chatReconnectAttempt++, 5));
+    this.chatReconnectTimer = setTimeout(() => {
+      this.chatReconnectTimer = null;
+      void this.reconnectWebChat();
+    }, delay);
+    this.chatReconnectTimer.unref?.();
+  }
+
+  private clearChatReconnect(): void {
+    if (this.chatReconnectTimer) {
+      clearTimeout(this.chatReconnectTimer);
+      this.chatReconnectTimer = null;
+    }
+  }
+
+  private async reconnectWebChat(): Promise<void> {
+    if (!this.chatReconnectEnabled || !this.webChat) return;
+    if (this.socket?.isOpen) {
+      this.webChatReady = true;
+      this.webChatError = null;
+      this.refreshChatStatus();
+      await this.rejoinChatChannels();
+      return;
+    }
+    const connected = await this.startWebChatSocket();
+    if (!connected) return;
+    await this.rejoinChatChannels();
+  }
+
+  private async rejoinChatChannels(): Promise<void> {
+    for (const session of this.store.listSessions()) {
+      if (session.status !== 'active' || session.transport !== 'referee_hub') continue;
+      if (!this.channels.has(session.id)) continue;
+      await this.ensureChatChannel(session, this.snapshots.get(session.id));
+    }
+    this.socket?.startChat();
+  }
+
   async connectHub(): Promise<AppState> {
     if (this.hub && this.statuses.get('referee_hub')?.status === 'connected') {
+      if (!this.socket?.isOpen) {
+        this.chatReconnectEnabled = true;
+        this.scheduleChatReconnect(0);
+      }
       return this.getAppState();
     }
     if (this.hub) {
@@ -389,16 +498,20 @@ export class ConnectionManager {
     });
     this.setStatus('referee_hub', 'connecting', this.settings.get().hubBaseUrl);
     this.unsubscribers.push(hub.onEvent((event) => this.onTransportEvent('referee_hub', event)));
+    this.hub = hub;
 
     try {
       await hub.connect();
     } catch (error) {
+      this.hub = null;
       this.setStatus('referee_hub', 'error', errorMessage(error));
       throw error;
     }
-    this.hub = hub;
     this.setStatus('referee_hub', 'connected', this.settings.get().hubBaseUrl);
 
+    this.chatReconnectEnabled = true;
+    this.chatGeneration += 1;
+    this.clearChatReconnect();
     this.socket?.close();
     this.socket = null;
     this.webChatReady = false;
@@ -410,34 +523,10 @@ export class ConnectionManager {
     });
     this.unsubscribers.push(this.webChat.onMessage((message) => this.onChat(message, 'referee_hub')));
 
-    try {
-      const socket = new OsuChatSocket({
-        url: await this.chatWebsocketUrl(),
-        getAccessToken: () => this.server.accessToken(),
-        onMessage: (payload) => this.webChat?.ingest(payload),
-        onStatus: (socketStatus, detail) => {
-          if (this.socket !== socket) return;
-          this.webChatReady = socketStatus === 'open';
-          if (socketStatus === 'open') {
-            this.webChatError = null;
-          } else if (socketStatus === 'closed' || socketStatus === 'error') {
-            this.webChatError = detail ?? socketStatus;
-          }
-          this.refreshChatStatus();
-        },
-        onKeepalive: () => this.server.osu.chatKeepalive(),
-      });
-      this.socket = socket;
-      await socket.connect();
-      this.webChatReady = true;
-      this.webChatError = null;
-      this.refreshChatStatus();
-    } catch (error) {
-      this.webChatReady = false;
-      this.webChatError = errorMessage(error);
-      this.refreshChatStatus();
-    }
+    await this.startWebChatSocket();
+    this.startChatPolling();
 
+    await this.recoverClosedLobbies();
     await this.restoreRooms('referee_hub');
     this.emitState();
     return this.getAppState();
@@ -450,6 +539,9 @@ export class ConnectionManager {
       this.ircChat = null;
       this.setStatus('irc', 'disconnected', null);
     } else if (kind === 'referee_hub') {
+      this.chatReconnectEnabled = false;
+      this.chatGeneration += 1;
+      this.clearChatReconnect();
       await this.hub?.disconnect();
       this.hub = null;
       this.socket?.close();
@@ -462,6 +554,9 @@ export class ConnectionManager {
       this.setStatus('referee_hub', 'disconnected', null);
       this.refreshChatStatus();
     } else {
+      this.chatReconnectEnabled = false;
+      this.chatGeneration += 1;
+      this.clearChatReconnect();
       this.socket?.close();
       this.socket = null;
       this.webChatReady = false;
@@ -480,11 +575,7 @@ export class ConnectionManager {
 
   // --- rooms and sessions --------------------------------------------------
 
-  async openRoom(input: {
-    tournamentId: string;
-    matchId: string;
-    transport?: 'irc' | 'referee_hub';
-  }): Promise<MatchSession> {
+  async openRoom(input: { tournamentId: string; matchId: string }): Promise<MatchSession> {
     const tournament = this.store.getTournament(input.tournamentId);
     if (!tournament) throw new Error('tournament not found');
     const match = findMatch(tournament, input.matchId);
@@ -493,7 +584,7 @@ export class ConnectionManager {
     if (!stage) throw new Error('stage not found');
     const flow = stage.flow;
 
-    const kind = input.transport ?? match.transport;
+    const kind = tournament.platform === 'lazer' ? 'referee_hub' : 'irc';
     const transport = kind === 'irc' ? this.irc : this.hub;
     if (!transport) {
       throw new Error(
@@ -501,20 +592,13 @@ export class ConnectionManager {
       );
     }
 
-    const beatmapId = match.initialBeatmapId ?? stage.slots[0]?.beatmapId ?? null;
+    const beatmapId = kind === 'referee_hub' ? stage.slots[0]?.beatmapId ?? null : null;
     if (!beatmapId && kind === 'referee_hub') {
-      throw new Error('the Referee Hub requires an initial beatmap; add one to the mappool');
+      throw new Error('the Referee Hub requires a mappool beatmap; add one to the stage');
     }
 
     const participants = matchTeamIds(match);
-    const teamOne = findTeam(tournament, participants[0] ?? 0);
-    const teamTwo = findTeam(tournament, participants[1] ?? 0);
-    const name = renderRoomName(match.roomNameTemplate, {
-      tournament: tournament.name,
-      stage: stage.name,
-      team_one: teamOne?.name ?? 'Team 1',
-      team_two: teamTwo?.name ?? 'Team 2',
-    });
+    const name = buildRoomName(tournament, stage, match);
     const maxParticipants = Math.min(
       16,
       Math.max(2, tournament.teamSize * participants.length + 2),
@@ -524,7 +608,8 @@ export class ConnectionManager {
       name,
       rulesetId: resolveTournamentRuleset(tournament.mode, stage.slots),
       ...(beatmapId ? { beatmapId } : {}),
-      matchType: match.roomMode,
+      teamMode: match.roomMode,
+      winCondition: match.winCondition,
       maxParticipants,
     });
 
@@ -532,9 +617,11 @@ export class ConnectionManager {
       tournament,
       match,
       flow: match.type === 'lobby'
-        ? { id: `flow_${stage.id}`, name: stage.name, steps: [], triggers: [] }
+        ? { id: `flow_${stage.id}`, name: stage.name, phases: [], triggers: [] }
         : flow,
       bestOf: stage.bestOf,
+      bans: stage.bans,
+      protects: stage.protects,
       kind,
       snapshot,
       configSnapshot: tournament,
@@ -584,6 +671,7 @@ export class ConnectionManager {
     const flow = stage?.flow;
     if (!match || !flow) throw new Error('failed to build the quick room configuration');
 
+    const quickWinCondition = input.transport === 'referee_hub' ? 'score' : 'score_v2';
     const requested = Math.round(input.maxParticipants);
     const maxParticipants = requested <= 0 ? 0 : Math.min(16, Math.max(2, requested));
 
@@ -591,7 +679,8 @@ export class ConnectionManager {
       name,
       rulesetId: input.rulesetId,
       ...(beatmapId ? { beatmapId } : {}),
-      matchType: input.matchType,
+      teamMode: input.matchType,
+      winCondition: quickWinCondition,
       maxParticipants,
     });
 
@@ -600,6 +689,8 @@ export class ConnectionManager {
       match,
       flow,
       bestOf,
+      bans: stage.bans,
+      protects: stage.protects,
       kind: input.transport,
       snapshot,
       configSnapshot: tournament,
@@ -670,7 +761,7 @@ export class ConnectionManager {
       name: snapshot.name,
       beatmapId: snapshot.currentBeatmapId ?? activeItem?.beatmapId ?? null,
       rulesetId: activeItem?.rulesetId ?? 0,
-      matchType: snapshot.matchType,
+      matchType: snapshot.matchType === 'team_versus' ? 'team_versus' : 'head_to_head',
       transport: kind,
       bestOf,
       referee: this.serverUser,
@@ -684,6 +775,8 @@ export class ConnectionManager {
       match,
       flow,
       bestOf,
+      bans: stage.bans,
+      protects: stage.protects,
       kind,
       snapshot,
       configSnapshot: tournament,
@@ -697,6 +790,8 @@ export class ConnectionManager {
     match: Match;
     flow: MatchFlow;
     bestOf: number;
+    bans: number;
+    protects: number;
     kind: 'irc' | 'referee_hub';
     snapshot: RoomSnapshot;
     configSnapshot: Tournament | null;
@@ -709,7 +804,14 @@ export class ConnectionManager {
         id: `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
         tournamentId: params.tournament.id,
         matchId: params.match.id,
-        matchName: params.match.name,
+        matchName: params.chatOnly
+          ? params.snapshot.name
+          : (() => {
+              const stage = findStageForMatch(params.tournament, params.match.id);
+              return stage
+                ? matchSessionName(params.tournament, stage, params.match)
+                : params.match.id;
+            })(),
         matchKind: params.match.type,
         participantIds: matchTeamIds(params.match).map(String),
         teamOneId: String(matchTeamIds(params.match)[0] ?? 0),
@@ -719,6 +821,8 @@ export class ConnectionManager {
         matchType: params.match.roomMode,
         transport: params.kind,
         bestOf: params.bestOf,
+        bans: params.bans,
+        protects: params.protects,
         configSnapshot: params.configSnapshot,
         firstTeamsSet: params.firstTeamsSet ?? false,
         now,
@@ -778,9 +882,12 @@ export class ConnectionManager {
         this.emiteSystemChat(session, 'room closed');
       }
       try {
+        this.closingSessions.add(session.id);
         await transport.closeRoom(session.roomId);
       } catch (error) {
         this.log('warn', 'room', `could not close room: ${errorMessage(error)}`);
+      } finally {
+        this.closingSessions.delete(session.id);
       }
     }
     const aborted = closeRoomSession(session, new Date().toISOString());
@@ -878,8 +985,7 @@ export class ConnectionManager {
     if (transport && session.roomId) {
       await transport.editBeatmap(session.roomId, {
         beatmapId: slot.beatmapId,
-        rulesetId:
-          slot.rulesetId ?? resolveTournamentRuleset(tournament.mode, [slot]),
+        rulesetId: slot.rulesetId ?? undefined,
         requiredMods: slot.requiredMods,
         allowedMods: slot.allowedMods,
         freestyle: slot.freestyle,
@@ -1106,7 +1212,7 @@ export class ConnectionManager {
       try {
         await transport?.editBeatmap(next.roomId, {
           beatmapId: slot.beatmapId,
-          rulesetId: slot.rulesetId ?? resolveTournamentRuleset(tournament.mode, [slot]),
+          rulesetId: slot.rulesetId ?? undefined,
           requiredMods: slot.requiredMods,
           allowedMods: slot.allowedMods,
           freestyle: slot.freestyle,
@@ -1116,7 +1222,10 @@ export class ConnectionManager {
       }
     }
 
-    this.runAutomation(tournament, next, 'action_applied');
+    this.runAutomation(tournament, next, 'action_applied', {
+      slot: input.slotLabel,
+      beatmap_id: String(beatmapId),
+    });
     this.emit({ type: 'session_updated', session: next });
     return next;
   }
@@ -1202,35 +1311,51 @@ export class ConnectionManager {
         return { ...score, username };
       });
 
-    const evaluation = evaluateBeatmap({
+    const recordedAt = new Date().toISOString();
+    const evaluation =
+      session.matchKind === 'lobby'
+        ? null
+        : evaluateBeatmap({
+            slotLabel: input.slotLabel,
+            beatmapId,
+            scores,
+            teamOneId: session.teamOneId,
+            teamTwoId: session.teamTwoId,
+            memberTeam,
+            scheme: scoring,
+            winCondition: slot?.winCondition ?? match?.winCondition ?? scoring.winCondition,
+            winner: slot?.winConditionWinner,
+            recordedAt,
+            source: input.source,
+          });
+    const result: BeatmapResult = evaluation?.result ?? {
+      id: `${input.slotLabel}:${recordedAt}`,
       slotLabel: input.slotLabel,
       beatmapId,
       scores,
-      teamOneId: session.teamOneId,
-      teamTwoId: session.teamTwoId,
-      memberTeam,
-      scheme: scoring,
-      winCondition: slot?.winCondition,
-      winner: slot?.winConditionWinner,
-      recordedAt: new Date().toISOString(),
+      winner: null,
+      teamValues: { team_one: null, team_two: null },
       source: input.source,
-    });
+      recordedAt,
+      needsReview: false,
+    };
 
-    const next = recordSessionResult(session, evaluation.result);
+    const next = recordSessionResult(session, result);
     this.persistSession(next);
     this.appendEvent(
       next,
-      evaluation.needsReview ? 'result_needs_review' : 'result_recorded',
-      `${input.slotLabel}: ${evaluation.result.winner ?? 'needs review'}`,
-      evaluation.result,
+      evaluation?.needsReview ? 'result_needs_review' : 'result_recorded',
+      `${input.slotLabel}: ${result.winner ?? (evaluation?.needsReview ? 'needs review' : 'recorded')}`,
+      result,
     );
-    if (evaluation.needsReview) {
+    if (evaluation?.needsReview) {
       this.emiteSystemChat(next, `Result for ${input.slotLabel} needs review: ${evaluation.reviewReason}`);
     }
 
     this.runAutomation(tournament, next, 'beatmap_completed', {
-      winner: evaluation.result.winner ?? '',
+      winner: result.winner ?? '',
       slot: input.slotLabel,
+      beatmap_id: String(beatmapId),
     });
     if (next.status === 'finished') {
       this.runAutomation(tournament, next, 'match_finished');
@@ -1266,7 +1391,7 @@ export class ConnectionManager {
     };
     try {
       this.store.saveTournament(next);
-      this.log('info', 'tournament', `synced result ${result.scoreRed}-${result.scoreBlue} for ${match.name}`);
+      this.log('info', 'tournament', `synced result ${result.scoreRed}-${result.scoreBlue} for match ${match.id}`);
     } catch (error) {
       this.log('warn', 'tournament', `could not sync match result: ${errorMessage(error)}`);
     }
@@ -1314,7 +1439,28 @@ export class ConnectionManager {
       },
     });
 
-    const outcome = await dispatcher.submit(text);
+    const outcomeRaw = await (async () => {
+      try {
+        return await dispatcher.submit(text);
+      } catch (error) {
+        if (isMpCommand(text)) throw error;
+        const recovered = await this.recoverWebChat(target.channelId, error);
+        if (!recovered) throw error;
+        try {
+          return await dispatcher.submit(text);
+        } catch (retryError) {
+          this.webChatError = errorMessage(retryError);
+          this.refreshChatStatus();
+          throw retryError;
+        }
+      }
+    })();
+    const outcome = outcomeRaw;
+    if (!isMpCommand(text) && this.socket?.isOpen) {
+      this.webChatReady = true;
+      this.webChatError = null;
+      this.refreshChatStatus();
+    }
     if (outcome.ok && !isMpCommand(text)) {
       this.appendLocalChat(session, text, target.channelId, 'referee_hub');
     }
@@ -1347,14 +1493,19 @@ export class ConnectionManager {
     }
 
     if (outcome.ok && outcome.actions.includes('closeRoom')) {
-      const closed = closeRoomSession(session, new Date().toISOString());
-      this.persistSession(closed);
-      this.snapshots.delete(session.id);
-      this.channels.delete(session.id);
-      if (this.activeSessionId === session.id) this.activeSessionId = null;
-      this.appendEvent(closed, 'room_left', 'room closed by !mp close');
-      this.emit({ type: 'session_updated', session: closed });
-      session = closed;
+      const latest = this.store.getSession(session.id) ?? session;
+      if (latest.status !== 'closed') {
+        const closed = closeRoomSession(latest, new Date().toISOString());
+        this.persistSession(closed);
+        this.snapshots.delete(session.id);
+        this.channels.delete(session.id);
+        if (this.activeSessionId === session.id) this.activeSessionId = null;
+        this.appendEvent(closed, 'room_left', 'room closed by !mp close');
+        this.emit({ type: 'session_updated', session: closed });
+        session = closed;
+      } else {
+        session = latest;
+      }
     }
 
     const result: MpCommandResult = {
@@ -1463,7 +1614,42 @@ export class ConnectionManager {
 
   // --- transport events ----------------------------------------------------
 
-  private onTransportEvent(kind: 'irc' | 'referee_hub', event: TransportEvent): void {
+  private async confirmRoomClosed(session: MatchSession): Promise<void> {
+    if (
+      session.status !== 'active' ||
+      this.closingSessions.has(session.id) ||
+      this.verifyingRooms.has(session.id)
+    ) {
+      return;
+    }
+    const roomId = session.roomId;
+    if (session.transport === 'referee_hub' && this.hub && roomId) {
+      this.verifyingRooms.add(session.id);
+      try {
+        await this.hub.joinRoom(roomId);
+        return;
+      } catch (error) {
+        this.diagnose('warn', 'referee_hub', `room ${roomId} is not joinable: ${errorMessage(error)}`);
+      } finally {
+        this.verifyingRooms.delete(session.id);
+      }
+    }
+    const current = this.store.getSession(session.id) ?? session;
+    if (current.status !== 'active') return;
+    const closed = closeRoomSession(current, new Date().toISOString());
+    this.persistSession(closed);
+    this.snapshots.delete(session.id);
+    this.channels.delete(session.id);
+    this.ircScores.delete(session.id);
+    if (this.activeSessionId === session.id) this.activeSessionId = null;
+    this.appendEvent(closed, 'room_left', 'room was closed');
+    this.emitLifecycleChat(closed, 'the room was closed');
+    this.log('info', 'room', `room ${roomId ?? session.id} was closed`);
+    this.emit({ type: 'session_updated', session: closed });
+    this.emitState();
+  }
+
+  private async onTransportEvent(kind: 'irc' | 'referee_hub', event: TransportEvent): Promise<void> {
     switch (event.type) {
       case 'connection': {
         this.setStatus(kind, event.status, event.detail ?? null);
@@ -1485,15 +1671,21 @@ export class ConnectionManager {
         const previous = this.snapshots.get(session.id) ?? null;
         const snapshot = sanitizeSnapshot(event.snapshot);
         let current = session;
+        if (session.status === 'closed' && session.matchKind === 'lobby') {
+          current = reopenRoomSession(session, new Date().toISOString());
+          this.persistSession(current);
+          this.appendEvent(current, 'transport_event', `reopened room ${event.snapshot.roomId}`);
+          this.emit({ type: 'session_updated', session: current });
+        }
         if (session.roomId && snapshot.name && snapshot.name !== session.roomName) {
-          current = linkRoom(session, session.roomId, snapshot.name, new Date().toISOString());
+          current = linkRoom(current, current.roomId ?? session.roomId, snapshot.name, new Date().toISOString());
           this.persistSession(current);
           this.emit({ type: 'session_updated', session: current });
         }
         for (const change of diffRoomSnapshots(previous, snapshot)) {
           this.appendEvent(current, change.type, change.summary, change.payload);
         }
-        this.store.upsertLobbyLogSession(toLobbyLogSession(current));
+        if (!current.chatOnly) this.store.upsertLobbyLogSession(toLobbyLogSession(current));
         this.snapshots.set(current.id, snapshot);
         void this.ensureChatChannel(current, snapshot);
         this.emit({ type: 'room_snapshot', sessionId: current.id, snapshot });
@@ -1503,17 +1695,7 @@ export class ConnectionManager {
       case 'room_closed': {
         const session = this.findSessionByRoom(event.roomId);
         if (!session) return;
-        const closed = closeRoomSession(session, new Date().toISOString());
-        this.persistSession(closed);
-        this.snapshots.delete(session.id);
-        this.channels.delete(session.id);
-        this.ircScores.delete(session.id);
-        if (this.activeSessionId === session.id) this.activeSessionId = null;
-        this.appendEvent(closed, 'room_left', 'room was closed');
-        this.emiteSystemChat(closed, 'the room was closed');
-        this.log('info', 'room', `room ${event.roomId} was closed`);
-        this.emit({ type: 'session_updated', session: closed });
-        this.emitState();
+        await this.confirmRoomClosed(session);
         return;
       }
       case 'match_started': {
@@ -1536,7 +1718,7 @@ export class ConnectionManager {
             beatmapId: session.currentBeatmapId,
           },
         );
-        this.emiteSystemChat(session, 'match started');
+        this.emitLifecycleChat(session, 'match started');
         const tournament = this.tournamentForSession(session);
         if (tournament) this.runAutomation(tournament, session, 'beatmap_started');
         return;
@@ -1562,7 +1744,7 @@ export class ConnectionManager {
         const session = this.findSessionByRoom(event.roomId);
         if (!session) return;
         this.appendEvent(session, 'match_finished', 'match finished');
-        this.emiteSystemChat(session, 'match finished');
+        this.emitLifecycleChat(session, 'match finished');
         void this.handleIrcMatchFinished(session);
         return;
       }
@@ -1570,7 +1752,7 @@ export class ConnectionManager {
         const session = this.findSessionByRoom(event.roomId);
         if (session) {
           this.appendEvent(session, 'match_aborted', 'match aborted');
-          this.emiteSystemChat(session, 'match aborted');
+          this.emitLifecycleChat(session, 'match aborted');
         }
         return;
       }
@@ -1602,7 +1784,7 @@ export class ConnectionManager {
             'spectator server shutdown announced: finish the current game, then reopen the room on the new instance',
           );
         } else {
-          this.emiteSystemChat(session, `${event.kind === 'timer' ? 'timer' : 'match start'} countdown: ${event.seconds}s`);
+          this.emitLifecycleChat(session, `${event.kind === 'timer' ? 'timer' : 'match start'} countdown: ${event.seconds}s`);
         }
         return;
       }
@@ -1635,7 +1817,8 @@ export class ConnectionManager {
       return;
     }
 
-    const condition = slot.winCondition ?? scoring.winCondition;
+    const matchWinCondition = match?.winCondition;
+    const condition = slot.winCondition ?? matchWinCondition ?? scoring.winCondition;
     if (condition !== 'score' && condition !== 'score_v2') {
       this.emiteSystemChat(
         session,
@@ -1905,7 +2088,7 @@ export class ConnectionManager {
       ...(payload === undefined ? {} : { payload }),
     };
     try {
-      this.store.upsertLobbyLogSession(toLobbyLogSession(session));
+      if (!session.chatOnly) this.store.upsertLobbyLogSession(toLobbyLogSession(session));
     } catch (error) {
       this.log('warn', 'lobby-log', `could not store lobby log metadata: ${errorMessage(error)}`);
     }
@@ -1915,6 +2098,77 @@ export class ConnectionManager {
       this.log('warn', 'lobby-log', `could not store lobby log entry: ${errorMessage(error)}`);
     }
     this.emit({ type: 'session_event', event });
+  }
+
+  private async recoverClosedLobbies(): Promise<void> {
+    if (!this.hub) return;
+    const sessions = this.store.listSessions();
+    const active = sessions.filter((session) => session.status === 'active');
+    const recovered = new Set<string>();
+    for (const session of sessions) {
+      if (
+        session.status !== 'closed' ||
+        session.matchKind !== 'lobby' ||
+        session.transport !== 'referee_hub' ||
+        session.roomId !== null
+      ) {
+        continue;
+      }
+      const log = this.store.getLobbyLogSession(session.id);
+      if (!log?.roomId || recovered.has(log.roomId)) continue;
+      const covered = active.some(
+        (other) =>
+          other.roomId === log.roomId ||
+          (other.tournamentId === session.tournamentId && other.matchId === session.matchId),
+      );
+      if (covered) continue;
+      try {
+        const snapshot = await this.hub.joinRoom(log.roomId);
+        recovered.add(log.roomId);
+        const at = new Date().toISOString();
+        const linked = linkRoom(session, log.roomId, snapshot.name, at);
+        const reopened = reopenRoomSession(linked, at);
+        this.persistSession(reopened);
+        this.snapshots.set(reopened.id, sanitizeSnapshot(snapshot));
+        this.appendEvent(reopened, 'room_joined', `recovered room ${log.roomId}`);
+        void this.ensureChatChannel(reopened, snapshot);
+        this.emit({ type: 'session_updated', session: reopened });
+        this.emit({ type: 'room_snapshot', sessionId: reopened.id, snapshot: this.snapshots.get(reopened.id)! });
+      } catch {
+        // The room is gone; the session stays closed.
+      }
+    }
+  }
+
+  private async joinWebChatChannel(channelId: string): Promise<boolean> {
+    if (!this.webChat) return false;
+    try {
+      await this.webChat.join(channelId);
+      this.joinedChannels.add(channelId);
+      this.webChatError = null;
+      if (this.socket?.isOpen) this.webChatReady = true;
+      this.refreshChatStatus();
+      this.socket?.startChat();
+      return true;
+    } catch (error) {
+      const detail = errorMessage(error);
+      this.joinedChannels.delete(channelId);
+      if (detail !== this.webChatError) {
+        this.webChatError = detail;
+        this.refreshChatStatus();
+        this.diagnose('warn', 'chat', `could not join ${channelId}: ${detail}`);
+      }
+      return false;
+    }
+  }
+
+  private async recoverWebChat(channelId: string, error: unknown): Promise<boolean> {
+    const detail = errorMessage(error);
+    if (!/\(403\)|没有权限/.test(detail)) return false;
+    this.joinedChannels.delete(channelId);
+    this.webChatError = detail;
+    this.refreshChatStatus();
+    return this.joinWebChatChannel(channelId);
   }
 
   private async ensureChatChannel(session: MatchSession, snapshot?: RoomSnapshot): Promise<void> {
@@ -1929,16 +2183,12 @@ export class ConnectionManager {
       this.joinedChannels.add(channelId);
       return;
     }
-    // Referee Hub may or may not allow this account to join the multiplayer
-    // channel; try silently so live chat still works when membership exists.
     if (session.transport === 'referee_hub') {
-      try {
-        await this.webChat?.join(channelId);
-        this.joinedChannels.add(channelId);
-      } catch {
-        // Live-only mode: history stays empty and the WebSocket may still deliver.
+      if (this.joinedChannels.has(channelId) && !this.webChatError) {
+        this.socket?.startChat();
+        return;
       }
-      this.socket?.startChat();
+      await this.joinWebChatChannel(channelId);
       return;
     }
     if (!this.webChat || this.joinedChannels.has(channelId)) return;
@@ -2111,8 +2361,13 @@ export class ConnectionManager {
       users: [...users.values()],
       self: this.serverUser,
       defaultRulesetId: tournament ? resolveTournamentRuleset(tournament.mode, pool?.slots ?? []) : 0,
-      defaultBeatmapId: match?.initialBeatmapId ?? pool?.slots[0]?.beatmapId ?? null,
-      defaultMatchType: match?.roomMode ?? 'team_versus',
+      defaultBeatmapId: pool?.slots[0]?.beatmapId ?? null,
+      defaultMatchType:
+        match?.roomMode === 'head_to_head' || match?.roomMode === 'tag_coop'
+          ? match.roomMode === 'tag_coop'
+            ? 'team_versus'
+            : 'head_to_head'
+          : 'team_versus',
       defaultMaxParticipants: snapshot?.maxParticipants ?? 0,
       freemodPool: [...this.settings.get().freemodMods],
     };
@@ -2171,6 +2426,8 @@ export class ConnectionManager {
         match,
         flow,
         bestOf,
+        bans: stage.bans,
+        protects: stage.protects,
         kind: 'irc',
         snapshot,
         configSnapshot: tournament,
@@ -2290,6 +2547,16 @@ export class ConnectionManager {
     );
   }
 
+  /**
+   * BanchoBot announces room lifecycle lines (start, abort, finish, countdown,
+   * room closed) in `#mp_<id>`. The Referee Hub has no bot, so only hub
+   * sessions get the local copy instead of repeating what BanchoBot just said.
+   */
+  private emitLifecycleChat(session: MatchSession, text: string): void {
+    if (session.transport === 'irc') return;
+    this.emiteSystemChat(session, text);
+  }
+
   private emiteSystemChat(session: MatchSession, text: string): void {
     const channelId = this.channels.get(session.id) ?? (session.roomId ? `#mp_${session.roomId}` : 'local');
     const message: ChatMessage = {
@@ -2311,25 +2578,100 @@ export class ConnectionManager {
   private runAutomation(
     tournament: Tournament,
     session: MatchSession,
-    trigger: Parameters<typeof selectAutomationRules>[1],
-    extra: Record<string, string> = {},
+    trigger: AutomationTrigger,
+    extra: Partial<TemplateContext> = {},
   ): void {
-    if (tournament.automation.length === 0) return;
-    const rules = selectAutomationRules(tournament.automation, trigger, session.currentSlotLabel);
-    if (rules.length === 0) return;
-    const context = buildTemplateContext(
+    const templates = automationMessagesFor(tournament.automation, trigger);
+    if (templates.length === 0) return;
+
+    // Chain per session so messages from consecutive triggers are sent in the
+    // order the triggers happened, not in parallel.
+    const previous = this.automationQueues.get(session.id) ?? Promise.resolve();
+    const next = previous.then(async () => {
+      try {
+        const context = this.automationContext(tournament, session, trigger, extra);
+        const messages = expandAutomationMessages(templates, context);
+        for (const message of messages) {
+          const target = this.chatTargetFor(session);
+          await target.transport.send(target.channelId, message);
+          // IRC servers do not echo the sender's own PRIVMSG back, so show the
+          // automatic line locally and record it in the room log.
+          this.appendLocalChat(session, message, target.channelId, session.transport, true);
+          this.log('info', 'automation', `sent ${trigger}: ${message}`);
+        }
+      } catch (error) {
+        this.log('warn', 'automation', errorMessage(error));
+      }
+    });
+    this.automationQueues.set(session.id, next);
+    void next.then(
+      () => {
+        if (this.automationQueues.get(session.id) === next) {
+          this.automationQueues.delete(session.id);
+        }
+      },
+      () => {
+        if (this.automationQueues.get(session.id) === next) {
+          this.automationQueues.delete(session.id);
+        }
+      },
+    );
+  }
+
+  private automationContext(
+    tournament: Tournament,
+    session: MatchSession,
+    trigger: AutomationTrigger,
+    extra: Partial<TemplateContext>,
+  ): TemplateContext {
+    const lastResult = session.results.at(-1);
+    const usesCurrentMap = trigger === 'beatmap_completed' || trigger === 'match_finished';
+    const extraBeatmapId = Number(extra.beatmap_id);
+    const beatmapId =
+      Number.isInteger(extraBeatmapId) && extraBeatmapId > 0
+        ? extraBeatmapId
+        : session.currentBeatmapId ?? (usesCurrentMap ? lastResult?.beatmapId ?? null : null);
+    const info = beatmapId ? this.beatmapCache.get(beatmapId) : undefined;
+    const mapScores = usesCurrentMap ? this.mapScores(session, lastResult) : null;
+    return buildTemplateContext(
       tournament,
       session,
       findTeam(tournament, session.teamOneId)?.name ?? 'Team 1',
       findTeam(tournament, session.teamTwoId)?.name ?? 'Team 2',
-      extra,
+      {
+        ...extra,
+        beatmap: info ? `${info.title} - [${info.difficultyName}]` : '',
+        beatmap_id: beatmapId ? String(beatmapId) : '',
+        mapscore_red: mapScores?.red ?? 0,
+        mapscore_blue: mapScores?.blue ?? 0,
+      },
     );
-    for (const message of expandAutomationMessages(rules, context)) {
-      const target = this.chatTargetFor(session);
-      void target.transport.send(target.channelId, message).catch((error: unknown) => {
-        this.log('warn', 'automation', errorMessage(error));
-      });
+  }
+
+  /** Raw total score of each room team on one recorded map. */
+  private mapScores(
+    session: MatchSession,
+    result: MatchSession['results'][number] | undefined,
+  ): { red: number; blue: number } | null {
+    if (!result) return null;
+    const teamByUser = new Map<number, 'red' | 'blue'>();
+    for (const player of session.matchPlayers) {
+      if (player.team) teamByUser.set(player.userId, player.team);
     }
+    if (teamByUser.size > 0 && result.scores.length > 0) {
+      let red = 0;
+      let blue = 0;
+      for (const score of result.scores) {
+        const team = teamByUser.get(score.userId);
+        if (team === 'red') red += score.score;
+        else if (team === 'blue') blue += score.score;
+      }
+      return { red, blue };
+    }
+    return {
+      red: result.teamValues.team_one ?? 0,
+      blue: result.teamValues.team_two ?? 0,
+    };
   }
 
   private emitNotice(level: 'info' | 'warn' | 'error', message: string): void {
@@ -2375,12 +2717,9 @@ export class ConnectionManager {
           messages = await this.webChat.history(channelId, 20);
         } catch (error) {
           // Re-join once; a stale channel association also breaks history reads.
-          this.joinedChannels.delete(channelId);
-          await this.webChat.join(channelId);
-          this.joinedChannels.add(channelId);
-          this.socket?.startChat();
+          const rejoined = await this.joinWebChatChannel(channelId);
+          if (!rejoined) throw error;
           messages = await this.webChat.history(channelId, 20);
-          void error;
         }
         for (const message of messages) {
           if (this.webChatSeen.has(message.id)) continue;
@@ -2395,6 +2734,10 @@ export class ConnectionManager {
       this.webChatPollError = null;
     } catch (error) {
       const detail = errorMessage(error);
+      if (/\(403\)|没有权限/.test(detail)) {
+        this.webChatError = detail;
+        this.refreshChatStatus();
+      }
       if (detail !== this.webChatPollError) {
         this.webChatPollError = detail;
         this.diagnose('warn', 'chat', `history polling failed: ${detail}`);
@@ -2409,10 +2752,10 @@ export class ConnectionManager {
    * is part of the `irc` connection; the UI picks the matching one per session.
    */
   private refreshChatStatus(): void {
-    if (this.webChatReady) {
-      this.setStatus('chat', 'connected', 'osu!web');
-    } else if (this.webChatError) {
+    if (this.webChatError) {
       this.setStatus('chat', 'error', this.webChatError);
+    } else if (this.webChatReady) {
+      this.setStatus('chat', 'connected', 'osu!web');
     } else {
       this.setStatus('chat', 'disconnected', null);
     }
@@ -2472,7 +2815,9 @@ function errorMessage(error: unknown): string {
  * them to the renderer/audit log.
  */
 export function sanitizeSnapshot(snapshot: RoomSnapshot): RoomSnapshot {
-  return snapshot.password === null ? snapshot : { ...snapshot, password: null };
+  const clone = structuredClone(snapshot);
+  clone.password = null;
+  return clone;
 }
 
 function normalizePlayerName(value: string): string {

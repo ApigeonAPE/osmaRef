@@ -22,12 +22,13 @@ describe('quick room configuration', () => {
     expect(tournament.stages).toHaveLength(1);
     const stage = tournament.stages[0]!;
     expect(stage.slots[0]?.beatmapId).toBe(658127);
-    expect(stage.flow.steps.map((step) => step.kind)).toEqual(['pick']);
+    expect(stage.flow.phases.map((phase) => phase.action)).toEqual(['pick']);
+    expect(stage.flow.phases[0]?.countPerTeam).toBeNull();
     expect(stage.bestOf).toBe(9);
     expect(tournament.source).toBeNull();
     const match = stage.matches[0]!;
     expect(match.type).toBe('match');
-    expect(match.initialBeatmapId).toBe(658127);
+    expect(tournament.platform).toBe('lazer');
   });
 
   it('normalises the best-of value to a legal odd number', () => {
@@ -50,8 +51,8 @@ describe('quick room configuration', () => {
 
     expect(TournamentSchema.safeParse(tournament).success).toBe(true);
     expect(tournament.stages[0]?.slots).toEqual([]);
-    expect(tournament.stages[0]?.matches[0]?.initialBeatmapId).toBeNull();
-    expect(tournament.stages[0]?.flow.steps.length).toBeGreaterThan(0);
+    expect(tournament.platform).toBe('stable');
+    expect(tournament.stages[0]?.flow.phases.length).toBeGreaterThan(0);
   });
 
   it('keeps the snapshot on the session so it survives without the store', () => {
@@ -71,7 +72,7 @@ describe('quick room configuration', () => {
         id: 'session_quick',
         tournamentId: tournament.id,
         matchId: match.id,
-        matchName: match.name,
+        matchName: 'Quick room',
         matchKind: match.type,
         participantIds,
         teamOneId: participantIds[0]!,

@@ -124,7 +124,7 @@ export class RefereeHubTransport implements MatchTransport {
       ruleset_id: request.rulesetId,
       beatmap_id: request.beatmapId,
       name: request.name,
-      type: request.matchType,
+      type: request.teamMode === 'team_versus' ? 'team_versus' : 'head_to_head',
       queue_mode: 'host_only',
       max_participants: request.maxParticipants,
     });
@@ -172,7 +172,9 @@ export class RefereeHubTransport implements MatchTransport {
     const request: Record<string, unknown> = {};
     if (patch.name !== undefined) request.name = patch.name;
     if (patch.password !== undefined) request.password = patch.password;
-    if (patch.matchType !== undefined) request.type = patch.matchType;
+    if (patch.teamMode !== undefined) {
+      request.type = patch.teamMode === 'team_versus' ? 'team_versus' : 'head_to_head';
+    }
     if (patch.maxParticipants !== undefined) request.max_participants = patch.maxParticipants;
     await this.invoke('ChangeRoomSettings', toHubNumber(roomId), request);
   }
@@ -383,14 +385,10 @@ export class RefereeHubTransport implements MatchTransport {
   private async resync(): Promise<void> {
     try {
       const ids = await this.listRooms();
-      for (const existing of [...this.rooms.keys()]) {
-        if (!ids.includes(existing)) {
-          this.rooms.delete(existing);
-          this.emit({ type: 'room_closed', roomId: existing });
-        }
-      }
+      const listed = new Set(ids);
+      const targets = new Set([...this.rooms.keys(), ...ids]);
       const joined: RoomSnapshot[] = [];
-      for (const roomId of ids) {
+      for (const roomId of targets) {
         try {
           const response = await this.invoke('JoinRoom', toHubNumber(roomId));
           const snapshot = mapRoomJoined(response);
@@ -398,11 +396,16 @@ export class RefereeHubTransport implements MatchTransport {
           joined.push(snapshot);
           this.emit({ type: 'room_joined', snapshot });
         } catch (error) {
-          this.emit({
-            type: 'notice',
-            level: 'warn',
-            message: `could not rejoin room ${roomId}: ${errorMessage(error)}`,
-          });
+          if (!listed.has(roomId)) {
+            this.rooms.delete(roomId);
+            this.emit({ type: 'room_closed', roomId });
+          } else {
+            this.emit({
+              type: 'notice',
+              level: 'warn',
+              message: `could not rejoin room ${roomId}: ${errorMessage(error)}`,
+            });
+          }
         }
       }
       this.options.onResync?.(joined);
@@ -572,7 +575,14 @@ export function applyRoomSlots(snapshot: RoomSnapshot, slots: unknown): void {
 export function mapRoomJoined(raw: unknown): RoomSnapshot {
   const record = asRecord(raw);
   const state = asRecord(record.State ?? record.state);
-  const type = state.type === 'team_versus' ? 'team_versus' : 'head_to_head';
+  const type =
+    state.type === 'team_versus'
+      ? 'team_versus'
+      : state.type === 'tag_coop'
+        ? 'tag_coop'
+        : state.type === 'tag_team_versus'
+          ? 'tag_team_versus'
+          : 'head_to_head';
   const playlist = asArray(record.playlist)
     .map((item, index) => mapPlaylistItem(asRecord(item), index))
     .filter((item): item is PlaylistEntry => item !== null);

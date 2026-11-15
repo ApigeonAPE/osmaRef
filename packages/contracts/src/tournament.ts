@@ -6,11 +6,12 @@ import { z } from 'zod';
  * The configuration is deliberately declarative: no imported script may run.
  * Every rule (scoring, messaging) is data that the domain layer interprets.
  *
- * v3 stores teams and tournament mode at the root, with stages owning groups,
- * mappools, scoring, flows, and their lobby/match fixtures.
+ * v4 owns the platform at the tournament root, stores phase-based match flows
+ * and stage ban/protect counts, and keeps match IDs independent of their
+ * displayed order.
  */
 
-export const TOURNAMENT_SCHEMA_VERSION = 3 as const;
+export const TOURNAMENT_SCHEMA_VERSION = 4 as const;
 
 /**
  * Tournament ids are six random characters: digits plus lower-case letters
@@ -36,8 +37,63 @@ export function createTournamentId(random: () => number = Math.random): string {
 export const RulesetIdSchema = z.number().int().min(0).max(3);
 export type RulesetId = z.infer<typeof RulesetIdSchema>;
 
-export const MatchTypeSchema = z.enum(['head_to_head', 'team_versus']);
+/** Platform a tournament is played on; it decides the transport for every room. */
+export const PlatformSchema = z.enum(['stable', 'lazer']);
+export type Platform = z.infer<typeof PlatformSchema>;
+
+/** Multiplayer team mode (`!mp set` team mode / Hub room type). */
+export const MatchTypeSchema = z.enum([
+  'head_to_head',
+  'tag_coop',
+  'team_versus',
+  'tag_team_versus',
+]);
 export type MatchType = z.infer<typeof MatchTypeSchema>;
+
+/** Win conditions a multiplayer room can be configured with. */
+export const RoomWinConditionSchema = z.enum([
+  'score',
+  'score_v2',
+  'accuracy',
+  'combo',
+]);
+export type RoomWinCondition = z.infer<typeof RoomWinConditionSchema>;
+
+export const PLATFORM_TEAM_MODES: Record<Platform, MatchType[]> = {
+  stable: ['head_to_head', 'tag_coop', 'team_versus', 'tag_team_versus'],
+  lazer: ['head_to_head', 'team_versus'],
+};
+
+export const PLATFORM_WIN_CONDITIONS: Record<Platform, RoomWinCondition[]> = {
+  stable: ['score', 'score_v2', 'accuracy', 'combo'],
+  /** lazer has no Score V2 room win condition. */
+  lazer: ['score', 'accuracy', 'combo'],
+};
+
+export function isTeamModeAllowed(platform: Platform, mode: MatchType): boolean {
+  return PLATFORM_TEAM_MODES[platform].includes(mode);
+}
+
+export function isWinConditionAllowed(
+  platform: Platform,
+  condition: RoomWinCondition,
+): boolean {
+  return PLATFORM_WIN_CONDITIONS[platform].includes(condition);
+}
+
+/** Returns the supported value closest to the requested one. */
+export function normalizeRoomMode(platform: Platform, mode: MatchType): MatchType {
+  if (isTeamModeAllowed(platform, mode)) return mode;
+  return platform === 'stable' ? 'team_versus' : 'team_versus';
+}
+
+export function normalizeRoomWinCondition(
+  platform: Platform,
+  condition: RoomWinCondition,
+): RoomWinCondition {
+  if (isWinConditionAllowed(platform, condition)) return condition;
+  return platform === 'lazer' ? 'score' : 'score_v2';
+}
 
 export const TransportKindSchema = z.enum(['irc', 'referee_hub']);
 export type TransportKind = z.infer<typeof TransportKindSchema>;
@@ -163,36 +219,62 @@ export const MappoolSlotSchema = z.object({
 });
 export type MappoolSlot = z.infer<typeof MappoolSlotSchema>;
 
-export const FlowStepKindSchema = z.enum(['protect', 'ban', 'pick']);
-export type FlowStepKind = z.infer<typeof FlowStepKindSchema>;
+export const FlowActionSchema = z.enum(['protect', 'ban', 'pick']);
+export type FlowAction = z.infer<typeof FlowActionSchema>;
 
-export const FlowStepSchema = z.object({
-  id: IdSchema,
-  kind: FlowStepKindSchema,
-  /**
-   * Actions per team. Every step alternates the two teams, so `count: 1`
-   * means "one action each" ("one ban each", "one protect each", ...).
-   * Older files may still carry a `side` field; it is dropped on parse.
-   */
-  count: z.number().int().min(1).max(10),
-});
-export type FlowStep = z.infer<typeof FlowStepSchema>;
+export const FlowPhaseOrderSchema = z.enum(['alternate', 'sequential']);
+export type FlowPhaseOrder = z.infer<typeof FlowPhaseOrderSchema>;
+
+/**
+ * A flow phase. `countPerTeam` is the number of actions each team gets;
+ * `useStageCount` takes ban/protect counts from the stage. Picks are always
+ * open-ended (`countPerTeam: null`): the runtime derives them from the stage
+ * best-of, so the pick round count is never edited by hand.
+ */
+export const FlowPhaseSchema = z
+  .object({
+    id: IdSchema,
+    action: FlowActionSchema,
+    countPerTeam: z.number().int().min(1).max(10).nullable().default(1),
+    useStageCount: z.boolean().default(false),
+    phaseOrder: FlowPhaseOrderSchema.default('alternate'),
+  })
+  .superRefine((phase, ctx) => {
+    if (phase.useStageCount && phase.action === 'pick') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'picks cannot use the stage ban/protect count',
+        path: ['useStageCount'],
+      });
+    }
+    if (phase.action === 'pick' && phase.countPerTeam !== null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'pick phases are auto-sized from the stage best-of',
+        path: ['countPerTeam'],
+      });
+    }
+  });
+export type FlowPhase = z.infer<typeof FlowPhaseSchema>;
 
 export const FlowTriggerSchema = z.object({
   id: IdSchema,
-  team: z.enum(['team_one', 'team_two']),
+  /** Team whose score is watched. */
+  subject: z.enum(['team_one', 'team_two']),
   threshold: z.number().int().min(1).max(31),
-  action: z.enum(['ban', 'protect', 'pick']),
-  count: z.number().int().min(1).max(10).default(1),
   /** Repeat the grant every N additional points after the threshold. */
   repeatEvery: z.number().int().min(1).max(31).nullable().default(null),
+  /** Which team receives the extra action. */
+  grantTo: z.enum(['subject', 'opponent']).default('opponent'),
+  action: FlowActionSchema,
+  count: z.number().int().min(1).max(10).default(1),
 });
 export type FlowTrigger = z.infer<typeof FlowTriggerSchema>;
 
 export const MatchFlowSchema = z.object({
   id: IdSchema,
   name: z.string().min(1).max(64),
-  steps: z.array(FlowStepSchema).default([]),
+  phases: z.array(FlowPhaseSchema).default([]),
   triggers: z.array(FlowTriggerSchema).default([]),
 });
 export type MatchFlow = z.infer<typeof MatchFlowSchema>;
@@ -211,21 +293,15 @@ export type ScoringScheme = z.infer<typeof ScoringSchemeSchema>;
 
 const MatchBaseSchema = z.object({
   id: IdSchema,
-  name: z.string().min(1).max(128),
   /** Optional group membership for group-stage fixtures. */
   groupId: IdSchema.nullable().default(null),
   refereeIds: z.array(z.number().int().positive()).default([]),
-  transport: TransportKindSchema.default('irc'),
   /** Required UTC timestamp. New matches are initialized to now. */
   scheduledAt: UtcTimestampSchema,
   /** Lobby retains a zero result for shape consistency but does not use it. */
   result: MatchResultSchema.default({ scoreRed: 0, scoreBlue: 0 }),
-  roomNameTemplate: z
-    .string()
-    .min(1)
-    .max(160)
-    .default('{tournament}: ({team_one}) vs ({team_two})'),
-  initialBeatmapId: z.number().int().positive().nullable().default(null),
+  /** Room win condition; platform-specific options are enforced below. */
+  winCondition: RoomWinConditionSchema.default('score'),
   notes: z.string().max(1000).optional(),
 });
 
@@ -252,6 +328,10 @@ export const StageSchema = z
     type: StageTypeSchema,
     groups: z.array(StageGroupSchema).default([]),
     bestOf: z.number().int().min(1).max(31),
+    /** How many bans each team gets; used by phases with `useStageCount`. */
+    bans: z.number().int().min(0).max(10).default(0),
+    /** How many protects each team gets; used by phases with `useStageCount`. */
+    protects: z.number().int().min(0).max(10).default(0),
     slots: z.array(MappoolSlotSchema).default([]),
     flow: MatchFlowSchema,
     scoringScheme: ScoringSchemeSchema,
@@ -263,37 +343,37 @@ export const StageSchema = z
   });
 export type Stage = z.infer<typeof StageSchema>;
 
-export const AutomationTriggerSchema = z.enum([
+export const AUTOMATION_TRIGGERS = [
   'match_created',
   'beatmap_started',
   'beatmap_completed',
   'match_finished',
   'action_applied',
-]);
+] as const;
+export const AutomationTriggerSchema = z.enum(AUTOMATION_TRIGGERS);
 export type AutomationTrigger = z.infer<typeof AutomationTriggerSchema>;
 
-export const AutomationActionSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('chat'),
-    template: z.string().min(1).max(500),
-  }),
-  z.object({
-    type: z.literal('notice'),
-    message: z.string().min(1).max(500),
-  }),
-]);
-export type AutomationAction = z.infer<typeof AutomationActionSchema>;
+/** One automatic chat message; empty strings are kept in the editor but not sent. */
+export const AutomationMessageSchema = z.string().max(500);
 
-export const AutomationRuleSchema = z.object({
-  id: IdSchema,
-  name: z.string().min(1).max(64),
-  trigger: AutomationTriggerSchema,
-  /** Optional exact slot filter, e.g. only fire on `TB`. */
-  slotLabel: z.string().min(1).max(12).nullable().default(null),
-  actions: z.array(AutomationActionSchema).default([]),
-  enabled: z.boolean().default(true),
+export const AutomationMessagesSchema = z.object({
+  match_created: z.array(AutomationMessageSchema).default([]),
+  beatmap_started: z.array(AutomationMessageSchema).default([]),
+  beatmap_completed: z.array(AutomationMessageSchema).default([]),
+  match_finished: z.array(AutomationMessageSchema).default([]),
+  action_applied: z.array(AutomationMessageSchema).default([]),
 });
-export type AutomationRule = z.infer<typeof AutomationRuleSchema>;
+export type AutomationMessages = z.infer<typeof AutomationMessagesSchema>;
+
+export function emptyAutomationMessages(): AutomationMessages {
+  return {
+    match_created: [],
+    beatmap_started: [],
+    beatmap_completed: [],
+    match_finished: [],
+    action_applied: [],
+  };
+}
 
 export const TournamentSourceSchema = z.object({
   provider: z.enum(['file', 'http']),
@@ -325,12 +405,13 @@ export const TournamentSchema = z
       .refine((value) => value.length <= ABBREVIATION_MAX_LENGTH, {
         message: `abbreviation must be at most ${ABBREVIATION_MAX_LENGTH} characters`,
       }),
+    platform: PlatformSchema.default('stable'),
     mode: TournamentModeSchema.default('osu'),
     /** Expected players per team in an actual match; roster length is independent. */
     teamSize: z.number().int().min(1).max(16).default(4),
     teams: z.array(TeamSchema).default([]),
     stages: z.array(StageSchema).default([]),
-    automation: z.array(AutomationRuleSchema).default([]),
+    automation: AutomationMessagesSchema.default({}),
     revision: z.number().int().min(1).default(1),
     createdAt: TimestampSchema,
     updatedAt: TimestampSchema,
@@ -357,7 +438,7 @@ export interface ValidationIssue {
  * Kept exported so the UI can show a checklist instead of only failing on save.
  */
 export function validateTournamentReferences(
-  tournament: Pick<Tournament, 'teams' | 'stages'>,
+  tournament: Pick<Tournament, 'platform' | 'teams' | 'stages'>,
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const teamIds = new Set<TeamId>();
@@ -481,6 +562,26 @@ export function validateTournamentReferences(
       }
     });
 
+    if (stage.flow.phases.length === 0) {
+      issues.push({ path: [...stagePath, 'flow', 'phases'], message: 'a match flow needs at least one phase' });
+    }
+    if (!stage.flow.phases.some((phase) => phase.action === 'pick')) {
+      issues.push({ path: [...stagePath, 'flow', 'phases'], message: 'a match flow needs a pick phase' });
+    }
+    stage.flow.phases.forEach((phase, phaseIndex) => {
+      if (phase.useStageCount && phase.action === 'ban' && stage.bans === 0) {
+        issues.push({
+          path: [...stagePath, 'flow', 'phases', phaseIndex, 'useStageCount'],
+          message: 'this ban phase uses the stage count, but the stage allows no bans',
+        });
+      }
+      if (phase.useStageCount && phase.action === 'protect' && stage.protects === 0) {
+        issues.push({
+          path: [...stagePath, 'flow', 'phases', phaseIndex, 'useStageCount'],
+          message: 'this protect phase uses the stage count, but the stage allows no protects',
+        });
+      }
+    });
     stage.flow.triggers.forEach((trigger, triggerIndex) => {
       if (trigger.threshold > stage.bestOf) {
         issues.push({
@@ -504,6 +605,18 @@ export function validateTournamentReferences(
         issues.push({ path: [...matchPath, 'id'], message: `duplicate match id "${match.id}"` });
       }
       matchIds.add(match.id);
+      if (!isTeamModeAllowed(tournament.platform, match.roomMode)) {
+        issues.push({
+          path: [...matchPath, 'roomMode'],
+          message: `team mode "${match.roomMode}" is not available on the ${tournament.platform} platform`,
+        });
+      }
+      if (!isWinConditionAllowed(tournament.platform, match.winCondition)) {
+        issues.push({
+          path: [...matchPath, 'winCondition'],
+          message: `win condition "${match.winCondition}" is not available on the ${tournament.platform} platform`,
+        });
+      }
       if (match.groupId !== null && !groupIds.has(match.groupId)) {
         issues.push({
           path: [...matchPath, 'groupId'],
@@ -520,13 +633,13 @@ export function validateTournamentReferences(
             path: match.type === 'match'
               ? [...matchPath, teamIndex === 0 ? 'teamRedId' : 'teamBlueId']
               : [...matchPath, 'teamIds', teamIndex],
-            message: `match "${match.name}" references unknown team ${teamId}`,
+            message: `match #${matchIndex + 1} references unknown team ${teamId}`,
           });
         }
         if (participantIds.has(teamId)) {
           issues.push({
             path: match.type === 'match' ? matchPath : [...matchPath, 'teamIds', teamIndex],
-            message: `team ${teamId} appears more than once in match "${match.name}"`,
+            message: `team ${teamId} appears more than once in match #${matchIndex + 1}`,
           });
         }
         participantIds.add(teamId);
@@ -536,7 +649,7 @@ export function validateTournamentReferences(
         if (group && participants.some((teamId) => !group.teamIds.includes(teamId))) {
           issues.push({
             path: [...matchPath, 'groupId'],
-            message: `match "${match.name}" includes a team outside group "${group.name}"`,
+            message: `match #${matchIndex + 1} includes a team outside group "${group.name}"`,
           });
         }
       }
@@ -598,13 +711,91 @@ export function parseTournament(input: unknown) {
 export function migrateTournament(input: unknown): unknown {
   if (!isRecord(input)) return input;
   if (input.schemaVersion !== TOURNAMENT_SCHEMA_VERSION) return input;
+  const platform: Platform = input.platform === 'lazer' ? 'lazer' : 'stable';
+  const stages = Array.isArray(input.stages)
+    ? input.stages.map((stage) => {
+        if (!isRecord(stage)) return stage;
+        const matches = Array.isArray(stage.matches)
+          ? stage.matches.map((match) => {
+              if (!isRecord(match)) return match;
+              return {
+                ...match,
+                roomMode:
+                  typeof match.roomMode === 'string'
+                    ? normalizeRoomMode(platform, match.roomMode as MatchType)
+                    : match.roomMode,
+                winCondition:
+                  typeof match.winCondition === 'string'
+                    ? normalizeRoomWinCondition(
+                        platform,
+                        match.winCondition as RoomWinCondition,
+                      )
+                    : match.winCondition,
+              };
+            })
+          : stage.matches;
+        return { ...stage, matches };
+      })
+    : input.stages;
   return {
     ...input,
+    platform,
+    stages,
+    automation: migrateAutomation(input.automation),
     abbreviation:
       typeof input.abbreviation === 'string'
         ? normalizeAbbreviation(input.abbreviation)
         : input.abbreviation,
   };
+}
+const LEGACY_TEMPLATE_KEYS: Record<string, string> = {
+  team_one: 'team_red',
+  team_two: 'team_blue',
+  score_one: 'score_red',
+  score_two: 'score_blue',
+};
+
+function normalizeAutomationMessage(template: string): string {
+  return template.replace(/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g, (_match, key: string) => {
+    const mapped = LEGACY_TEMPLATE_KEYS[key] ?? key;
+    return `{{${mapped}}}`;
+  });
+}
+
+function migrateAutomation(input: unknown): AutomationMessages {
+  const messages = emptyAutomationMessages();
+  if (Array.isArray(input)) {
+    for (const rule of input) {
+      if (!isRecord(rule) || rule.enabled === false) continue;
+      const trigger =
+        typeof rule.trigger === 'string' &&
+        (AUTOMATION_TRIGGERS as readonly string[]).includes(rule.trigger)
+          ? (rule.trigger as AutomationTrigger)
+          : null;
+      if (!trigger) continue;
+      const actions = Array.isArray(rule.actions) ? rule.actions : [];
+      for (const action of actions) {
+        if (!isRecord(action)) continue;
+        if (action.type === 'chat' && typeof action.template === 'string') {
+          messages[trigger].push(normalizeAutomationMessage(action.template));
+        } else if (action.type === 'notice' && typeof action.message === 'string') {
+          messages[trigger].push(normalizeAutomationMessage(action.message));
+        }
+      }
+    }
+    return messages;
+  }
+  if (isRecord(input)) {
+    for (const trigger of AUTOMATION_TRIGGERS) {
+      const value = input[trigger];
+      messages[trigger] = Array.isArray(value)
+        ? value
+            .filter((entry): entry is string => typeof entry === 'string')
+            .map(normalizeAutomationMessage)
+        : [];
+    }
+  }
+  return messages;
 }
 export function createEmptyTournament(name: string, now = new Date()): Tournament {
   const timestamp = now.toISOString();
@@ -620,6 +811,7 @@ export function createEmptyTournament(name: string, now = new Date()): Tournamen
     id: createTournamentId(),
     name,
     abbreviation: normalizeAbbreviation(name) || 'TOURNAMENT',
+    platform: 'stable',
     mode: 'osu',
     teamSize: 4,
     teams: [
@@ -634,14 +826,27 @@ export function createEmptyTournament(name: string, now = new Date()): Tournamen
         type: 'knockout',
         groups: [],
         bestOf: 9,
+        bans: 1,
+        protects: 0,
         slots: [],
         flow: {
           id: 'flow_stage_1',
-          name: 'Protect, ban, pick',
-          steps: [
-            { id: 'step_protect', kind: 'protect', count: 1 },
-            { id: 'step_ban', kind: 'ban', count: 1 },
-            { id: 'step_pick', kind: 'pick', count: 10 },
+          name: 'Ban, pick',
+          phases: [
+            {
+              id: 'phase_ban',
+              action: 'ban',
+              countPerTeam: 1,
+              useStageCount: true,
+              phaseOrder: 'alternate',
+            },
+            {
+              id: 'phase_pick',
+              action: 'pick',
+              countPerTeam: null,
+              useStageCount: false,
+              phaseOrder: 'alternate',
+            },
           ],
           triggers: [],
         },
@@ -649,7 +854,7 @@ export function createEmptyTournament(name: string, now = new Date()): Tournamen
         matches: [],
       },
     ],
-    automation: [],
+    automation: emptyAutomationMessages(),
     revision: 1,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -689,6 +894,34 @@ export function findStageForMatch(tournament: Tournament, matchId: string): Stag
 
 export function matchTeamIds(match: Match): TeamId[] {
   return match.type === 'match' ? [match.teamRedId, match.teamBlueId] : match.teamIds;
+}
+/** Human label for a match row: no stored title, only participants. */
+export function matchSessionName(
+  tournament: Tournament,
+  stage: Stage,
+  match: Match,
+): string {
+  if (match.type === 'lobby') return `${stage.name} Lobby`;
+  const red = findTeam(tournament, match.teamRedId)?.name ?? `Team ${match.teamRedId}`;
+  const blue = findTeam(tournament, match.teamBlueId)?.name ?? `Team ${match.teamBlueId}`;
+  return `${red} vs ${blue}`;
+}
+
+/** Room name generated from the tournament, stage and participants. */
+export function buildRoomName(
+  tournament: Tournament,
+  stage: Stage,
+  match: Match,
+): string {
+  if (match.type === 'lobby') {
+    return `${tournament.abbreviation} ${stage.name} lobby`.slice(0, 160);
+  }
+  return `${tournament.abbreviation} ${matchSessionName(tournament, stage, match)}`.slice(0, 160);
+}
+
+/** Index of a match inside its stage, used for the displayed #number. */
+export function matchIndex(stage: Stage, matchId: string): number {
+  return stage.matches.findIndex((match) => match.id === matchId);
 }
 
 export function findTeam(tournament: Tournament, teamId: TeamId | string): Team | undefined {

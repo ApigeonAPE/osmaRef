@@ -50,14 +50,14 @@ export function JoinRoomDialog({
             className={transport === 'irc' ? 'active' : ''}
             onClick={() => setTransport('irc')}
           >
-            Bancho IRC
+            stable
           </button>
           <button
             type="button"
             className={transport === 'referee_hub' ? 'active' : ''}
             onClick={() => setTransport('referee_hub')}
           >
-            Referee Hub
+            lazer
           </button>
         </div>
 

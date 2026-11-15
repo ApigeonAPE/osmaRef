@@ -47,7 +47,7 @@ describe('store data upgrade', () => {
     second.close();
 
     const check = new DatabaseSync(join(dir, 'osmaRef.db'));
-    expect(Number(check.prepare('PRAGMA user_version').get()?.['user_version'])).toBe(3);
+    expect(Number(check.prepare('PRAGMA user_version').get()?.['user_version'])).toBe(4);
     check.close();
   });
 

@@ -53,7 +53,7 @@ interface SqliteDatabase {
 type SqliteConstructor = new (path: string) => SqliteDatabase;
 
 /** Current persistent shape for tournaments and sessions. */
-const STORE_DATA_VERSION = 3;
+const STORE_DATA_VERSION = 4;
 
 /**
  * SQLite-backed store with a JSON fallback.
@@ -239,6 +239,9 @@ class SqliteStore implements AppStore {
   }
 
   upsertLobbyLogSession(session: LobbyLogSession): void {
+    // IRC chat channels are not multiplayer rooms and must not appear in the
+    // room log list.
+    if (session.roomId !== null && !/^\d+$/.test(session.roomId)) return;
     this.db
       .prepare(
         'INSERT INTO lobby_log_sessions ' +
@@ -305,7 +308,16 @@ class SqliteStore implements AppStore {
   }
 
   private backfillLobbyLogSessions(): void {
+    this.db
+      .prepare("DELETE FROM lobby_log_sessions WHERE room_id IS NOT NULL AND room_id NOT GLOB '[0-9]*'")
+      .run();
     for (const session of this.listSessions()) {
+      if (session.chatOnly) {
+        this.db
+          .prepare('DELETE FROM lobby_log_sessions WHERE session_id = ?')
+          .run(session.id);
+        continue;
+      }
       if (this.getLobbyLogSession(session.id)) continue;
       const hasEvents = this.db
         .prepare('SELECT 1 AS present FROM events WHERE session_id = ? LIMIT 1')
@@ -456,6 +468,7 @@ class JsonStore implements AppStore {
   }
 
   upsertLobbyLogSession(session: LobbyLogSession): void {
+    if (session.roomId !== null && !/^\d+$/.test(session.roomId)) return;
     const index = this.state.lobbyLogSessions.findIndex(
       (entry) => entry.sessionId === session.sessionId,
     );
@@ -508,7 +521,16 @@ class JsonStore implements AppStore {
   }
 
   private backfillLobbyLogSessions(): void {
+    this.state.lobbyLogSessions = this.state.lobbyLogSessions.filter(
+      (entry) => entry.roomId === null || /^\d+$/.test(entry.roomId),
+    );
     for (const session of this.listSessions()) {
+      if (session.chatOnly) {
+        this.state.lobbyLogSessions = this.state.lobbyLogSessions.filter(
+          (entry) => entry.sessionId !== session.id,
+        );
+        continue;
+      }
       if (this.getLobbyLogSession(session.id)) continue;
       if (!this.state.events.some((event) => event.sessionId === session.id)) continue;
       this.upsertLobbyLogSession(toLobbyLogSession(session));

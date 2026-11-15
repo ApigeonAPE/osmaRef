@@ -77,7 +77,7 @@ export function WorkbenchPage({
     if (valid) return;
     const preferred =
       channelSessions.find((session) => session.id === model.state?.activeSessionId) ??
-      channelSessions.find((session) => session.roomId !== null) ??
+      channelSessions.find((session) => session.status === 'active' && session.roomId !== null) ??
       channelSessions[0] ??
       null;
     setActiveId(preferred?.id ?? null);
@@ -509,7 +509,7 @@ export function WorkbenchPage({
     : session?.status === 'finished'
       ? t('match finished')
       : t('flow complete');
-  const channelLabel = channel === 'irc' ? 'IRC' : 'Referee Hub';
+  const channelLabel = channel === 'irc' ? 'stable' : 'lazer';
 
   return (
     <div className="page workbench-page">
@@ -517,7 +517,7 @@ export function WorkbenchPage({
       {model.state?.connections.some((entry) => entry.status === 'error') ? (
         <div className="banner warn">
           {t(
-            'A connection reported an error. Check Settings → Diagnostics; room control needs an active transport.',
+            'A connection reported an error. Check Settings → Diagnostics; room control needs an active platform.',
           )}
         </div>
       ) : null}
@@ -540,7 +540,7 @@ export function WorkbenchPage({
                 className="ghost small wb-channel-button"
                 onClick={switchChannel}
               >
-                {t('Channel')}
+                {t('Platform')}
               </button>
             </div>
             <Section
@@ -589,7 +589,7 @@ export function WorkbenchPage({
                 className="ghost small wb-channel-button"
                 onClick={switchChannel}
               >
-                {t('Channel')}
+                {t('Platform')}
               </button>
             </div>
             <div
@@ -724,7 +724,7 @@ export function WorkbenchPage({
                         <p className="muted small">{t('No players in the room yet.')}</p>
                       )
                     ) : (
-                      <p className="muted small">{t('Waiting for the first snapshot from the transport.')}</p>
+                      <p className="muted small">{t('Waiting for the first snapshot from the platform.')}</p>
                     )}
                   </div>
                 </Section>
@@ -752,7 +752,7 @@ export function WorkbenchPage({
                   onClick={() => { if (!isLobby) adjustScore('team_one', 1); }}
                   onContextMenu={(event) => {
                     event.preventDefault();
-                    adjustScore('team_one', -1);
+                    if (!isLobby) adjustScore('team_one', -1);
                   }}
                 >
                   <strong>{teamName(session.teamOneId)}</strong>
@@ -768,7 +768,7 @@ export function WorkbenchPage({
                   onClick={() => { if (!isLobby) adjustScore('team_two', 1); }}
                   onContextMenu={(event) => {
                     event.preventDefault();
-                    adjustScore('team_two', -1);
+                    if (!isLobby) adjustScore('team_two', -1);
                   }}
                 >
                   <span className="flat-score">{session.wins.team_two}</span>
@@ -932,7 +932,7 @@ export function WorkbenchPage({
                   })}
                 </div>
               ) : (
-                <p className="muted small">{t('Waiting for the first snapshot from the transport.')}</p>
+                <p className="muted small">{t('Waiting for the first snapshot from the platform.')}</p>
               )}
                 </div>
               </div>
@@ -968,7 +968,7 @@ export function WorkbenchPage({
                   ) : null}
                 </div>
               ) : (
-                <p className="muted small">{t('Waiting for the first snapshot from the transport.')}</p>
+                <p className="muted small">{t('Waiting for the first snapshot from the platform.')}</p>
               )}
               <div className="room-status-actions">
                 <button
@@ -1056,10 +1056,11 @@ export function WorkbenchPage({
                         (pending?.kind === 'ban' || pending?.kind === 'protect') && protectedSlot;
                       const actionable =
                         session.status === 'active' &&
-                        !used &&
-                        session.phase !== 'playing' &&
-                        Boolean(pending) &&
-                        !blockedByProtection;
+                        (isLobby ||
+                          (!used &&
+                            session.phase !== 'playing' &&
+                            Boolean(pending) &&
+                            !blockedByProtection));
                       const isLast =
                         session.status === 'active' &&
                         lastAction?.slotLabel !== null &&
@@ -1243,6 +1244,7 @@ export function WorkbenchPage({
       {modsOpen && modsEntry ? (
         <PlaylistModsDialog
           entry={modsEntry}
+          platform={tournament?.platform ?? (session?.transport === 'referee_hub' ? 'lazer' : 'stable')}
           onClose={() => {
             setModsOpen(false);
             setModsEntry(null);

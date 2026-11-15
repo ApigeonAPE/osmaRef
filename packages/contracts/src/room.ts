@@ -47,7 +47,7 @@ export const RoomSnapshotSchema = z.object({
   name: z.string().min(1),
   password: z.string().nullable().default(null),
   chatChannelId: z.string().nullable().default(null),
-  matchType: z.enum(['head_to_head', 'team_versus']).default('head_to_head'),
+  matchType: z.enum(['head_to_head', 'tag_coop', 'team_versus', 'tag_team_versus']).default('head_to_head'),
   /** Bancho reports this as text (Score, ScoreV2, Accuracy, Combo). */
   winCondition: z.string().nullable().default(null),
   /** Bancho reports the ruleset name, e.g. "CatchTheBeat". */

@@ -7,7 +7,7 @@ import type {
   TransportKind,
   Match,
 } from '@osmaref/contracts';
-import type { HubTeam, RoomSnapshot } from '@osmaref/contracts';
+import type { HubTeam, MatchType, RoomSnapshot, RoomWinCondition } from '@osmaref/contracts';
 
 export type { HubTeam, PlaylistEntry, RoomPlayer, RoomPlayerStatus, RoomSnapshot } from '@osmaref/contracts';
 
@@ -22,14 +22,16 @@ export interface CreateRoomRequest {
   rulesetId: number;
   /** Optional for Bancho IRC (`!mp make` needs no beatmap); required by the Referee Hub. */
   beatmapId?: number;
-  matchType: 'head_to_head' | 'team_versus';
+  teamMode: MatchType;
+  winCondition: RoomWinCondition;
   maxParticipants: number;
 }
 
 export interface RoomSettingsPatch {
   name?: string;
   password?: string;
-  matchType?: 'head_to_head' | 'team_versus';
+  teamMode?: MatchType;
+  winCondition?: RoomWinCondition;
   maxParticipants?: number;
 }
 

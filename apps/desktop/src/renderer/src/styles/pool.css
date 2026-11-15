@@ -65,7 +65,8 @@
   align-items: start;
 }
 
-.mod-selector.allowed-only {
+.mod-selector.allowed-only,
+.mod-selector.stable {
   grid-template-columns: minmax(0, 1fr);
 }
 

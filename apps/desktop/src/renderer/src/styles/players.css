@@ -30,9 +30,10 @@
 }
 
 .player-remove {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
 }
 
 .player-invite {
@@ -97,4 +98,7 @@
   justify-content: flex-end;
   gap: 3px;
   flex: none;
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
 }

@@ -1,29 +1,58 @@
 import type { MatchFlow, PendingAction, TeamSide } from '@osmaref/contracts';
 
+export interface FlowStageCounts {
+  bans: number;
+  protects: number;
+}
+
 /**
- * Expands a declarative flow into a flat, ordered action queue.
+ * Expands a phase-based flow into a flat action queue.
  *
- * Every pick/ban/protect step involves both teams: `count` is the number of
- * actions per team, and each repetition alternates team one / team two. That is
- * how tournaments describe "one ban each" or "five picks each" style flows.
+ * Ban/protect phases use their own count or the stage count. A pick phase is
+ * open-ended in the configuration; its per-team count is derived from the
+ * stage best-of so the editor never asks for a pick round count.
  */
 export function buildActionQueue(
   flow: MatchFlow,
+  bestOf: number,
   teamOneId: string,
   teamTwoId: string,
+  stageCounts: FlowStageCounts,
 ): PendingAction[] {
   const actions: PendingAction[] = [];
-  for (const step of flow.steps) {
-    for (let index = 1; index <= step.count; index += 1) {
-      actions.push(makeAction(step.id, step.kind, 'team_one', index, step.count, teamOneId, teamTwoId));
-      actions.push(makeAction(step.id, step.kind, 'team_two', index, step.count, teamOneId, teamTwoId));
+  for (const phase of flow.phases) {
+    const count = phaseCount(phase, bestOf, stageCounts);
+    if (count <= 0) continue;
+    const sides: TeamSide[] = [];
+    if (phase.phaseOrder === 'sequential') {
+      for (let index = 0; index < count; index += 1) sides.push('team_one');
+      for (let index = 0; index < count; index += 1) sides.push('team_two');
+    } else {
+      for (let index = 0; index < count; index += 1) sides.push('team_one', 'team_two');
     }
+    sides.forEach((side, index) => {
+      actions.push(
+        makeAction(phase.id, phase.action, side, index + 1, count, teamOneId, teamTwoId),
+      );
+    });
   }
   return actions;
 }
 
+function phaseCount(
+  phase: MatchFlow['phases'][number],
+  bestOf: number,
+  stageCounts: FlowStageCounts,
+): number {
+  if (phase.action === 'pick') return Math.max(1, Math.ceil(bestOf / 2));
+  if (phase.useStageCount) {
+    return phase.action === 'ban' ? stageCounts.bans : stageCounts.protects;
+  }
+  return phase.countPerTeam ?? 0;
+}
+
 function makeAction(
-  stepId: string,
+  phaseId: string,
   kind: PendingAction['kind'],
   side: TeamSide,
   index: number,
@@ -33,8 +62,8 @@ function makeAction(
 ): PendingAction {
   const teamId = side === 'team_one' ? teamOneId : teamTwoId;
   return {
-    id: `${stepId}:${teamId}:${index}`,
-    stepId,
+    id: `${phaseId}:${teamId}:${index}`,
+    stepId: phaseId,
     kind,
     side,
     index,

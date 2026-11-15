@@ -1,19 +1,28 @@
 import type {
-  AutomationRule,
+  AutomationMessages,
   AutomationTrigger,
   MatchSession,
   Tournament,
 } from '@osmaref/contracts';
+import { findStageForMatch } from '@osmaref/contracts';
 
 export interface TemplateContext {
   tournament: string;
+  stage: string;
   match: string;
-  team_one: string;
-  team_two: string;
-  score_one: number;
-  score_two: number;
-  slot: string;
+  team_red: string;
+  team_blue: string;
+  score_red: number;
+  score_blue: number;
   beatmap: string;
+  beatmap_id: string;
+  action_team: string;
+  action: string;
+  action_next: string;
+  next_team: string;
+  mapscore_red: number;
+  mapscore_blue: number;
+  slot: string;
   winner: string;
 }
 
@@ -28,53 +37,69 @@ export function renderTemplate(template: string, context: Partial<TemplateContex
   });
 }
 
-export function selectAutomationRules(
-  rules: AutomationRule[],
+/** Messages configured for one trigger timing, in send order. */
+export function automationMessagesFor(
+  automation: AutomationMessages,
   trigger: AutomationTrigger,
-  slotLabel: string | null,
-): AutomationRule[] {
-  return rules.filter((rule) => {
-    if (!rule.enabled || rule.trigger !== trigger) return false;
-    if (rule.slotLabel && slotLabel) {
-      return rule.slotLabel.toUpperCase() === slotLabel.toUpperCase();
-    }
-    return rule.slotLabel === null;
-  });
+): string[] {
+  return automation[trigger] ?? [];
 }
 
 export function buildTemplateContext(
   tournament: Tournament,
   session: MatchSession,
-  teamOneName: string,
-  teamTwoName: string,
+  teamRedName: string,
+  teamBlueName: string,
   extra: Partial<TemplateContext> = {},
 ): TemplateContext {
+  const current = session.actions.at(-1) ?? null;
+  const next = session.queue[session.cursor] ?? null;
+  const currentTeam = current
+    ? current.teamId === session.teamOneId
+      ? teamRedName
+      : current.teamId === session.teamTwoId
+        ? teamBlueName
+        : ''
+    : '';
+  const nextTeam = next
+    ? next.side === 'team_one'
+      ? teamRedName
+      : teamBlueName
+    : '';
   return {
     tournament: tournament.name,
+    stage: findStageForMatch(tournament, session.matchId)?.name ?? '',
     match: session.matchName,
-    team_one: teamOneName,
-    team_two: teamTwoName,
-    score_one: session.wins.team_one,
-    score_two: session.wins.team_two,
+    team_red: teamRedName,
+    team_blue: teamBlueName,
+    score_red: session.wins.team_one,
+    score_blue: session.wins.team_two,
+    beatmap: '',
+    beatmap_id: String(session.currentBeatmapId ?? ''),
+    action_team: currentTeam,
+    action: current?.kind ?? '',
+    action_next: next?.kind ?? '',
+    next_team: nextTeam,
+    mapscore_red: 0,
+    mapscore_blue: 0,
     slot: session.currentSlotLabel ?? '',
-    beatmap: String(session.currentBeatmapId ?? ''),
     winner: '',
     ...extra,
   };
 }
 
-/** Applies `{{variables}}` in automation messages; never evaluates code. */
+/**
+ * Applies `{{variables}}` to every configured message and drops blank entries.
+ * The returned order is the configured order.
+ */
 export function expandAutomationMessages(
-  rules: AutomationRule[],
+  messages: string[],
   context: Partial<TemplateContext>,
 ): string[] {
-  const messages: string[] = [];
-  for (const rule of rules) {
-    for (const action of rule.actions) {
-      if (action.type === 'chat') {
-        messages.push(renderTemplate(action.template, context));
-      }
-    }
+  const rendered: string[] = [];
+  for (const template of messages) {
+    const message = renderTemplate(template, context).trim();
+    if (message) rendered.push(message);
   }
-  return messages;
+  return rendered;
 }

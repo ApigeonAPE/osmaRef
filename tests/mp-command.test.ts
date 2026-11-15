@@ -215,6 +215,25 @@ describe('referee hub !mp mapping', () => {
     expect(result.errorCode).toBe('MP_NOT_READY');
   });
 
+  it('ignores referees when checking readiness', () => {
+    const result = routeMpCommand(
+      '!mp start',
+      context({
+        room: room({
+          referees: [1],
+          players: [
+            { userId: 1, mods: [], team: null, slot: null, status: 'idle' },
+            { userId: 2, mods: [], team: 'red', slot: 0, status: 'ready' },
+            { userId: 3, mods: [], team: 'blue', slot: 1, status: 'ready' },
+          ],
+        }),
+      }),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.actions[0]).toEqual({ type: 'startMatch', roomId: '1001', countdown: null });
+  });
+
   it('maps lock and aborttimer', () => {
     expect(routeMpCommand('!mp lock', context()).actions[0]).toEqual({
       type: 'setLock',

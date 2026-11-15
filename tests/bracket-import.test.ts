@@ -87,12 +87,14 @@ describe('osu! tournament bracket import', () => {
     expect(tiebreaker?.requiredMods).toEqual([]);
   });
 
-  it('derives a pick/ban flow from best-of and ban count', () => {
-    expect(tournament.stages[0]!.flow.steps.map((step) => [step.kind, step.count])).toEqual([
-      ['ban', 1],
-      ['pick', 3],
-    ]);
-    expect(tournament.stages[3]!.flow.steps[1]?.count).toBe(7);
+  it('derives phase-based flows and stage ban counts from the bracket', () => {
+    const first = tournament.stages[0]!;
+    expect(first.bans).toBe(1);
+    expect(first.flow.phases.map((phase) => phase.action)).toEqual(['ban', 'pick']);
+    expect(first.flow.phases[0]?.useStageCount).toBe(true);
+    expect(first.flow.phases[1]?.countPerTeam).toBeNull();
+    expect(tournament.stages[3]!.bans).toBe(1);
+    expect(tournament.platform).toBe('stable');
   });
 
   it('nests matches under their stage with numeric teams and results', () => {
@@ -107,12 +109,12 @@ describe('osu! tournament bracket import', () => {
     expect(matchTwo.teamBlueId).toBe(1);
     expect(matchTwo.scheduledAt).toBe('2026-10-25T13:00:00.000Z');
     expect(matchTwo.result).toEqual({ scoreRed: 5, scoreBlue: 6 });
-    expect(matchTwo.initialBeatmapId).toBe(3989898);
+    expect(matchTwo.winCondition).toBe('score_v2');
+    expect(matchTwo.roomMode).toBe('team_versus');
     expect(matchTwo.notes).toContain('score 5-6');
 
     const firstMatch = matches.find((match) => match.id === 'match_1');
     expect(tournament.stages[1]!.matches).toContain(firstMatch);
-    expect(firstMatch?.initialBeatmapId).toBe(3273376);
   });
 });
 
@@ -205,7 +207,8 @@ describe('bracket conversion edge cases', () => {
       { ID: 9, Team1Acronym: 'A', Team2Acronym: 'B', Date: '2026-02-10T00:00:00Z' },
     ];
     const { tournament, notes } = convertBracketToTournament(document);
-    expect(tournament.stages[1]?.matches[0]?.initialBeatmapId).toBe(20);
+    expect(tournament.stages[1]?.matches).toHaveLength(1);
+    expect(tournament.stages[1]?.slots[0]?.beatmapId).toBe(20);
     expect(notes.join('\n')).toMatch(/assigned to "Late"/);
   });
 

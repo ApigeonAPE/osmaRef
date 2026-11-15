@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   FlowTriggerSchema,
   MatchTypeSchema,
+  type MatchType,
   RulesetIdSchema,
   TournamentSchema,
   TransportKindSchema,
@@ -261,8 +262,11 @@ export interface CreateSessionInput {
   teamOneId: string;
   teamTwoId: string;
   tournamentRevision: number;
+  /** Stage ban/protect counts used by `useStageCount` phases. */
+  bans?: number;
+  protects?: number;
   rulesetId: number;
-  matchType: 'head_to_head' | 'team_versus';
+  matchType: MatchType;
   transport: 'irc' | 'referee_hub';
   bestOf: number;
   /** Embedded configuration for rooms created without a stored tournament. */

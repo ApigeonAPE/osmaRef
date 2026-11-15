@@ -3,9 +3,10 @@ import {
   TournamentSchema,
   createEmptyTournament,
   createTournamentId,
+  emptyAutomationMessages,
   normalizeAbbreviation,
   slugify,
-  type FlowStep,
+  type FlowPhase,
   type MappoolSlot,
   type Match,
   type MatchFlow,
@@ -235,6 +236,7 @@ export function convertBracketToTournament(
     const stageName = ((raw.Name ?? '').trim() || `Stage ${index + 1}`).slice(0, 64);
     const id = uniqueId(`stage_${slugify(stageName) || index + 1}`, usedStageIds);
     const bestOf = normalizeBestOf(raw.BestOf ?? undefined, stageName, notes);
+    const bans = normalizeBans(raw.BanCount ?? undefined, stageName, notes);
     const stage: Stage = {
       id,
       name: stageName,
@@ -242,8 +244,10 @@ export function convertBracketToTournament(
       type: 'knockout',
       groups: [],
       bestOf,
+      bans,
+      protects: 0,
       slots: buildSlots(raw.Beatmaps ?? [], id, stageName, tournament.mode, notes),
-      flow: buildFlow(id, stageName, bestOf, raw.BanCount ?? undefined, notes),
+      flow: buildFlow(id, stageName, bans, notes),
       scoringScheme: {
         id: `score_${id}`,
         name: 'Score V2',
@@ -312,24 +316,20 @@ export function convertBracketToTournament(
     const teamBlue = teams.find((team) => team.id === teamTwoId);
     if (!teamRed || !teamBlue) continue;
 
-    const initialBeatmapId = firstPickedBeatmap(raw, stage);
     stage.matches.push({
       id: uniqueId(`match_${raw.ID}`, usedMatchIds),
       type: 'match',
-      name: `${teamRed.name} vs ${teamBlue.name}`.slice(0, 128),
       groupId: null,
       teamRedId: teamOneId,
       teamBlueId: teamTwoId,
       refereeIds: [],
-      transport: 'irc',
       scheduledAt,
       result: {
         scoreRed: Number.isInteger(raw.Team1Score) ? Math.max(0, raw.Team1Score!) : 0,
         scoreBlue: Number.isInteger(raw.Team2Score) ? Math.max(0, raw.Team2Score!) : 0,
       },
       roomMode: 'team_versus',
-      roomNameTemplate: '{tournament}: ({team_one}) vs ({team_two})',
-      initialBeatmapId,
+      winCondition: 'score_v2',
       notes: matchNote(raw).slice(0, 1000),
     });
   }
@@ -345,7 +345,7 @@ export function convertBracketToTournament(
 
   tournament.teams = teams;
   tournament.stages = stages;
-  tournament.automation = [];
+  tournament.automation = emptyAutomationMessages();
 
   const validated = TournamentSchema.safeParse(tournament);
   if (!validated.success) {
@@ -476,33 +476,41 @@ function buildSlots(
   return slots;
 }
 
+function normalizeBans(banCount: number | undefined, stageName: string, notes: string[]): number {
+  const requested = Math.round(banCount ?? 0);
+  const bans = Math.min(10, Math.max(0, requested));
+  if (bans !== requested) {
+    notes.push(
+      `Stage "${stageName}" has ${requested} bans per team; the stage count is capped to ${bans}.`,
+    );
+  }
+  return bans;
+}
+
 function buildFlow(
   stageId: string,
   stageName: string,
-  bestOf: number,
-  banCount: number | undefined,
+  bans: number,
   notes: string[],
 ): MatchFlow {
-  const steps: FlowStep[] = [];
-  const requestedBans = Math.round(banCount ?? 0);
-  const bans = Math.min(10, Math.max(0, requestedBans));
-  if (bans !== requestedBans) {
-    notes.push(
-      `Stage "${stageName}" has ${requestedBans} bans per team; the flow step is capped to ${bans}.`,
-    );
-  }
+  const phases: FlowPhase[] = [];
   if (bans > 0) {
-    steps.push({ id: `step_ban_${stageId}`, kind: 'ban', count: bans });
+    phases.push({
+      id: `phase_ban_${stageId}`,
+      action: 'ban',
+      countPerTeam: 1,
+      useStageCount: true,
+      phaseOrder: 'alternate',
+    });
   }
-  const picksNeeded = Math.ceil(bestOf / 2);
-  const picks = Math.min(10, Math.max(1, picksNeeded));
-  if (picks !== picksNeeded) {
-    notes.push(
-      `Stage "${stageName}" needs ${picksNeeded} picks per team; the flow step is capped at 10.`,
-    );
-  }
-  steps.push({ id: `step_pick_${stageId}`, kind: 'pick', count: picks });
-  return { id: `flow_${stageId}`, name: `${stageName} flow`.slice(0, 64), steps, triggers: [] };
+  phases.push({
+    id: `phase_pick_${stageId}`,
+    action: 'pick',
+    countPerTeam: null,
+    useStageCount: false,
+    phaseOrder: 'alternate',
+  });
+  return { id: `flow_${stageId}`, name: `${stageName} flow`.slice(0, 64), phases, triggers: [] };
 }
 
 function stageForDate(
@@ -523,17 +531,6 @@ function stageForDate(
     }
   }
   return chosen ?? stages[0];
-}
-
-function firstPickedBeatmap(match: BracketMatch, stage: Stage): number | null {
-  const pool = new Set(stage.slots.map((slot) => slot.beatmapId));
-  for (const entry of match.PicksBans ?? []) {
-    if ((entry.Type ?? '').toLowerCase() !== 'pick') continue;
-    if (typeof entry.BeatmapID === 'number' && pool.has(entry.BeatmapID)) {
-      return entry.BeatmapID;
-    }
-  }
-  return stage.slots[0]?.beatmapId ?? null;
 }
 
 function matchNote(match: BracketMatch): string {

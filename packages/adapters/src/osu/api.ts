@@ -116,10 +116,6 @@ export class OsuApiClient {
     );
   }
 
-  async chatKeepalive(): Promise<void> {
-    await this.request('/chat/keepalive', { method: 'POST', apiVersion: false });
-  }
-
   /** Reads every score page for one played playlist item. */
   async playlistScores(roomId: string, playlistItemId: string): Promise<OsuScorePage> {
     const collected: unknown[] = [];
