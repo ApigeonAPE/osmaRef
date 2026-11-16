@@ -68,13 +68,9 @@
 
   .workspace-nav-item {
     width: auto;
-    border-left-color: transparent;
-    border-bottom: 2px solid transparent;
-    border-radius: var(--radius-sm);
   }
 
   .workspace-nav-item.active {
-    border-left-color: transparent;
-    border-bottom-color: var(--pink);
+    border-color: var(--pink-border);
   }
 }

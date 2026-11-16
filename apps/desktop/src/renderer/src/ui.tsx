@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react';
+import { useI18n } from './i18n';
 
 export function Field({
   label,
-  hint,
   children,
   wide,
 }: {
   label: string;
-  hint?: string;
   children: ReactNode;
   wide?: boolean;
 }) {
@@ -15,22 +14,19 @@ export function Field({
     <label className={`field${wide ? ' field-wide' : ''}`}>
       <span className="field-label">{label}</span>
       {children}
-      {hint ? <span className="field-hint">{hint}</span> : null}
     </label>
   );
 }
 
 export function Section({
   title,
-  subtitle,
   actions,
   children,
   className,
 }: {
   title: string;
-  subtitle?: string;
   actions?: ReactNode;
-  children: ReactNode;
+  children?: ReactNode;
   className?: string;
 }) {
   return (
@@ -38,7 +34,6 @@ export function Section({
       <header className="card-head">
         <div>
           <h2>{title}</h2>
-          {subtitle ? <p className="muted">{subtitle}</p> : null}
         </div>
         {actions ? <div className="card-actions">{actions}</div> : null}
       </header>
@@ -58,12 +53,20 @@ export function Modal({
   footer?: ReactNode;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
+
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
-      <div className="modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(event) => event.stopPropagation()}
+      >
         <header className="modal-head">
           <h2>{title}</h2>
-          <button type="button" className="ghost" onClick={onClose} aria-label="close">
+          <button type="button" className="ghost" onClick={onClose} aria-label={t('Close')}>
             ×
           </button>
         </header>
@@ -74,11 +77,10 @@ export function Modal({
   );
 }
 
-export function Empty({ title, body }: { title: string; body: string }) {
+export function Empty({ title }: { title: string }) {
   return (
     <div className="empty">
       <strong>{title}</strong>
-      <p className="muted">{body}</p>
     </div>
   );
 }

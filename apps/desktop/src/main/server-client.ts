@@ -7,7 +7,7 @@ import type { OAuthTokenSet } from './token-vault';
 export interface ServerClientDeps {
   getSettings: () => Settings;
   getTokens: () => OAuthTokenSet | null;
-  setTokens: (tokens: OAuthTokenSet | null) => void;
+  setTokens: (tokens: OAuthTokenSet | null) => Promise<void> | void;
   /** Connection-only diagnostics; never persisted. */
   onDiagnostic?: (level: LogLevel, scope: string, message: string) => void;
 }
@@ -105,7 +105,7 @@ export class ServerClient {
           userId: poll.user.userId,
           username: poll.user.username,
         };
-        this.deps.setTokens(tokens);
+        await this.deps.setTokens(tokens);
         return this.toStatus(tokens);
       }
       if (poll.status === 'expired' || poll.status === 'unknown') {
@@ -140,7 +140,7 @@ export class ServerClient {
   }
 
   async logout(): Promise<ServerStatus> {
-    this.deps.setTokens(null);
+    await this.deps.setTokens(null);
     return this.anonymous();
   }
 
@@ -187,7 +187,7 @@ export class ServerClient {
         userId: tokens.userId,
         username: tokens.username,
       };
-      this.deps.setTokens(next);
+      await this.deps.setTokens(next);
       return next.accessToken;
     })();
 

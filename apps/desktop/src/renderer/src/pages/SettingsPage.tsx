@@ -5,6 +5,7 @@ import {
   type LanguageSetting,
   type Settings,
 } from '@osmaref/contracts';
+import harmonyLicense from '@assets/HarmonyOS_Sans/LICENSE.txt?raw';
 import { ModSelector } from '../components/ModSelector';
 import { Toast } from '../components/Toast';
 import { useModel } from '../useOsmaRef';
@@ -19,6 +20,10 @@ export function SettingsPage() {
   const [freemodOpen, setFreemodOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [licenseOpen, setLicenseOpen] = useState(false);
+  const [licenseTab, setLicenseTab] = useState<'harmony' | 'mit'>('harmony');
+  const [logsOpen, setLogsOpen] = useState(true);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(true);
 
   useEffect(() => {
     void (async () => {
@@ -72,24 +77,23 @@ export function SettingsPage() {
     }
   };
 
-  const run = async (label: string, action: () => Promise<unknown>) => {
-    setBusy(label);
-    setError(null);
-    setMessage(null);
-    try {
-      await action();
-      setMessage(t('Done'));
-      await model.refreshAll();
-    } catch (cause) {
-      setError(errorText(cause));
-    } finally {
-      setBusy(null);
-    }
-  };
-
   const changeLanguage = async (value: LanguageSetting) => {
     patch('language', value);
     await setLanguage(value);
+  };
+
+  const restoreHubDefaults = async () => {
+    setError(null);
+    setMessage(null);
+    try {
+      const next = await window.osmaRef.app.saveSettings({
+        hubBaseUrl: DEFAULT_SETTINGS.hubBaseUrl,
+      });
+      setSettings(next);
+      setMessage(t('Referee Hub settings restored'));
+    } catch (cause) {
+      setError(errorText(cause));
+    }
   };
 
   const exportRuntime = async () => {
@@ -108,8 +112,6 @@ export function SettingsPage() {
 
   if (!settings) return <div className="page">{t('loading settings…')}</div>;
 
-  const status = model.serverStatus;
-
   return (
     <div className="page">
       <header className="page-head">
@@ -126,7 +128,7 @@ export function SettingsPage() {
       ) : null}
       {error ? <Toast message={error} onClose={() => setError(null)} /> : null}
 
-      <Section title={t('Language')} subtitle={t('Follow the operating system language when set to automatic.')}>
+      <div className="card">
         <div className="form-grid">
           <Field label={t('Language')}>
             <select
@@ -139,7 +141,7 @@ export function SettingsPage() {
             </select>
           </Field>
         </div>
-      </Section>
+      </div>
 
       <Section title={t('Chat appearance')}>
         <div className="form-grid">
@@ -178,7 +180,7 @@ export function SettingsPage() {
 
       <Section
         title={t('Freemod mods')}
-        subtitle={t('Mods allowed by !mp mods freemod in Referee Hub rooms.')}
+        actions={<span className="muted small">{t('Only applies on lazer')}</span>}
       >
         <div className="settings-mod-row">
           <div className="mod-chips">
@@ -197,14 +199,13 @@ export function SettingsPage() {
             className="ghost small"
             onClick={() => setFreemodOpen(true)}
           >
-            {t('Settings')}
+            {t('Edit')}
           </button>
         </div>
       </Section>
 
         <Section
           title={t('Bancho IRC')}
-          subtitle={t('Connection details; the account and password are on the login page.')}
           actions={
             <button type="button" className="ghost small" onClick={() => void restoreIrcDefaults()}>
               {t('Restore defaults')}
@@ -217,41 +218,28 @@ export function SettingsPage() {
               <Field label={t('Host')}>
                 <input value={settings.ircHost} onChange={(event) => patch('ircHost', event.target.value)} />
               </Field>
-              <Field label={t('Port')} hint={t('6667 is plaintext; 6697 uses TLS.')}>
+              <Field label={t('Port')}>
                 <input
                   type="number"
                   value={settings.ircPort}
                   onChange={(event) => patchIrcEndpoint({ ircPort: Number(event.target.value) })}
                 />
               </Field>
-              <Field label={t('Use TLS')} hint={t('Official Bancho uses 6667 without TLS.')}>
+              <Field label={t('Use TLS')}>
                 <input
                   type="checkbox"
                   checked={settings.ircUseTls}
                   onChange={(event) => patchIrcEndpoint({ ircUseTls: event.target.checked })}
                 />
               </Field>
-              <Field label={t('Remember password')}>
-                <input
-                  type="checkbox"
-                  checked={settings.storeIrcPassword}
-                  onChange={(event) => patch('storeIrcPassword', event.target.checked)}
-                />
-              </Field>
-              <Field
-                label={t('Connect on startup')}
-                hint={t('Uses the saved IRC password; requires “Remember password”.')}
-              >
+              <Field label={t('Connect on startup')}>
                 <input
                   type="checkbox"
                   checked={settings.ircAutoConnect}
                   onChange={(event) => patch('ircAutoConnect', event.target.checked)}
                 />
               </Field>
-              <Field
-                label={t('Default channels')}
-                hint={t('Comma separated, e.g. #osu, #tournament.')}
-              >
+              <Field label={t('Default channels')}>
                 <input
                   value={settings.ircDefaultChannels.join(', ')}
                   onChange={(event) =>
@@ -280,50 +268,53 @@ export function SettingsPage() {
           </details>
         </Section>
 
-      <Section
-        title={t('Referee Hub')}
-        subtitle={t('osu! spectator server used by lazer multiplayer rooms.')}
-      >
-        <div className="form-grid">
-          <Field label={t('Base URL')} wide>
-            <input value={settings.hubBaseUrl} onChange={(event) => patch('hubBaseUrl', event.target.value)} />
-          </Field>
-        </div>
-        <div className="row-actions">
-          <button
-            type="button"
-            className="primary"
-            disabled={busy !== null || !status?.authenticated}
-            onClick={() => void run('Hub connect', () => window.osmaRef.connection.connectHub())}
-          >
-            {t('Connect Referee Hub')}
-          </button>
-          <button
-            type="button"
-            className="ghost"
-            disabled={busy !== null}
-            onClick={() => void run('Hub disconnect', () => window.osmaRef.connection.disconnect('referee_hub'))}
-          >
-            {t('Disconnect')}
-          </button>
-        </div>
+      <Section title={t('Referee Hub')}>
+        <details className="advanced-settings">
+          <summary>{t('Advanced Referee Hub settings')}</summary>
+          <div className="form-grid">
+            <Field label={t('Base URL')} wide>
+              <input
+                value={settings.hubBaseUrl}
+                onChange={(event) => patch('hubBaseUrl', event.target.value)}
+              />
+            </Field>
+          </div>
+          <div className="row-actions">
+            <button
+              type="button"
+              className="ghost small"
+              onClick={() => void restoreHubDefaults()}
+            >
+              {t('Restore defaults')}
+            </button>
+          </div>
+        </details>
       </Section>
 
       <Section
         title={t('Runtime logs')}
-        subtitle={t('Application activity such as rooms, tournament edits and errors. Kept across restarts.')}
         actions={
-          <button
-            type="button"
-            className="ghost small"
-            disabled={busy !== null || model.logs.length === 0}
-            onClick={() => void exportRuntime()}
-          >
-            {t('Export runtime logs')}
-          </button>
+          <>
+            <button
+              type="button"
+              className="ghost small"
+              onClick={() => setLogsOpen((open) => !open)}
+            >
+              {logsOpen ? t('Hide') : t('Show')}
+            </button>
+            <button
+              type="button"
+              className="ghost small"
+              disabled={busy !== null || model.logs.length === 0}
+              onClick={() => void exportRuntime()}
+            >
+              {t('Export runtime logs')}
+            </button>
+          </>
         }
       >
-        <div className="log-list">
+        {logsOpen ? (
+          <div className="log-list">
           {model.logs.length === 0 ? <p className="muted">{t('No runtime logs yet.')}</p> : null}
           {model.logs
             .slice()
@@ -343,14 +334,24 @@ export function SettingsPage() {
                 </div>
               </div>
             ))}
-        </div>
+          </div>
+        ) : null}
       </Section>
 
       <Section
         title={t('Connection diagnostics')}
-        subtitle={t('Only the current run is shown; this list is cleared when osmaRef restarts.')}
+        actions={
+          <button
+            type="button"
+            className="ghost small"
+            onClick={() => setDiagnosticsOpen((open) => !open)}
+          >
+            {diagnosticsOpen ? t('Hide') : t('Show')}
+          </button>
+        }
       >
-        <div className="log-list">
+        {diagnosticsOpen ? (
+          <div className="log-list">
           {model.diagnostics.length === 0 ? (
             <p className="muted">{t('No connection diagnostics yet.')}</p>
           ) : null}
@@ -364,24 +365,28 @@ export function SettingsPage() {
                 <span>{entry.message}</span>
               </div>
             ))}
+          </div>
+        ) : null}
+      </Section>
+
+      <Section title={t('About')}>
+        <div className="row-actions">
+          <button type="button" className="ghost small" onClick={() => setLicenseOpen(true)}>
+            {t('View licenses')}
+          </button>
         </div>
       </Section>
 
-      <Section title={t('About')} subtitle={t('Fonts and third-party licenses')}>
-        <p className="muted small">
-          {t(
-            'The interface uses HarmonyOS Sans, © 2021 Huawei Device Co., Ltd., under the HarmonyOS Sans Fonts License Agreement.',
-          )}
-        </p>
-        <p className="muted small">
-          {t(
-            'The complete font license ships with the app at resources/licenses/HarmonyOS_Sans_LICENSE.txt.',
-          )}
-        </p>
-      </Section>
-
       {freemodOpen ? (
-        <Modal title={t('Freemod mods')} onClose={() => setFreemodOpen(false)}>
+        <Modal
+          title={t('Freemod mods')}
+          onClose={() => setFreemodOpen(false)}
+          footer={
+            <button type="button" className="primary" onClick={() => setFreemodOpen(false)}>
+              {t('Done')}
+            </button>
+          }
+        >
           <ModSelector
             required={[]}
             allowed={settings.freemodMods}
@@ -389,15 +394,30 @@ export function SettingsPage() {
             allowedOnly
             onChange={(next) => patch('freemodMods', next.allowed)}
           />
-          <div className="row-actions">
+        </Modal>
+      ) : null}
+
+      {licenseOpen ? (
+        <Modal title={t('Licenses')} onClose={() => setLicenseOpen(false)}>
+          <div className="license-tabs">
             <button
               type="button"
-              className="primary"
-              onClick={() => setFreemodOpen(false)}
+              className={`ghost small${licenseTab === 'harmony' ? ' active' : ''}`}
+              onClick={() => setLicenseTab('harmony')}
             >
-              {t('Done')}
+              HarmonyOS Sans
+            </button>
+            <button
+              type="button"
+              className={`ghost small${licenseTab === 'mit' ? ' active' : ''}`}
+              onClick={() => setLicenseTab('mit')}
+            >
+              MIT
             </button>
           </div>
+          <pre className="license-text">
+            {licenseTab === 'harmony' ? harmonyLicense : MIT_LICENSE}
+          </pre>
         </Modal>
       ) : null}
     </div>
@@ -407,3 +427,26 @@ export function SettingsPage() {
 function errorText(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
+
+const MIT_LICENSE = `MIT License
+
+Copyright (c) 2026 A-pigeon
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+`;

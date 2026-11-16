@@ -96,9 +96,6 @@ export function ModSelector({
           >
             Freestyle
           </button>
-          <span className="muted small">
-            {freestyle ? t('difficulty settings unlocked') : t('left: forced · right: allowed')}
-          </span>
         </div>
       ) : null}
       <div className={`mod-selector-grid${freestyleActive ? ' disabled' : ''}`}>

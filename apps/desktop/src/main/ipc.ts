@@ -8,6 +8,7 @@ import {
   OpenRoomInputSchema,
   AddPlaylistBeatmapInputSchema,
   SelectBeatmapInputSchema,
+  StartMatchInputSchema,
   JoinRoomInputSchema,
   PlaylistModsInputSchema,
   PlayerActionInputSchema,
@@ -91,8 +92,8 @@ export function registerIpc(ctx: IpcContext): void {
     emit({ type: 'app_state', state: ctx.connections.getAppState() });
     return settings;
   });
-  handle(IPC.appIrcPassword, (password) => {
-    ctx.settings.setIrcPassword(String(password ?? ''));
+  handle(IPC.appIrcPassword, async (password) => {
+    await ctx.settings.setIrcPassword(String(password ?? ''));
   });
   handle(IPC.appIrcPasswordClear, () => {
     ctx.settings.clearIrcPassword();
@@ -186,6 +187,9 @@ export function registerIpc(ctx: IpcContext): void {
   );
   handle(IPC.sessionsSelectBeatmap, (input) =>
     ctx.connections.selectBeatmap(parse(SelectBeatmapInputSchema, input, 'beatmap selection')),
+  );
+  handle(IPC.sessionsStartMatch, (input) =>
+    ctx.connections.startMatch(parse(StartMatchInputSchema, input, 'start match')),
   );
   handle(IPC.sessionsAddPlaylistBeatmap, (input) =>
     ctx.connections.addPlaylistBeatmap(

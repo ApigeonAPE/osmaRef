@@ -5,8 +5,10 @@ import {
   PLATFORM_WIN_CONDITIONS,
   TOURNAMENT_MODES,
   WinConditionSchema,
+  composeSlotLabel,
   normalizeRoomMode,
   normalizeRoomWinCondition,
+  slotLabelSequence,
   type Platform,
   type RoomWinCondition,
   matchTeamIds,
@@ -21,6 +23,7 @@ import {
   type Team,
   type Tournament,
   type TournamentMode,
+  type ValidationIssue,
   type WinCondition,
 } from '@osmaref/contracts';
 import { useModel } from '../useOsmaRef';
@@ -42,31 +45,68 @@ const WORKSPACE_VIEWS: { id: WorkspaceView; label: string }[] = [
   { id: 'automation', label: 'Message triggers' },
 ];
 
-function padLobbyTeams(tournament: Tournament): Tournament {
-  const available = tournament.teams.map((team) => team.id);
-  return {
-    ...tournament,
-    stages: tournament.stages.map((stage) => {
-      let changed = false;
-      const matches = stage.matches.map((match) => {
-        if (match.type !== 'lobby') return match;
-        const teamIds = [...new Set(match.teamIds.filter((id) => available.includes(id)))];
-        for (const id of available) {
-          if (teamIds.length >= 3) break;
-          if (!teamIds.includes(id)) teamIds.push(id);
-        }
-        if (
-          teamIds.length === match.teamIds.length &&
-          teamIds.every((id, index) => id === match.teamIds[index])
-        ) {
-          return match;
-        }
-        changed = true;
-        return { ...match, teamIds };
-      });
-      return changed ? { ...stage, matches } : stage;
-    }),
-  };
+function isPoolPlaceholderIssue(issue: ValidationIssue): boolean {
+  const [root, stageIndex, collection, , field] = issue.path;
+  if (root !== 'stages' || typeof stageIndex !== 'number' || collection !== 'slots') return false;
+  if (field === 'label') return issue.message === 'slot label is empty';
+  if (field === 'category') return issue.message === 'slot category is empty';
+  if (field === 'beatmapId') return issue.message === 'beatmap id must be a positive number';
+  return false;
+}
+
+function slotModLabel(slot: Stage['slots'][number]): string {
+  if (slot.freestyle) return 'Freestyle';
+  const required = slot.requiredMods.join(' ');
+  const allowed = slot.allowedMods.length > 0 ? `(${slot.allowedMods.join(' ')})` : '';
+  return [required, allowed].filter(Boolean).join(' ');
+}
+
+function BeatmapIdField({
+  beatmapId,
+  invalid,
+  onChange,
+}: {
+  beatmapId: number;
+  invalid: boolean;
+  onChange: (value: string) => void;
+}) {
+  const { t } = useI18n();
+  const [localInvalid, setLocalInvalid] = useState(false);
+
+  useEffect(() => {
+    if (beatmapId <= 0) {
+      setLocalInvalid(false);
+      return;
+    }
+    let cancelled = false;
+    setLocalInvalid(false);
+    const timer = window.setTimeout(() => {
+      void window.osmaRef.osu
+        .lookupBeatmaps([beatmapId])
+        .then((result) => {
+          if (!cancelled) {
+            setLocalInvalid(!result.beatmaps.some((beatmap) => beatmap.id === beatmapId));
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setLocalInvalid(true);
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [beatmapId]);
+
+  return (
+    <IdInput
+      kind="beatmap"
+      value={beatmapId > 0 ? String(beatmapId) : ''}
+      placeholder={t('Beatmap id')}
+      aria-invalid={beatmapId <= 0 || localInvalid || invalid}
+      onChange={onChange}
+    />
+  );
 }
 
 export function TournamentsPage() {
@@ -86,6 +126,8 @@ export function TournamentsPage() {
   const [pendingIds, setPendingIds] = useState<Set<number>>(new Set());
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [memberInput, setMemberInput] = useState<Record<number, string>>({});
+  const [invalidBeatmapIds, setInvalidBeatmapIds] = useState<Set<number>>(new Set());
+  const [mappoolRequest, setMappoolRequest] = useState(0);
 
   useEffect(() => {
     if (selectedId === null) {
@@ -108,6 +150,7 @@ export function TournamentsPage() {
   }, [model.tournaments, selectedId, dirty]);
 
   const issues = useMemo(() => (draft ? validateTournamentReferences(draft) : []), [draft]);
+  const visibleIssues = issues.filter((issue) => !isPoolPlaceholderIssue(issue));
 
   const edit = (mutator: (tournament: Tournament) => void) => {
     setDraft((previous) => {
@@ -148,6 +191,7 @@ export function TournamentsPage() {
     setSelectedId(id);
     setActiveStageId(null);
     setWorkspaceView('basics');
+    setInvalidBeatmapIds(new Set());
   };
 
   const closeDetail = () => {
@@ -157,15 +201,59 @@ export function TournamentsPage() {
     setDraft(null);
     setActiveStageId(null);
     setWorkspaceView('basics');
+    setInvalidBeatmapIds(new Set());
+  };
+
+  const clearInvalidBeatmaps = () => {
+    setInvalidBeatmapIds((previous) => (previous.size > 0 ? new Set() : previous));
   };
 
   const save = async () => {
     if (!draft) return;
+    const unnamedStage = draft.stages.find((stage) => !stage.name.trim());
+    if (unnamedStage) {
+      setError(t('Stage name is required'));
+      setActiveStageId(unnamedStage.id);
+      setWorkspaceView('stages');
+      return;
+    }
+    const incompleteStage = draft.stages.find((stage) =>
+      stage.slots.some(
+        (slot) => !slot.category.trim() || !slotLabelSequence(slot.label) || slot.beatmapId <= 0,
+      ),
+    );
+    if (incompleteStage) {
+      setActiveStageId(incompleteStage.id);
+      setWorkspaceView('stages');
+      setMappoolRequest((value) => value + 1);
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
+    setInvalidBeatmapIds(new Set());
     try {
-      const saved = await model.saveTournament(padLobbyTeams(structuredClone(draft)));
+      const beatmapIds = Array.from(
+        new Set(draft.stages.flatMap((stage) => stage.slots.map((slot) => slot.beatmapId))),
+      );
+      if (beatmapIds.length > 0) {
+        const result = await window.osmaRef.osu.lookupBeatmaps(beatmapIds);
+        const found = new Set(result.beatmaps.map((beatmap) => beatmap.id));
+        const invalid = new Set(beatmapIds.filter((id) => !found.has(id)));
+        setInvalidBeatmapIds(invalid);
+        if (invalid.size > 0) {
+          const stage = draft.stages.find((entry) =>
+            entry.slots.some((slot) => invalid.has(slot.beatmapId)),
+          );
+          if (stage) {
+            setActiveStageId(stage.id);
+            setWorkspaceView('stages');
+            setMappoolRequest((value) => value + 1);
+          }
+          return;
+        }
+      }
+      const saved = await model.saveTournament(structuredClone(draft));
       setDraft(structuredClone(saved));
       setDirty(false);
       setNotice(t('saved as revision {revision}', { revision: saved.revision }));
@@ -187,6 +275,7 @@ export function TournamentsPage() {
       setDraft(structuredClone(created));
       setActiveStageId(null);
       setWorkspaceView('basics');
+      setInvalidBeatmapIds(new Set());
     } catch (cause) {
       setError(errorText(cause));
     } finally {
@@ -323,16 +412,14 @@ export function TournamentsPage() {
 
           <div className="editor-panel">
             {!draft ? (
-              <Section title={t('No tournament selected')}>
-                <p className="muted">{t('Create one to start configuring teams and stages.')}</p>
-              </Section>
+              <Section title={t('No tournament selected')} />
             ) : (
               <>
-                {issues.length > 0 ? (
+                {visibleIssues.length > 0 ? (
                   <div className="banner warn">
                     <strong>{t('Configuration issues')}</strong>
                     <ul>
-                      {issues.slice(0, 8).map((issue, index) => (
+                      {visibleIssues.slice(0, 8).map((issue, index) => (
                         <li key={index}>
                           {issue.path.join('.')}: {issue.message}
                         </li>
@@ -442,7 +529,7 @@ export function TournamentsPage() {
                           </Field>
                         </div>
                         <p className="muted small">
-                          {t('id {id} · revision {revision} · updated {date}', {
+                          {t('id {id}, rev {revision}, updated {date}', {
                             id: draft.id,
                             revision: draft.revision,
                             date: formatDateTime(draft.updatedAt),
@@ -468,6 +555,9 @@ export function TournamentsPage() {
                         edit={edit}
                         activeStage={activeStage}
                         onSelectStage={setActiveStageId}
+                        mappoolRequest={mappoolRequest}
+                        invalidBeatmapIds={invalidBeatmapIds}
+                        onBeatmapEdited={clearInvalidBeatmaps}
                       />
                     ) : null}
 
@@ -520,15 +610,7 @@ export function TournamentsPage() {
             <section className="management-content">
               <div className="management-content-head">
                 <h2>{t('Local tournaments')}</h2>
-                <span className="muted small">
-                  {t('{count} tournament(s)', { count: model.tournaments.length })}
-                </span>
               </div>
-              {model.tournaments.length === 0 ? (
-                <p className="muted small">
-                  {t('Create a tournament or import an existing configuration.')}
-                </p>
-              ) : null}
               <div className="tournament-list">
                 {model.tournaments.map((entry) => (
                   <button
@@ -539,7 +621,7 @@ export function TournamentsPage() {
                   >
                     <span className="list-name">{entry.name}</span>
                     <span className="muted small">
-                      {entry.abbreviation} · {t('{count} team(s)', { count: entry.teams.length })}
+                      {entry.abbreviation}, {t('{count} team(s)', { count: entry.teams.length })}
                     </span>
                   </button>
                 ))}
@@ -602,14 +684,9 @@ export function TournamentsPage() {
           }
         >
           <p>
-            <strong>{importPreview.tournament.name}</strong> · revision{' '}
-            {importPreview.tournament.revision} ·{' '}
+            <strong>{importPreview.tournament.name}</strong>, revision{' '}
+            {importPreview.tournament.revision},{' '}
             {importPreview.provider === 'http' ? t('from server') : t('from file')}
-          </p>
-          <p className="muted small">
-            {t(
-              'Each import creates a new tournament with its own id; existing local tournaments are never modified.',
-            )}
           </p>
           {importPreview.notes.length > 0 ? (
             <div className="banner info">
@@ -646,7 +723,7 @@ export function TournamentsPage() {
               <div>
                 <strong>{remote.name}</strong>
                 <span className="muted small">
-                  {remote.id} · {t('revision {revision} · {date}', {
+                  {remote.id}, {t('rev {revision}, {date}', {
                     revision: remote.revision,
                     date: formatDateTime(remote.updatedAt),
                   })}
@@ -838,14 +915,24 @@ function StagesEditor({
   edit,
   activeStage,
   onSelectStage,
+  mappoolRequest,
+  invalidBeatmapIds,
+  onBeatmapEdited,
 }: {
   draft: Tournament;
   edit: (mutator: (tournament: Tournament) => void) => void;
   activeStage: Stage | null;
   onSelectStage: (id: string | null) => void;
+  mappoolRequest: number;
+  invalidBeatmapIds: Set<number>;
+  onBeatmapEdited: () => void;
 }) {
   const { t } = useI18n();
   const [stageView, setStageView] = useState<StageView>('mappool');
+
+  useEffect(() => {
+    setStageView('mappool');
+  }, [mappoolRequest]);
 
   const addStage = () => {
     const id = `stage_${Date.now().toString(36)}`;
@@ -1066,7 +1153,14 @@ function StagesEditor({
             <GroupsEditor draft={draft} edit={edit} stage={activeStage} stageIndex={stageIndex} />
           ) : null}
           {resolvedStageView === 'mappool' ? (
-            <PoolEditor draft={draft} edit={edit} stage={activeStage} stageIndex={stageIndex} />
+            <PoolEditor
+              draft={draft}
+              edit={edit}
+              stage={activeStage}
+              stageIndex={stageIndex}
+              invalidBeatmapIds={invalidBeatmapIds}
+              onBeatmapEdited={onBeatmapEdited}
+            />
           ) : null}
           {resolvedStageView === 'flow' ? (
             <FlowEditor draft={draft} edit={edit} stage={activeStage} stageIndex={stageIndex} />
@@ -1115,8 +1209,7 @@ function GroupsEditor({
 
   return (
     <div className="flow-card">
-      <div className="row">
-        <strong>{t('Groups')}</strong>
+      <div className="panel-head">
         <button type="button" className="ghost small" onClick={addGroup}>
           {t('+ Group')}
         </button>
@@ -1173,11 +1266,15 @@ function PoolEditor({
   edit,
   stage,
   stageIndex,
+  invalidBeatmapIds,
+  onBeatmapEdited,
 }: {
   draft: Tournament;
   edit: (mutator: (tournament: Tournament) => void) => void;
   stage: Stage;
   stageIndex: number;
+  invalidBeatmapIds: Set<number>;
+  onBeatmapEdited: () => void;
 }) {
   const { t } = useI18n();
   const [modSlotId, setModSlotId] = useState<string | null>(null);
@@ -1186,13 +1283,11 @@ function PoolEditor({
   const addSlot = () => {
     const id = `slot_${Date.now().toString(36)}`;
     edit((next) => {
-      const target = next.stages[stageIndex]!;
-      const nextIndex = target.slots.length + 1;
-      target.slots.push({
+      next.stages[stageIndex]!.slots.push({
         id,
-        label: `NM${nextIndex}`,
-        category: 'NM',
-        beatmapId: 1,
+        label: '',
+        category: '',
+        beatmapId: 0,
         rulesetId: null,
         requiredMods: [],
         allowedMods: [],
@@ -1207,6 +1302,21 @@ function PoolEditor({
     edit((next) => mutator(next.stages[stageIndex]!.slots[index]!));
   };
 
+  const setSlotCategory = (index: number, raw: string) => {
+    const category = raw.toUpperCase();
+    patchSlot(index, (target) => {
+      target.category = category;
+      target.label = composeSlotLabel(category, slotLabelSequence(target.label));
+    });
+  };
+
+  const setSlotSequence = (index: number, raw: string) => {
+    const sequence = raw.replace(/\D/g, '');
+    patchSlot(index, (target) => {
+      target.label = composeSlotLabel(target.category, sequence);
+    });
+  };
+
   const patchSlotById = (id: string, mutator: (slot: Stage['slots'][number]) => void) => {
     edit((next) => {
       const slot = next.stages[stageIndex]!.slots.find((entry) => entry.id === id);
@@ -1216,8 +1326,7 @@ function PoolEditor({
 
   return (
     <div className="flow-card">
-      <div className="row">
-        <strong>{t('Mappool')}</strong>
+      <div className="panel-head">
         <button type="button" className="ghost small" onClick={addSlot}>
           {t('+ Slot')}
         </button>
@@ -1229,35 +1338,27 @@ function PoolEditor({
           {stage.slots.map((slot, index) => (
             <div className="slot-editor" key={slot.id}>
               <input
-                value={slot.label}
-                maxLength={12}
-                onChange={(event) => patchSlot(index, (target) => (target.label = event.target.value))}
-              />
-              <input
                 value={slot.category}
                 maxLength={8}
-                onChange={(event) => {
-                  const category = event.target.value.toUpperCase();
-                  patchSlot(index, (target) => {
-                    target.category = category;
-                    if (category === 'HD' || category === 'HR' || category === 'DT') {
-                      const alternatives = category === 'DT' ? ['DT', 'NC'] : [category];
-                      if (!alternatives.some((mod) => target.requiredMods.includes(mod))) {
-                        target.requiredMods = [...target.requiredMods, category];
-                        target.allowedMods = target.allowedMods.filter((mod) => mod !== category);
-                        target.freestyle = false;
-                      }
-                    }
-                  });
-                }}
+                placeholder={t('Type')}
+                aria-invalid={!slot.category.trim()}
+                onChange={(event) => setSlotCategory(index, event.target.value)}
               />
               <input
-                type="number"
-                min={1}
-                value={slot.beatmapId}
-                onChange={(event) =>
-                  patchSlot(index, (target) => (target.beatmapId = Math.max(1, Number(event.target.value) || 1)))
-                }
+                value={slotLabelSequence(slot.label)}
+                inputMode="numeric"
+                maxLength={4}
+                placeholder={t('Number')}
+                aria-invalid={!slotLabelSequence(slot.label)}
+                onChange={(event) => setSlotSequence(index, event.target.value)}
+              />
+              <BeatmapIdField
+                beatmapId={slot.beatmapId}
+                invalid={invalidBeatmapIds.has(slot.beatmapId)}
+                onChange={(value) => {
+                  onBeatmapEdited();
+                  patchSlot(index, (target) => (target.beatmapId = Number(value) || 0));
+                }}
               />
               <select
                 value={slot.rulesetId ?? ''}
@@ -1283,12 +1384,7 @@ function PoolEditor({
                 className="ghost small slot-mods"
                 onClick={() => setModSlotId(slot.id)}
               >
-                {slot.freestyle
-                  ? 'Freestyle'
-                  : slot.requiredMods.join(' ') ||
-                    (slot.allowedMods.length > 0
-                      ? `(${slot.allowedMods.join(' ')})`
-                      : t('Mods'))}
+                {slotModLabel(slot) || t('Mods')}
               </button>
               <button
                 type="button"
@@ -1357,8 +1453,7 @@ function FlowEditor({
 
   return (
     <div className="flow-card">
-      <div className="row">
-        <strong>{t('Pick/Ban flow')}</strong>
+      <div className="panel-head">
         <button type="button" className="ghost small" onClick={() => addPhase('ban')}>
           {t('+ Ban phase')}
         </button>
@@ -1594,7 +1689,6 @@ function ScoringEditor({
 
   return (
     <div className="flow-card">
-      <strong>{t('Scoring')}</strong>
       <div className="form-grid">
         <Field label={t('Win condition')}>
           <select
@@ -1641,7 +1735,8 @@ function MatchesEditor({
   };
 
   const addMatch = (type: 'lobby' | 'match') => {
-    if (type === 'lobby' && draft.teams.length < 3) return;
+    if (type === 'lobby' && draft.teams.length === 0) return;
+    if (type === 'match' && draft.teams.length < 2) return;
     const id = `match_${Date.now().toString(36)}`;
     edit((next) => {
       const target = next.stages[stageIndex]!;
@@ -1667,8 +1762,8 @@ function MatchesEditor({
         target.matches.push({
           ...base,
           type: 'match',
-          teamRedId: next.teams[0]?.id ?? 0,
-          teamBlueId: next.teams[1]?.id ?? 1,
+          teamRedId: next.teams[0]!.id,
+          teamBlueId: next.teams[1]!.id,
           roomMode: 'team_versus',
         });
       }
@@ -1684,23 +1779,24 @@ function MatchesEditor({
 
   return (
     <div className="flow-card">
-      <div className="row">
-        <strong>{t('Matches')}</strong>
-        <button type="button" className="ghost small" onClick={() => addMatch('match')}>
+      <div className="panel-head">
+        <button
+          type="button"
+          className="ghost small"
+          disabled={draft.teams.length < 2}
+          onClick={() => addMatch('match')}
+        >
           {t('+ Match')}
         </button>
         <button
           type="button"
           className="ghost small"
-          disabled={draft.teams.length < 3}
+          disabled={draft.teams.length === 0}
           onClick={() => addMatch('lobby')}
         >
           {t('+ Lobby')}
         </button>
       </div>
-      {stage.matches.length === 0 ? (
-        <p className="muted small">{t('Add a match to open a room from the workbench.')}</p>
-      ) : null}
       <div className="match-editor-list">
         {stage.matches.map((match, index) => {
           const open = expanded.has(match.id);
@@ -1815,7 +1911,7 @@ function MatchesEditor({
                                 patchMatch(index, (target) => {
                                   if (target.type !== 'lobby') return;
                                   if (target.teamIds.includes(team.id)) {
-                                    if (target.teamIds.length <= 3) return;
+                                    if (target.teamIds.length <= 1) return;
                                     target.teamIds = target.teamIds.filter((id) => id !== team.id);
                                   } else {
                                     target.teamIds = [...target.teamIds, team.id];
@@ -1948,8 +2044,7 @@ function AutomationEditor({
 
   return (
     <div className="flow-card">
-      <div className="row automation-head">
-        <strong>{t('Message triggers')}</strong>
+      <div className="panel-head automation-head">
         <button
           type="button"
           className="ghost small help-button"
@@ -2005,7 +2100,6 @@ function AutomationEditor({
 
       {helpOpen ? (
         <Modal title={t('Referenceable strings')} onClose={() => setHelpOpen(false)}>
-          <p className="muted small">{t('Use these strings inside an automatic message.')}</p>
           <ul className="reference-list">
             {TEMPLATE_VARIABLES.map((entry) => (
               <li key={entry.key}>

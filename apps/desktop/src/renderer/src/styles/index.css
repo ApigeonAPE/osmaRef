@@ -5,6 +5,23 @@
  * feature layers -> responsive. Later layers win ties, so keep this order.
  */
 
+@import '@radix-ui/colors/mauve-dark.css';
+@import '@radix-ui/colors/mauve-dark-alpha.css';
+@import '@radix-ui/colors/pink-dark.css';
+@import '@radix-ui/colors/pink-dark-alpha.css';
+@import '@radix-ui/colors/red-dark.css';
+@import '@radix-ui/colors/red-dark-alpha.css';
+@import '@radix-ui/colors/blue-dark.css';
+@import '@radix-ui/colors/blue-dark-alpha.css';
+@import '@radix-ui/colors/green-dark.css';
+@import '@radix-ui/colors/green-dark-alpha.css';
+@import '@radix-ui/colors/amber-dark.css';
+@import '@radix-ui/colors/amber-dark-alpha.css';
+@import '@radix-ui/colors/cyan-dark.css';
+@import '@radix-ui/colors/cyan-dark-alpha.css';
+@import '@radix-ui/colors/black-alpha.css';
+@import '@radix-ui/colors/white-alpha.css';
+
 @import './tokens.css';
 @import './base.css';
 @import './layout.css';

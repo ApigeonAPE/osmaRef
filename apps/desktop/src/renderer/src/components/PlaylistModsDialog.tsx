@@ -58,7 +58,7 @@ export function PlaylistModsDialog({
         platform={platform}
         onChange={setMods}
       />
-      {error ? <p className="error small">{error}</p> : null}
+      {error ? <div className="banner error">{error}</div> : null}
       <div className="row-actions">
         <button type="button" className="ghost" onClick={onClose}>
           {t('Cancel')}

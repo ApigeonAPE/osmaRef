@@ -6,7 +6,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
 }
 
@@ -56,7 +56,7 @@
   display: grid;
   place-items: center;
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: 50%;
   background: var(--panel-2);
 }
@@ -102,4 +102,48 @@
 
 .advanced-settings[open] > summary::before {
   transform: rotate(90deg);
+}
+
+.license-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.license-tabs button.active {
+  border-color: var(--pink-border);
+  background: var(--pink-soft);
+}
+
+.license-text {
+  max-height: 52vh;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.modal-foot .row-actions {
+  justify-content: flex-end;
+}
+
+.login-irc-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.login-api {
+  justify-content: space-between;
+}
+
+.login-api-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.login-api-actions {
+  display: flex;
+  gap: 8px;
 }

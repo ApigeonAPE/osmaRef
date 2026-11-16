@@ -23,6 +23,23 @@
   margin-bottom: 0;
 }
 
+.playlist-start {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.playlist-start select {
+  height: 30px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.playlist-start button {
+  height: 30px;
+}
+
 .playlist-head {
   position: sticky;
   top: -8px;
@@ -33,7 +50,7 @@
   gap: 8px;
   margin: -8px -10px 8px;
   padding: 8px 10px;
-  background: var(--panel-2);
+  background: var(--bg-soft);
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -49,13 +66,13 @@
 
 .playlist-add select {
   width: 108px;
-  height: 28px;
+  height: 30px;
   padding: 3px 8px;
   font-size: 12px;
 }
 
 .playlist-add button {
-  height: 28px;
+  height: 30px;
 }
 
 .mod-selector {
@@ -77,10 +94,10 @@
 }
 
 .freestyle-toggle {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  background: var(--panel-2);
   color: var(--text);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 12px 10px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -88,9 +105,9 @@
 }
 
 .freestyle-toggle.active {
-  background: #ffb347;
-  border-color: #ffb347;
-  color: #24160a;
+  background: var(--amber);
+  border-color: transparent;
+  color: var(--on-accent);
 }
 
 .mod-selector-grid {
@@ -104,10 +121,10 @@
 }
 
 .mod-selector-button {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  background: var(--panel-2);
   color: var(--text);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 8px 0;
   font-weight: 700;
   font-size: 0.8rem;
@@ -116,32 +133,31 @@
 }
 
 .mod-selector-button:hover:not(:disabled) {
-  border-color: var(--pink);
+  border-color: var(--pink-border);
   background: var(--pink-soft);
   color: var(--text);
-  transform: translateY(-1px);
 }
 
 .mod-selector-button.forced:hover:not(:disabled) {
-  border-color: #ff7b7b;
-  background: #ef6a6a;
+  border-color: transparent;
+  background: var(--red-hover);
 }
 
 .mod-selector-button.allowed:hover:not(:disabled) {
-  border-color: #63d99c;
-  background: #4bcc8a;
+  border-color: transparent;
+  background: var(--green-hover);
 }
 
 .mod-selector-button.forced {
-  background: #e45757;
-  border-color: #e45757;
-  color: #fff;
+  background: var(--red);
+  border-color: transparent;
+  color: var(--on-solid);
 }
 
 .mod-selector-button.allowed {
-  background: #3fbf7f;
-  border-color: #3fbf7f;
-  color: #061b10;
+  background: var(--green);
+  border-color: transparent;
+  color: var(--on-accent);
 }
 
 .mod-selector-button:disabled {
@@ -153,9 +169,9 @@
   flex-direction: column;
   gap: 10px;
   padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--panel-2);
 }
 
 .mod-picker.disabled {
@@ -181,10 +197,10 @@
 }
 
 .mod-pill {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  background: var(--panel-2);
   color: var(--text);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 7px 0;
   font-weight: 600;
   font-size: 0.8rem;
@@ -193,14 +209,14 @@
 }
 
 .mod-pill:hover:not(:disabled) {
-  border-color: var(--pink);
-  transform: translateY(-1px);
+  border-color: var(--pink-border);
+  background: var(--pink-soft);
 }
 
 .mod-pill.selected {
   background: var(--pink);
-  border-color: var(--pink);
-  color: #fff;
+  border-color: transparent;
+  color: var(--on-accent);
 }
 
 .mod-pill:disabled {
@@ -213,7 +229,7 @@
   gap: 10px;
   align-items: center;
   padding: 7px 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid var(--line-soft);
   font-size: 0.85rem;
 }
 
@@ -258,7 +274,7 @@
   gap: 4px;
   justify-content: flex-end;
   max-width: 280px;
-  color: #9fd0b0;
+  color: var(--green-text);
 }
 
 .playlist-actions {
@@ -271,6 +287,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.beatmap-state {
+  margin-left: 6px;
+  color: var(--amber-text);
+  font-size: 0.7rem;
+}
+
+.beatmap-state.missing {
+  color: var(--muted);
 }
 
 .beatmap-meta {
@@ -287,9 +313,9 @@
   min-width: 34px;
   margin-right: 6px;
   padding: 1px 5px;
-  border-radius: 5px;
-  background: rgba(255, 102, 170, 0.16);
-  color: var(--pink);
+  border-radius: var(--radius-xs);
+  background: var(--pink-soft);
+  color: var(--pink-text);
   font-size: 0.74rem;
   font-weight: 600;
 }
@@ -307,9 +333,9 @@
   gap: 10px;
   align-items: center;
   padding: 7px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
   overflow: hidden;
 }
 
@@ -318,23 +344,25 @@
 }
 
 .pool-row.actionable:hover {
-  background: rgba(255, 102, 170, 0.06);
+  background: var(--pink-soft);
 }
 
 .pool-row.action-pick, .pool-row.action-ban, .pool-row.action-protect {
   border-width: 2px;
+  padding: 6px 9px;
 }
 
 .pool-row.team-one {
-  border-color: rgba(255, 93, 108, 0.78);
+  border-color: var(--red-8);
 }
 
 .pool-row.team-two {
-  border-color: rgba(61, 155, 255, 0.78);
+  border-color: var(--blue-8);
 }
 
 .pool-row.current {
-  box-shadow: inset 3px 0 0 var(--pink);
+  background: var(--pink-soft);
+  box-shadow: inset 0 0 0 1px var(--pink-border);
 }
 
 .pool-overlay {
@@ -343,7 +371,7 @@
   display: grid;
   place-items: center;
   pointer-events: none;
-  background: rgba(20, 15, 18, 0.42);
+  background: var(--black-a5);
 }
 
 .pool-overlay-icon {
@@ -354,11 +382,11 @@
 }
 
 .pool-row.team-one .pool-overlay {
-  color: #ff5d6c;
+  color: var(--red-9);
 }
 
 .pool-row.team-two .pool-overlay {
-  color: #3d9bff;
+  color: var(--blue-9);
 }
 
 .pool-row.action-ban .pool-overlay-icon {
@@ -378,22 +406,21 @@
   font-size: 0.68rem;
   line-height: 1.5;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--panel-3);
 }
 
 .mod-chip.required {
-  color: #ff8484;
-  background: rgba(255, 96, 96, 0.12);
+  color: var(--red-text);
+  background: var(--red-soft);
 }
 
 .mod-chip.allowed {
-  color: #79d6a2;
-  background: rgba(99, 214, 155, 0.12);
+  color: var(--green-text);
+  background: var(--green-soft);
 }
 
 .playlist-row.active {
-  background: rgba(255, 102, 170, 0.08);
-  box-shadow: inset 3px 0 0 var(--pink);
+  background: var(--pink-soft);
 }
 
 .playlist-row.played {

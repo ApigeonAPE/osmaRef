@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   TournamentSchema,
+  composeSlotLabel,
   createEmptyTournament,
   findSlotByLabel,
   normalizeSlotLabel,
   parseTournament,
+  slotLabelSequence,
   validateTournamentReferences,
   type MappoolSlot,
 } from '@osmaref/contracts';
@@ -84,12 +86,12 @@ describe('tournament schema (stages v4)', () => {
     expect(TournamentSchema.safeParse(tournament).success).toBe(false);
   });
 
-  it('rejects a category that does not match its required mods', () => {
+  it('accepts a category without matching required mods', () => {
     const tournament = createEmptyTournament('Test Cup');
     tournament.stages[0]!.slots = [
       slot({ id: 's1', label: 'HD1', category: 'HD', beatmapId: 1 }),
     ];
-    expect(TournamentSchema.safeParse(tournament).success).toBe(false);
+    expect(TournamentSchema.safeParse(tournament).success).toBe(true);
   });
 
   it('accepts arbitrary category codes such as mania RC/LN/SV', () => {
@@ -133,16 +135,36 @@ describe('tournament schema (stages v4)', () => {
     expect(TournamentSchema.safeParse(tournament).success).toBe(false);
   });
 
-  it('requires at least three teams in a lobby fixture', () => {
+  it('requires at least one team in a lobby fixture', () => {
     const tournament = createEmptyTournament('Test Cup');
     tournament.stages[0]!.matches.push({
+      ...twoTeamMatch(),
+      type: 'lobby',
+      teamIds: [],
+      roomMode: 'head_to_head',
+      winCondition: 'score',
+    });
+    expect(TournamentSchema.safeParse(tournament).success).toBe(false);
+  });
+
+  it('accepts a lobby fixture with one or two teams', () => {
+    const tournament = createEmptyTournament('Test Cup');
+    tournament.stages[0]!.matches.push({
+      ...twoTeamMatch(),
+      type: 'lobby',
+      teamIds: [0],
+      roomMode: 'head_to_head',
+      winCondition: 'score',
+    });
+    expect(TournamentSchema.safeParse(tournament).success).toBe(true);
+    tournament.stages[0]!.matches[0] = {
       ...twoTeamMatch(),
       type: 'lobby',
       teamIds: [0, 1],
       roomMode: 'head_to_head',
       winCondition: 'score',
-    });
-    expect(TournamentSchema.safeParse(tournament).success).toBe(false);
+    };
+    expect(TournamentSchema.safeParse(tournament).success).toBe(true);
   });
 
   it('accepts a lobby fixture with three or more teams', () => {
@@ -415,5 +437,40 @@ describe('mappool slot labels', () => {
     expect(withLabel('123')).toBe(false);
     expect(withLabel('NM 1')).toBe(false);
     expect(withLabel('A'.repeat(13))).toBe(false);
+  });
+
+  it('splits and composes sequence numbers', () => {
+    expect(slotLabelSequence('HB2')).toBe('2');
+    expect(slotLabelSequence('4K10')).toBe('10');
+    expect(slotLabelSequence('TB')).toBe('');
+    expect(composeSlotLabel('HB', '2')).toBe('HB2');
+    expect(composeSlotLabel('4K', '10')).toBe('4K10');
+    expect(composeSlotLabel('TB', '3')).toBe('TB3');
+  });
+
+  it('accepts tiebreaker slots with a sequence number', () => {
+    const tournament = createEmptyTournament('Label Cup');
+    tournament.stages[0]!.slots = [
+      slot({ id: 's1', label: 'TB3', category: 'TB', beatmapId: 1 }),
+    ];
+    const messages = validateTournamentReferences(tournament)
+      .map((issue) => issue.message)
+      .join('\n');
+    expect(messages).not.toMatch(/tiebreaker slots/);
+    expect(TournamentSchema.safeParse(tournament).success).toBe(true);
+  });
+
+  it('reports a blank slot created by the editor', () => {
+    const tournament = createEmptyTournament('Test Cup');
+    tournament.stages[0]!.slots = [
+      slot({ id: 's1', label: '', category: '', beatmapId: 0 }),
+    ];
+    const messages = validateTournamentReferences(tournament)
+      .map((issue) => issue.message)
+      .join('\n');
+    expect(messages).toMatch(/slot label is empty/);
+    expect(messages).toMatch(/slot category is empty/);
+    expect(messages).toMatch(/beatmap id must be a positive number/);
+    expect(TournamentSchema.safeParse(tournament).success).toBe(false);
   });
 });

@@ -308,7 +308,7 @@ const MatchBaseSchema = z.object({
 export const MatchSchema = z.discriminatedUnion('type', [
   MatchBaseSchema.extend({
     type: z.literal('lobby'),
-    teamIds: z.array(TeamIdSchema).min(3),
+    teamIds: z.array(TeamIdSchema).min(1),
     roomMode: MatchTypeSchema.default('head_to_head'),
   }),
   MatchBaseSchema.extend({
@@ -512,53 +512,39 @@ export function validateTournamentReferences(
     stage.slots.forEach((slot, slotIndex) => {
       const slotPath = [...stagePath, 'slots', slotIndex];
       const label = normalizeSlotLabel(slot.label);
-      if (labels.has(label)) {
-        issues.push({
-          path: [...slotPath, 'label'],
-          message: `duplicate slot label "${slot.label}" in stage "${stage.name}"`,
-        });
+      if (label) {
+        if (labels.has(label)) {
+          issues.push({
+            path: [...slotPath, 'label'],
+            message: `duplicate slot label "${slot.label}" in stage "${stage.name}"`,
+          });
+        }
+        labels.add(label);
+      } else {
+        issues.push({ path: [...slotPath, 'label'], message: 'slot label is empty' });
       }
-      labels.add(label);
-      if (beatmaps.has(slot.beatmapId)) {
+      if (!slot.category.trim()) {
+        issues.push({ path: [...slotPath, 'category'], message: 'slot category is empty' });
+      }
+      if (Number.isInteger(slot.beatmapId) && slot.beatmapId > 0) {
+        if (beatmaps.has(slot.beatmapId)) {
+          issues.push({
+            path: [...slotPath, 'beatmapId'],
+            message: `beatmap ${slot.beatmapId} appears twice in stage "${stage.name}"`,
+          });
+        }
+        beatmaps.add(slot.beatmapId);
+      } else {
         issues.push({
           path: [...slotPath, 'beatmapId'],
-          message: `beatmap ${slot.beatmapId} appears twice in stage "${stage.name}"`,
+          message: 'beatmap id must be a positive number',
         });
       }
-      beatmaps.add(slot.beatmapId);
       if (slot.freestyle && slot.allowedMods.length > 0) {
         issues.push({
           path: [...slotPath, 'allowedMods'],
           message: 'freestyle slots cannot also declare allowed mods',
         });
-      }
-      if (slot.category === 'TB' && label !== 'TB') {
-        issues.push({
-          path: [...slotPath, 'label'],
-          message: 'tiebreaker slots must use the TB label',
-        });
-      }
-      const required = new Set(slot.requiredMods.map((mod) => mod.toUpperCase()));
-      const expectedMods: Record<string, string[]> = {
-        HD: ['HD'],
-        HR: ['HR'],
-        DT: ['DT', 'NC'],
-      };
-      const alternatives = expectedMods[slot.category];
-      if (alternatives && !alternatives.some((mod) => required.has(mod))) {
-        issues.push({
-          path: [...slotPath, 'requiredMods'],
-          message: `category ${slot.category} requires one of ${alternatives.join('/')} in required mods`,
-        });
-      }
-      if (slot.category === 'NM' && required.size > 0) {
-        issues.push({
-          path: [...slotPath, 'requiredMods'],
-          message: 'NM slots cannot declare required mods',
-        });
-      }
-      if (slot.category === 'FM' && !slot.freestyle && slot.allowedMods.length === 0) {
-        issues.push({ path: slotPath, message: 'FM slots must be freestyle or declare allowed mods' });
       }
     });
 
@@ -660,6 +646,16 @@ export function validateTournamentReferences(
 }
 export function normalizeSlotLabel(label: string): string {
   return label.trim().toUpperCase();
+}
+
+/** Trailing digits of a slot label, i.e. the sequence in `HB2`; `TB` yields an empty string. */
+export function slotLabelSequence(label: string): string {
+  return label.match(/(\d+)$/)?.[1] ?? '';
+}
+
+/** Build a slot label from its category and sequence number. */
+export function composeSlotLabel(category: string, sequence: string): string {
+  return `${category}${sequence}`;
 }
 
 export const SLOT_LABEL_PATTERN = /^(?=.*[A-Za-z])[A-Za-z0-9]{1,12}$/;

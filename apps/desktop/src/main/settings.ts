@@ -6,9 +6,9 @@ import { DEFAULT_SETTINGS, normalizeIrcEndpoint, type Settings } from '@osmaref/
 /**
  * Settings and credentials.
  *
- * The IRC password is memory-only by default. When the user opts in, it is
- * sealed with Electron's OS-backed `safeStorage`; if the OS facility is not
- * available the password is never written to disk in plain text.
+ * The IRC password is sealed with Electron's OS-backed `safeStorage`. If the
+ * OS facility is not available it stays in memory for this session only; it is
+ * never written to disk in plain text.
  */
 export class SettingsStore {
   private readonly settingsFile: string;
@@ -23,7 +23,11 @@ export class SettingsStore {
     this.credentialsFile = join(dataDir, 'irc-credential.bin');
     this.settings = this.loadSettings();
     this.repairIrcEndpoint();
-    this.loadPassword();
+  }
+
+  /** Loads the sealed IRC password once the app is ready. */
+  async init(): Promise<void> {
+    await this.loadPassword();
   }
 
   get(): Settings {
@@ -50,24 +54,15 @@ export class SettingsStore {
     next.ircUseTls = endpoint.useTls;
     this.settings = next;
     this.persist();
-    if (!next.storeIrcPassword) {
-      this.removeStoredPassword();
-    }
     return this.get();
   }
 
-  setIrcPassword(password: string): void {
+  async setIrcPassword(password: string): Promise<void> {
     this.ircPassword = password.length > 0 ? password : null;
     this.lastWarning = null;
-    if (!this.settings.storeIrcPassword) {
-      this.removeStoredPassword();
-      return;
-    }
-    if (!safeStorage.isEncryptionAvailable()) {
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) {
       this.lastWarning =
         'The operating system credential store is unavailable, so the IRC password stays in memory for this session only.';
-      this.settings.storeIrcPassword = false;
-      this.persist();
       this.removeStoredPassword();
       return;
     }
@@ -75,7 +70,7 @@ export class SettingsStore {
       this.removeStoredPassword();
       return;
     }
-    const encrypted = safeStorage.encryptString(this.ircPassword);
+    const encrypted = await safeStorage.encryptStringAsync(this.ircPassword);
     writeFileSync(this.credentialsFile, encrypted);
   }
 
@@ -137,23 +132,24 @@ export class SettingsStore {
     }
   }
 
-  private loadPassword(): void {
-    if (!this.settings.storeIrcPassword) return;
+  private async loadPassword(): Promise<void> {
     if (!existsSync(this.credentialsFile)) return;
-    if (!safeStorage.isEncryptionAvailable()) {
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) {
       this.lastWarning =
         'Stored IRC credentials could not be decrypted on this system; enter the password again.';
-      this.settings.storeIrcPassword = false;
-      this.persist();
       return;
     }
     try {
-      this.ircPassword = safeStorage.decryptString(readFileSync(this.credentialsFile));
+      let decrypted = await safeStorage.decryptStringAsync(readFileSync(this.credentialsFile));
+      if (decrypted.shouldReEncrypt) {
+        const reencrypted = await safeStorage.encryptStringAsync(decrypted.result);
+        writeFileSync(this.credentialsFile, reencrypted);
+        decrypted = await safeStorage.decryptStringAsync(reencrypted);
+      }
+      this.ircPassword = decrypted.result;
     } catch {
       this.lastWarning = 'Stored IRC credentials were unreadable and have been discarded.';
       this.removeStoredPassword();
-      this.settings.storeIrcPassword = false;
-      this.persist();
     }
   }
 

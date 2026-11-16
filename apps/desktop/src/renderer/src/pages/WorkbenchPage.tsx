@@ -8,6 +8,7 @@ import {
   type MappoolSlot,
   type PlaylistEntry,
   type BeatmapInfo,
+  type BeatmapLookupFailure,
   type RoomPlayer,
 } from '@osmaref/contracts';
 import { useModel } from '../useOsmaRef';
@@ -39,6 +40,7 @@ export function WorkbenchPage({
   );
 
   const [busy, setBusy] = useState<string | null>(null);
+  const busyRef = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resultOpen, setResultOpen] = useState(false);
   const [firstTeamsOpen, setFirstTeamsOpen] = useState(false);
@@ -54,6 +56,12 @@ export function WorkbenchPage({
   const [joinOpen, setJoinOpen] = useState(false);
   const [modsOpen, setModsOpen] = useState(false);
   const [modsEntry, setModsEntry] = useState<PlaylistEntry | null>(null);
+  const [startCountdown, setStartCountdown] = useState('10');
+  const [startConfirming, setStartConfirming] = useState(false);
+  const startConfirmRef = useRef<{ firstAt: number; timeout: ReturnType<typeof setTimeout> } | null>(
+    null,
+  );
+  const [resizing, setResizing] = useState<string | null>(null);
 
   const channelSessions = useMemo(
     () => model.sessions.filter((entry) => entry.transport === channel),
@@ -83,6 +91,19 @@ export function WorkbenchPage({
     setActiveId(preferred?.id ?? null);
   }, [channelSessions, model.state?.activeSessionId, activeId]);
 
+  useEffect(() => {
+    return () => {
+      if (startConfirmRef.current) clearTimeout(startConfirmRef.current.timeout);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!startConfirmRef.current) return;
+    clearTimeout(startConfirmRef.current.timeout);
+    startConfirmRef.current = null;
+    setStartConfirming(false);
+  }, [activeId]);
+
   const session = model.sessions.find((entry) => entry.id === activeId) ?? null;
   const tournament = session
     ? session.configSnapshot ?? model.tournaments.find((entry) => entry.id === session.tournamentId) ?? null
@@ -97,6 +118,8 @@ export function WorkbenchPage({
   const lastAction = session?.actions.at(-1) ?? null;
   const room = session ? model.snapshots[session.id] ?? null : null;
   const [beatmaps, setBeatmaps] = useState<Record<number, BeatmapInfo>>({});
+  const [beatmapFailures, setBeatmapFailures] = useState<Record<number, BeatmapLookupFailure>>({});
+  const [lookupAttempt, setLookupAttempt] = useState(0);
   const beatmapCache = useRef<Record<number, BeatmapInfo>>({});
   const playlist = room ? [...room.playlist].sort((a, b) => a.order - b.order) : [];
   const visiblePlaylist = playlist.filter((entry) => !entry.wasPlayed);
@@ -116,6 +139,9 @@ export function WorkbenchPage({
     return [...ids].filter((id) => Number.isSafeInteger(id) && id > 0).sort((a, b) => a - b);
   }, [pool, playlist, room?.currentBeatmapId, session?.currentBeatmapId]);
   const beatmapKey = beatmapIds.join(',');
+  const failedCount = Object.values(beatmapFailures).filter(
+    (failure) => !failure.notFound,
+  ).length;
 
   const playlistViews = useMemo(() => {
     if (!session || !room) return [];
@@ -186,20 +212,49 @@ export function WorkbenchPage({
 
   useEffect(() => {
     if (!beatmapKey) return;
-    const missing = beatmapIds.filter((id) => !beatmapCache.current[id]);
+    const missing = beatmapIds.filter(
+      (id) => !beatmapCache.current[id] && beatmapFailures[id] === undefined,
+    );
     if (missing.length === 0) return;
     let cancelled = false;
     void window.osmaRef.osu
       .lookupBeatmaps(missing)
-      .then((list) => {
-        for (const info of list) beatmapCache.current[info.id] = info;
-        if (!cancelled) setBeatmaps({ ...beatmapCache.current });
+      .then((result) => {
+        for (const info of result.beatmaps) beatmapCache.current[info.id] = info;
+        if (cancelled) return;
+        setBeatmaps({ ...beatmapCache.current });
+        if (result.failed.length > 0) {
+          setBeatmapFailures((previous) => {
+            const next = { ...previous };
+            for (const failure of result.failed) next[failure.id] = failure;
+            return next;
+          });
+        }
       })
-      .catch(() => undefined);
+      .catch((cause) => {
+        if (cancelled) return;
+        const message = cause instanceof Error ? cause.message : String(cause);
+        setBeatmapFailures((previous) => {
+          const next = { ...previous };
+          for (const id of missing) next[id] = { id, message, notFound: false };
+          return next;
+        });
+      });
     return () => {
       cancelled = true;
     };
-  }, [beatmapKey]);
+  }, [beatmapKey, lookupAttempt]);
+
+  const retryBeatmapLookup = () => {
+    setBeatmapFailures((previous) => {
+      const next: Record<number, BeatmapLookupFailure> = {};
+      for (const [id, failure] of Object.entries(previous)) {
+        if (failure.notFound) next[Number(id)] = failure;
+      }
+      return next;
+    });
+    setLookupAttempt((value) => value + 1);
+  };
 
   const teamName = (id: string | null | undefined): string =>
     (tournament?.teams.find((team) => String(team.id) === id)?.name ?? id ?? '—') as string;
@@ -230,6 +285,7 @@ export function WorkbenchPage({
   };
 
   const run = async (label: string, action: () => Promise<unknown>) => {
+    busyRef.current = label;
     setBusy(label);
     setError(null);
     try {
@@ -237,6 +293,7 @@ export function WorkbenchPage({
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
+      busyRef.current = null;
       setBusy(null);
     }
   };
@@ -302,6 +359,44 @@ export function WorkbenchPage({
     });
   };
 
+  const startMatch = async () => {
+    if (!session) return;
+    const countdown = startCountdown === 'none' ? null : Number(startCountdown);
+    await run('start', () =>
+      window.osmaRef.sessions.startMatch({ sessionId: session.id, countdown }),
+    );
+  };
+
+  const resetStartConfirm = () => {
+    if (startConfirmRef.current) {
+      clearTimeout(startConfirmRef.current.timeout);
+      startConfirmRef.current = null;
+    }
+    setStartConfirming(false);
+  };
+
+  const handleStartClick = () => {
+    const now = Date.now();
+    const pending = startConfirmRef.current;
+    if (!pending) {
+      const timeout = setTimeout(() => {
+        startConfirmRef.current = null;
+        setStartConfirming(false);
+      }, 5000);
+      startConfirmRef.current = { firstAt: now, timeout };
+      setStartConfirming(true);
+      return;
+    }
+    const elapsed = now - pending.firstAt;
+    if (elapsed < 500) return;
+    if (elapsed >= 5000) {
+      resetStartConfirm();
+      return;
+    }
+    resetStartConfirm();
+    void startMatch();
+  };
+
   const removePlaylistBeatmap = async (entry: PlaylistEntry) => {
     if (!session) return;
     await run('playlist-remove', () =>
@@ -315,7 +410,7 @@ export function WorkbenchPage({
   const isLobby = session?.matchKind === 'lobby';
 
   const applySlot = (slot: MappoolSlot) => {
-    if (!session) return;
+    if (!session || busyRef.current !== null) return;
     if (isLobby) {
       void run('select', () =>
         window.osmaRef.sessions.selectBeatmap({
@@ -396,9 +491,9 @@ export function WorkbenchPage({
     const stop = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', stop);
-      document.body.classList.remove('resizing-columns');
+      setResizing(null);
     };
-    document.body.classList.add('resizing-columns');
+    setResizing(side === 'left' ? 'column-left' : 'column-right');
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', stop);
   };
@@ -417,9 +512,9 @@ export function WorkbenchPage({
     const stop = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', stop);
-      document.body.classList.remove('resizing-rows');
+      setResizing(null);
     };
-    document.body.classList.add('resizing-rows');
+    setResizing('row-center');
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', stop);
   };
@@ -438,9 +533,9 @@ export function WorkbenchPage({
     const stop = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', stop);
-      document.body.classList.remove('resizing-rows');
+      setResizing(null);
     };
-    document.body.classList.add('resizing-rows');
+    setResizing('row-left');
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', stop);
   };
@@ -459,9 +554,9 @@ export function WorkbenchPage({
     const stop = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', stop);
-      document.body.classList.remove('resizing-rows');
+      setResizing(null);
     };
-    document.body.classList.add('resizing-rows');
+    setResizing('row-right');
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', stop);
   };
@@ -625,7 +720,7 @@ export function WorkbenchPage({
                 </Section>
               </div>
               <div
-                className="row-resizer"
+                className={`row-resizer${resizing === 'row-left' ? ' active' : ''}`}
                 role="separator"
                 aria-orientation="horizontal"
                 onPointerDown={startLeftRowResize}
@@ -733,7 +828,7 @@ export function WorkbenchPage({
           </aside>
 
           <div
-            className="column-resizer"
+            className={`column-resizer${resizing === 'column-left' ? ' active' : ''}`}
             role="separator"
             aria-orientation="vertical"
             onPointerDown={(event) => startColumnResize('left', event)}
@@ -800,7 +895,7 @@ export function WorkbenchPage({
               </div>
 
               <div
-                className="row-resizer"
+                className={`row-resizer${resizing === 'row-center' ? ' active' : ''}`}
                 role="separator"
                 aria-orientation="horizontal"
                 onPointerDown={startRowResize}
@@ -810,8 +905,30 @@ export function WorkbenchPage({
                 <div className="playlist-scroll">
               {room ? (
                 <div className="room-playlist">
-                  {session.transport === 'referee_hub' && session.status === 'active' ? (
+                  {session.status === 'active' ? (
                     <div className="playlist-head">
+                      <div className="playlist-start">
+                        <select
+                          value={startCountdown}
+                          onChange={(event) => setStartCountdown(event.target.value)}
+                          aria-label={t('Countdown')}
+                        >
+                          <option value="none">{t('No countdown')}</option>
+                          {[5, 10, 15, 30, 60].map((seconds) => (
+                            <option key={seconds} value={seconds}>
+                              {seconds}s
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className={`primary small${startConfirming ? ' confirm-start' : ''}`}
+                          disabled={busy !== null || !session.roomId}
+                          onClick={handleStartClick}
+                        >
+                          {startConfirming ? t('Confirm?') : t('Start')}
+                        </button>
+                      </div>
                       <div className="playlist-add">
                         <select
                           value={playlistRulesetId}
@@ -843,13 +960,14 @@ export function WorkbenchPage({
                           disabled={busy !== null || !playlistBeatmapId}
                           onClick={() => void addPlaylistBeatmap()}
                         >
-                          {t('Add')}
+                          {session.transport === 'referee_hub' ? t('Add') : t('Change')}
                         </button>
                       </div>
                     </div>
                   ) : null}
                   {playlistViews.map((entry) => {
                     const info = beatmaps[entry.beatmapId];
+                    const failure = beatmapFailures[entry.beatmapId];
                     const slotLabel =
                       pool?.slots.find((slot) => slot.beatmapId === entry.beatmapId)?.label ?? '';
                     return (
@@ -883,12 +1001,20 @@ export function WorkbenchPage({
                             {info
                               ? `${info.title} - ${info.artist}`
                               : `Beatmap #${entry.beatmapId}`}
+                            {!info && failure ? (
+                              <span
+                                className={`beatmap-state${failure.notFound ? ' missing' : ' failed'}`}
+                                title={failure.message}
+                              >
+                                {failure.notFound ? t('not found') : t('lookup failed')}
+                              </span>
+                            ) : null}
                           </div>
                           <div className="beatmap-meta">
                             {entry.mode} #{entry.beatmapId}
                             {info?.difficultyName ? ` [${info.difficultyName}]` : ''} -{' '}
                             {info?.mapper || '—'}
-                            {entry.played ? ` · ${t('played')}` : entry.active ? ` · ${t('next')}` : ''}
+                            {entry.played ? ` (${t('played')})` : entry.active ? ` (${t('next')})` : ''}
                           </div>
                         </div>
                         <div className="playlist-mods">
@@ -940,7 +1066,7 @@ export function WorkbenchPage({
           </section>
 
           <div
-            className="column-resizer"
+            className={`column-resizer${resizing === 'column-right' ? ' active' : ''}`}
             role="separator"
             aria-orientation="vertical"
             onPointerDown={(event) => startColumnResize('right', event)}
@@ -1026,17 +1152,28 @@ export function WorkbenchPage({
               }}
             >
               <div className="wb-panel mappool-panel">
-                <Section title={t('Mappool')}>
-                  {isQuickRoom ? (
-                    <p className="muted small">{t('This match has no mappool.')}</p>
-                  ) : (
-                    <>
+                <Section
+                  title={t('Mappool')}
+                  actions={
+                    <div className="pool-head-actions">
                       <input
                         className="pool-search"
                         value={poolSearch}
                         onChange={(event) => setPoolSearch(event.target.value)}
                         placeholder={t('Search mappool')}
                       />
+                      {failedCount > 0 ? (
+                        <button type="button" className="ghost small" onClick={retryBeatmapLookup}>
+                          {t('Retry')}
+                        </button>
+                      ) : null}
+                    </div>
+                  }
+                >
+                  {isQuickRoom ? (
+                    <p className="muted small">{t('This match has no mappool.')}</p>
+                  ) : (
+                    <>
                       <div className="panel-scroll">
                 {!pool ? (
                   <p className="muted small">{t('This match has no mappool.')}</p>
@@ -1055,6 +1192,7 @@ export function WorkbenchPage({
                       const blockedByProtection =
                         (pending?.kind === 'ban' || pending?.kind === 'protect') && protectedSlot;
                       const actionable =
+                        busy === null &&
                         session.status === 'active' &&
                         (isLobby ||
                           (!used &&
@@ -1068,6 +1206,7 @@ export function WorkbenchPage({
                         normalizeSlotLabel(lastAction.slotLabel) ===
                           normalizeSlotLabel(slot.label);
                       const info = beatmaps[slot.beatmapId];
+                      const failure = beatmapFailures[slot.beatmapId];
                       const action: { kind: string; teamId: string | null } | null = used
                         ? used
                         : protectedSlot
@@ -1105,8 +1244,8 @@ export function WorkbenchPage({
                             );
                           }}
                           title={`beatmap ${slot.beatmapId}${
-                            action ? ` · ${action.kind} by ${teamName(action.teamId)}` : ''
-                          }${isLast ? ` · ${t('right click to undo')}` : ''}`}
+                            action ? `, ${action.kind} by ${teamName(action.teamId)}` : ''
+                          }${failure ? `, ${failure.message}` : ''}`}
                         >
                           <span className="playlist-slot">
                             <span className="slot-tag">{slot.label}</span>
@@ -1116,6 +1255,13 @@ export function WorkbenchPage({
                               {info
                                 ? `${info.title} - ${info.artist}`
                                 : `Beatmap #${slot.beatmapId}`}
+                              {!info && failure ? (
+                                <span
+                                  className={`beatmap-state${failure.notFound ? ' missing' : ' failed'}`}
+                                >
+                                  {failure.notFound ? t('not found') : t('lookup failed')}
+                                </span>
+                              ) : null}
                             </div>
                             <div className="beatmap-meta">
                               {info ? modeLabel(info.mode, slot.rulesetId ?? 0) : rulesetName(slot.rulesetId ?? 0)} #
@@ -1161,7 +1307,7 @@ export function WorkbenchPage({
               </div>
 
               <div
-                className="row-resizer"
+                className={`row-resizer${resizing === 'row-right' ? ' active' : ''}`}
                 role="separator"
                 aria-orientation="horizontal"
                 onPointerDown={startRightRowResize}

@@ -84,7 +84,7 @@ export function JoinRoomDialog({
           </>
         )}
       </div>
-      {error ? <p className="error small">{error}</p> : null}
+      {error ? <div className="banner error">{error}</div> : null}
       <div className="row-actions join-actions">
         <button type="button" className="primary" disabled={busy || !canJoin} onClick={() => void submit()}>
           {busy ? t('joining…') : t('Join')}

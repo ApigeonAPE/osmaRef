@@ -12,6 +12,8 @@ import {
   type AppState,
   type AutomationTrigger,
   type BeatmapInfo,
+  type BeatmapLookupFailure,
+  type BeatmapLookupResult,
   type BeatmapResult,
   type ChatMessage,
   type ConnectionKind,
@@ -22,6 +24,7 @@ import {
   type MatchFlow,
   type MatchSession,
   type MpCommandResult,
+  type PlayerScore,
   type RoomSnapshot,
   type SessionEvent,
   type SessionEventCategory,
@@ -33,6 +36,7 @@ import {
 } from '@osmaref/contracts';
 import {
   adjustWins,
+  amendResult,
   applyAction as applySessionAction,
   buildQuickTournament,
   buildTemplateContext,
@@ -65,9 +69,15 @@ import {
   resolvePlaylistRuleset,
   WebChatClient,
   executeHubActions,
+  hasCompleteTeamScores,
+  mergeScores,
+  mplinkGames,
+  scoresDiffer,
+  selectLatestGame,
   type ChatEnvelope,
   type ChatTransport,
   type MatchTransport,
+  type MplinkGame,
   type MpContext,
   type TransportEvent,
 } from '@osmaref/adapters';
@@ -129,7 +139,10 @@ export class ConnectionManager {
   private webChatPollError: string | null = null;
   private readonly webChatSeen = new Set<string>();
   /** Debounces local chat echoes against the transport's own echo of the same line. */
-  private readonly recentSelfChat = new Map<string, number>();
+  private readonly recentSelfChat = new Map<
+    string,
+    { local: number[]; remote: number[] }
+  >();
   /** Users resolved from osu! by username while handling !mp commands. */
   private readonly resolvedUsers = new Map<number, { userId: number; username: string }>();
   private readonly resolvedNames = new Map<string, number>();
@@ -155,6 +168,8 @@ export class ConnectionManager {
   >();
   private readonly beatmapCache = new Map<number, BeatmapInfo>();
   private readonly automationQueues = new Map<string, Promise<void>>();
+  /** Result ids already sent through the mplink correction pass. */
+  private readonly mplinkCorrections = new Set<string>();
 
   constructor(deps: ConnectionManagerDeps) {
     this.store = deps.store;
@@ -216,9 +231,10 @@ export class ConnectionManager {
     this.emitState();
   }
 
-  async lookupBeatmaps(ids: number[]): Promise<BeatmapInfo[]> {
+  async lookupBeatmaps(ids: number[]): Promise<BeatmapLookupResult> {
     const unique = [...new Set(ids)].filter((id) => Number.isSafeInteger(id) && id > 0);
     const missing = unique.filter((id) => !this.beatmapCache.has(id));
+    const failed: BeatmapLookupFailure[] = [];
     for (let index = 0; index < missing.length; index += 4) {
       const chunk = missing.slice(index, index + 4);
       await Promise.all(
@@ -234,14 +250,17 @@ export class ConnectionManager {
               mode: info.mode,
             });
           } catch (error) {
-            this.diagnose('warn', 'osu', `could not load beatmap ${id}: ${errorMessage(error)}`);
+            const message = errorMessage(error);
+            failed.push({ id, message, notFound: /\(404\)/.test(message) });
+            this.diagnose('warn', 'osu', `could not load beatmap ${id}: ${message}`);
           }
         }),
       );
     }
-    return unique
+    const beatmaps = unique
       .map((id) => this.beatmapCache.get(id))
       .filter((info): info is BeatmapInfo => info !== undefined);
+    return { beatmaps, failed };
   }
 
   // --- connections ---------------------------------------------------------
@@ -317,7 +336,7 @@ export class ConnectionManager {
 
     if (input.password) {
       try {
-        this.settings.setIrcPassword(input.password);
+        await this.settings.setIrcPassword(input.password);
       } catch (error) {
         // The in-memory password is already set, so the connection can proceed
         // even when the credential file cannot be written.
@@ -393,6 +412,8 @@ export class ConnectionManager {
           this.scheduleChatReconnect();
         } else {
           this.webChatReady = false;
+          if (this.chatReconnectEnabled) this.setStatus('chat', 'reconnecting', 'connecting');
+          return;
         }
         this.refreshChatStatus();
       },
@@ -416,8 +437,8 @@ export class ConnectionManager {
       }
       this.webChatReady = false;
       this.webChatError = errorMessage(error);
-      this.refreshChatStatus();
       this.scheduleChatReconnect();
+      this.refreshChatStatus();
       return false;
     }
   }
@@ -467,7 +488,8 @@ export class ConnectionManager {
     if (this.hub && this.statuses.get('referee_hub')?.status === 'connected') {
       if (!this.socket?.isOpen) {
         this.chatReconnectEnabled = true;
-        this.scheduleChatReconnect(0);
+        await this.reconnectWebChat();
+        this.emitState();
       }
       return this.getAppState();
     }
@@ -1007,18 +1029,50 @@ export class ConnectionManager {
     return next;
   }
 
+  async startMatch(input: { sessionId: string; countdown: number | null }): Promise<void> {
+    const session = this.requireSession(input.sessionId);
+    if (session.status !== 'active') throw new Error('the match is not active');
+    if (!session.roomId) throw new Error('the match has no room id yet');
+    const transport = session.transport === 'irc' ? this.irc : this.hub;
+    if (!transport) throw new Error('connect to the match platform first');
+    await transport.startMatch(session.roomId, input.countdown);
+    this.appendEvent(
+      session,
+      'manual_adjustment',
+      input.countdown === null ? 'match started' : `match started with ${input.countdown}s countdown`,
+    );
+  }
+
   async addPlaylistBeatmap(input: {
     sessionId: string;
     beatmapId: number;
     rulesetId: number;
   }): Promise<void> {
     const session = this.requireSession(input.sessionId);
-    if (session.transport !== 'referee_hub' || !session.roomId) {
-      throw new Error('playlist editing is only available through the Referee Hub');
-    }
-    if (!this.hub) throw new Error('connect to the Referee Hub first');
+    if (!session.roomId) throw new Error('the match has no room id yet');
     const beatmap = await this.server.osu.getBeatmap(input.beatmapId);
     const rulesetId = resolvePlaylistRuleset(beatmap.mode, input.rulesetId);
+    if (session.transport === 'irc') {
+      const transport = this.irc;
+      if (!transport) throw new Error('connect to Bancho IRC first');
+      await transport.editBeatmap(session.roomId, {
+        beatmapId: input.beatmapId,
+        rulesetId,
+      });
+      const next: MatchSession = {
+        ...session,
+        currentBeatmapId: input.beatmapId,
+        updatedAt: new Date().toISOString(),
+      };
+      this.persistSession(next);
+      this.appendEvent(next, 'beatmap_changed', `changed beatmap to ${input.beatmapId}`, {
+        beatmapId: input.beatmapId,
+        rulesetId,
+      });
+      this.emit({ type: 'session_updated', session: next });
+      return;
+    }
+    if (!this.hub) throw new Error('connect to the Referee Hub first');
     await this.hub.addPlaylistItem(session.roomId, {
       beatmapId: input.beatmapId,
       rulesetId,
@@ -1827,11 +1881,9 @@ export class ConnectionManager {
       return;
     }
 
-    const reported = this.ircScores.get(session.id);
-    if (!reported || reported.size === 0) {
-      this.emiteSystemChat(session, 'no player scores were reported; enter the result manually');
-      return;
-    }
+    const reported =
+      this.ircScores.get(session.id) ?? new Map<string, { score: number; passed: boolean }>();
+    const storedScores = this.ircScores.get(session.id);
 
     const members = tournament.teams.flatMap((team) => team.members);
     const nameToId = new Map<string, { userId: number; username: string }>();
@@ -1863,16 +1915,7 @@ export class ConnectionManager {
 
     // Bancho only reports names; resolve each name to an osu! user id before
     // matching teams, so the actual result path compares ids only.
-    const scores: {
-      userId: number;
-      username: string;
-      score: number;
-      accuracy: number;
-      maxCombo: number;
-      misses: number;
-      mods: string[];
-      passed: boolean;
-    }[] = [];
+    const scores: PlayerScore[] = [];
     for (const [name, entry] of reported.entries()) {
       let identity = nameToId.get(name);
       if (!identity) {
@@ -1902,17 +1945,212 @@ export class ConnectionManager {
       });
     }
 
+    const beatmapId = slot.beatmapId ?? session.currentBeatmapId;
+    if (!beatmapId) {
+      this.emiteSystemChat(session, 'match finished but the beatmap is unknown; enter the result manually');
+      return;
+    }
+    const teamByUser = this.memberTeamFor(session, tournament);
+    const teamSize = (this.snapshots.get(session.id)?.matchType ?? session.matchType) === 'team_versus'
+      ? tournament.teamSize
+      : 1;
+    const complete = hasCompleteTeamScores(
+      scores,
+      teamByUser,
+      teamSize,
+      session.teamOneId,
+      session.teamTwoId,
+    );
+
     try {
-      await this.recordScores({
+      let finalScores = scores;
+      if (!complete) {
+        const merged = await this.waitForMplinkScores(
+          session,
+          beatmapId,
+          scores,
+          teamByUser,
+          teamSize,
+        );
+        if (merged) {
+          finalScores = merged;
+        } else if (scores.length === 0) {
+          this.emiteSystemChat(session, 'no player scores were reported; enter the result manually');
+          return;
+        } else {
+          this.emiteSystemChat(
+            session,
+            'mplink scores were not available in time; recording the IRC scores',
+          );
+        }
+      }
+
+      const recorded = await this.recordScores({
         sessionId: session.id,
         slotLabel,
-        scores,
+        scores: finalScores,
         source: 'irc',
       });
+      if (complete) {
+        const result = recorded.results.at(-1);
+        if (result) void this.correctIrcResultWithMplink(recorded.id, result.id);
+      }
     } catch (error) {
       this.emiteSystemChat(session, `automatic IRC result failed: ${errorMessage(error)}`);
     } finally {
-      this.ircScores.delete(session.id);
+      if (storedScores && this.ircScores.get(session.id) === storedScores) {
+        this.ircScores.delete(session.id);
+      }
+    }
+  }
+
+  /** Roster and room colours as user-id -> team-id, used for scoring and completeness. */
+  private memberTeamFor(session: MatchSession, tournament: Tournament): Map<number, string> {
+    const teamByUser = new Map<number, string>();
+    for (const team of tournament.teams) {
+      const teamId = String(team.id);
+      for (const member of team.members) teamByUser.set(member.userId, teamId);
+    }
+    for (const player of session.matchPlayers) {
+      if (teamByUser.has(player.userId)) continue;
+      if (player.team === 'red') teamByUser.set(player.userId, session.teamOneId);
+      else if (player.team === 'blue') teamByUser.set(player.userId, session.teamTwoId);
+    }
+    return teamByUser;
+  }
+
+  /** Merges the latest mplink game with the IRC report for one beatmap. */
+  private async mplinkScores(
+    session: MatchSession,
+    beatmapId: number,
+    ircScores: readonly PlayerScore[],
+    at = new Date().toISOString(),
+  ): Promise<PlayerScore[] | null> {
+    const roomId = Number(session.roomId);
+    if (!Number.isInteger(roomId) || roomId <= 0) return null;
+    const match = await this.server.osu.getMatch(roomId);
+    const game: MplinkGame | null = selectLatestGame(mplinkGames(match), beatmapId, at);
+    if (!game || game.scores.length === 0) return null;
+    return mergeScores(ircScores, game.scores);
+  }
+
+  /**
+   * IRC can drop players or report a stale score. Wait briefly for mplink so an
+   * incomplete IRC report is completed before the result is recorded.
+   */
+  private async waitForMplinkScores(
+    session: MatchSession,
+    beatmapId: number,
+    ircScores: readonly PlayerScore[],
+    teamByUser: ReadonlyMap<number, string>,
+    teamSize: number,
+  ): Promise<PlayerScore[] | null> {
+    const deadline = Date.now() + 120_000;
+    let latest: PlayerScore[] | null = null;
+    while (Date.now() < deadline) {
+      try {
+        const merged = await this.mplinkScores(session, beatmapId, ircScores);
+        if (merged) {
+          latest = merged;
+          if (
+            hasCompleteTeamScores(
+              merged,
+              teamByUser,
+              teamSize,
+              session.teamOneId,
+              session.teamTwoId,
+            )
+          ) {
+            return merged;
+          }
+        }
+      } catch (error) {
+        this.diagnose('warn', 'osu', `mplink lookup failed: ${errorMessage(error)}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10_000));
+    }
+    return latest;
+  }
+
+  /** Replaces an IRC result with the merged IRC+mplink scores once mplink catches up. */
+  private async correctIrcResultWithMplink(sessionId: string, resultId: string): Promise<void> {
+    if (this.mplinkCorrections.has(resultId)) return;
+    this.mplinkCorrections.add(resultId);
+    try {
+      const session = this.requireSession(sessionId);
+      const result = session.results.find((entry) => entry.id === resultId);
+      if (!result || result.source !== 'irc') return;
+      const tournament = this.tournamentForSession(session);
+      const match = tournament ? findMatch(tournament, session.matchId) : undefined;
+      const stage = tournament && match ? findStageForMatch(tournament, match.id) : undefined;
+      const slot = stage ? findSlotByLabel(stage, result.slotLabel) : undefined;
+      const scoring = stage?.scoringScheme;
+      if (!tournament || !scoring || !slot) return;
+      const teamByUser = this.memberTeamFor(session, tournament);
+      const teamSize =
+        (this.snapshots.get(session.id)?.matchType ?? session.matchType) === 'team_versus'
+          ? tournament.teamSize
+          : 1;
+
+      let merged: PlayerScore[] | null = null;
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        try {
+          merged = await this.mplinkScores(session, result.beatmapId, result.scores, result.recordedAt);
+        } catch (error) {
+          this.diagnose('warn', 'osu', `mplink correction lookup failed: ${errorMessage(error)}`);
+        }
+        if (
+          merged &&
+          scoresDiffer(result.scores, merged) &&
+          hasCompleteTeamScores(
+            merged,
+            teamByUser,
+            teamSize,
+            session.teamOneId,
+            session.teamTwoId,
+          )
+        ) {
+          break;
+        }
+        merged = null;
+        await new Promise((resolve) => setTimeout(resolve, 10_000));
+      }
+      if (!merged || !scoresDiffer(result.scores, merged)) return;
+
+      const evaluation = evaluateBeatmap({
+        slotLabel: result.slotLabel,
+        beatmapId: result.beatmapId,
+        scores: merged,
+        teamOneId: session.teamOneId,
+        teamTwoId: session.teamTwoId,
+        memberTeam: this.memberTeamFor(session, tournament),
+        scheme: scoring,
+        winCondition: slot.winCondition ?? match?.winCondition ?? scoring.winCondition,
+        winner: slot.winConditionWinner,
+        recordedAt: result.recordedAt,
+        source: 'irc',
+      });
+      const corrected: BeatmapResult = { ...evaluation.result, id: result.id, source: 'irc' };
+      if (!scoresDiffer(result.scores, corrected.scores)) return;
+
+      const next = amendResult(session, result.id, corrected, new Date().toISOString());
+      this.persistSession(next);
+      this.appendEvent(
+        next,
+        'result_recorded',
+        `${result.slotLabel}: corrected from mplink`,
+        corrected,
+      );
+      if (evaluation.needsReview) {
+        this.emiteSystemChat(
+          next,
+          `Result for ${result.slotLabel} needs review: ${evaluation.reviewReason}`,
+        );
+      }
+      if (next.status === 'finished') this.syncMatchResult(tournament, next);
+      this.emit({ type: 'session_updated', session: next });
+    } catch (error) {
+      this.diagnose('warn', 'osu', `mplink correction failed: ${errorMessage(error)}`);
     }
   }
 
@@ -2513,17 +2751,35 @@ export class ConnectionManager {
 
   private appendChatLog(session: MatchSession, message: ChatMessage): void {
     if (message.self && !message.system) {
-      // Bancho may or may not echo our own IRC line; the optimistic local
-      // echo and the transport copy must produce one lobby-log entry.
+      // Bancho may or may not echo our own IRC line. Pair each server echo
+      // with at most one optimistic local copy so repeated identical lines
+      // are logged once per send.
       const key = `${session.id}\u0000${message.text}`;
       const at = Date.parse(message.at);
-      const previous = this.recentSelfChat.get(key);
-      if (previous !== undefined && Math.abs(at - previous) < 30_000) return;
-      this.recentSelfChat.set(key, at);
-      if (this.recentSelfChat.size > 500) {
-        const oldest = this.recentSelfChat.keys().next().value;
-        if (oldest !== undefined) this.recentSelfChat.delete(oldest);
+      const entry = this.recentSelfChat.get(key) ?? { local: [], remote: [] };
+      const prune = (times: number[]) =>
+        times.filter((time) => Math.abs(at - time) < 30_000);
+      entry.local = prune(entry.local);
+      entry.remote = prune(entry.remote);
+      const isLocal = message.id.startsWith('local:');
+      const pending = isLocal ? entry.remote : entry.local;
+      let record = true;
+      if (pending.length > 0) {
+        pending.shift();
+        record = false;
+      } else {
+        (isLocal ? entry.local : entry.remote).push(at);
       }
+      if (entry.local.length === 0 && entry.remote.length === 0) {
+        this.recentSelfChat.delete(key);
+      } else {
+        this.recentSelfChat.set(key, entry);
+        if (this.recentSelfChat.size > 500) {
+          const oldest = this.recentSelfChat.keys().next().value;
+          if (oldest !== undefined) this.recentSelfChat.delete(oldest);
+        }
+      }
+      if (!record) return;
     }
     const summary = `${message.username}: ${message.action ? '* ' : ''}${message.text}`;
     this.appendEvent(
@@ -2752,7 +3008,9 @@ export class ConnectionManager {
    * is part of the `irc` connection; the UI picks the matching one per session.
    */
   private refreshChatStatus(): void {
-    if (this.webChatError) {
+    if (this.chatReconnectTimer) {
+      this.setStatus('chat', 'reconnecting', this.webChatError ?? 'waiting to reconnect');
+    } else if (this.webChatError) {
       this.setStatus('chat', 'error', this.webChatError);
     } else if (this.webChatReady) {
       this.setStatus('chat', 'connected', 'osu!web');

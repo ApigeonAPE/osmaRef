@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyAction,
   adjustWins,
+  amendResult,
   closeRoomSession,
   createSession,
   captureMatchPlayers,
@@ -235,6 +236,27 @@ describe('match state machine', () => {
       { userId: 1, username: 'Player_One', slot: 0, team: 'red' },
       { userId: 2, username: 'Player_Two', slot: 1, team: 'blue' },
     ]);
+  });
+
+  it('replaces a recorded result and recomputes totals', () => {
+    const first = recordResult(session(), result('team_one', 'NM1', 1));
+    const corrected = {
+      ...first.results[0]!,
+      winner: 'team_two' as const,
+      teamValues: { team_one: 400, team_two: 500 },
+      scores: [player(1, 400), player(2, 500)],
+    };
+    const next = amendResult(first, corrected.id, corrected, at(2));
+    expect(next.results).toHaveLength(1);
+    expect(next.results[0]).toEqual(corrected);
+    expect(next.wins).toEqual({ team_one: 0, team_two: 1 });
+    expect(next.teamScores).toEqual({ team_one: 400, team_two: 500 });
+  });
+
+  it('rejects amending a result that was never recorded', () => {
+    expect(() => amendResult(session(), 'missing', result('team_one', 'NM1', 1))).toThrowError(
+      DomainError,
+    );
   });
 
   it('records a result without a pick for playlist-driven rooms', () => {

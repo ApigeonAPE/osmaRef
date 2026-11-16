@@ -58,6 +58,8 @@ async function bootstrap(): Promise<void> {
   const store = await createAppStore(join(userData, 'data'));
   const settings = new SettingsStore(join(userData, 'config'));
   const vault = new TokenVault(join(userData, 'credentials'));
+  await settings.init();
+  await vault.init();
   const logger = new AppLogger(store);
 
   const server = new ServerClient({

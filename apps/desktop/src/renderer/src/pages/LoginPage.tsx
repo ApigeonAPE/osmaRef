@@ -17,7 +17,9 @@ export function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [hasPassword, setHasPassword] = useState(false);
-  const [busy, setBusy] = useState<'authorize' | 'logout' | 'irc' | null>(null);
+  const [busy, setBusy] = useState<
+    'authorize' | 'logout' | 'irc' | 'irc-logout' | 'hub' | 'chat' | null
+  >(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [avatarFailed, setAvatarFailed] = useState(false);
@@ -26,6 +28,7 @@ export function LoginPage() {
   const userId = user?.userId ?? null;
   const ircConnected =
     model.state?.connections.find((entry) => entry.kind === 'irc')?.status === 'connected';
+  const authorized = Boolean(model.serverStatus?.authenticated);
 
   useEffect(() => {
     void (async () => {
@@ -89,6 +92,60 @@ export function LoginPage() {
       setHasPassword(await window.osmaRef.app.hasIrcPassword());
       await model.refreshAll();
       setMessage(t('IRC connected'));
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const logoutIrc = async () => {
+    setBusy('irc-logout');
+    setError(null);
+    setMessage(null);
+    try {
+      await window.osmaRef.connection.disconnect('irc');
+      await window.osmaRef.app.clearIrcPassword();
+      setPassword('');
+      setHasPassword(false);
+      await model.refreshAll();
+      setMessage(t('IRC logged out'));
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const reconnectHub = async () => {
+    setBusy('hub');
+    setError(null);
+    setMessage(null);
+    try {
+      await window.osmaRef.connection.disconnect('referee_hub');
+      await window.osmaRef.connection.connectHub();
+      await model.refreshAll();
+      setMessage(t('Referee Hub reconnected'));
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const reconnectChat = async () => {
+    setBusy('chat');
+    setError(null);
+    setMessage(null);
+    try {
+      await window.osmaRef.connection.disconnect('chat');
+      const state = await window.osmaRef.connection.connectHub();
+      await model.refreshAll();
+      const chat = state.connections.find((entry) => entry.kind === 'chat');
+      if (chat?.status !== 'connected') {
+        throw new Error(chat?.detail ?? t('Chat did not reconnect'));
+      }
+      setMessage(t('Chat reconnected'));
     } catch (cause) {
       setError(errorText(cause));
     } finally {
@@ -167,19 +224,58 @@ export function LoginPage() {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder={hasPassword ? '••••••••' : undefined}
+              placeholder={hasPassword ? t('password saved') : undefined}
               autoComplete="current-password"
               disabled={busy !== null}
             />
           </Field>
-          <button
-            type="submit"
-            className="primary"
-            disabled={busy !== null || !username.trim() || (!password && !hasPassword)}
-          >
-            {busy === 'irc' ? t('connecting') : ircConnected ? t('Reconnect') : t('Connect')}
-          </button>
+          <div className="login-irc-actions">
+            {ircConnected || hasPassword ? (
+              <button
+                type="button"
+                className="ghost"
+                disabled={busy !== null}
+                onClick={() => void logoutIrc()}
+              >
+                {busy === 'irc-logout' ? '…' : t('Log out')}
+              </button>
+            ) : null}
+            <button
+              type="submit"
+              className="primary"
+              disabled={busy !== null || !username.trim() || (!password && !hasPassword)}
+            >
+              {busy === 'irc' ? t('connecting') : ircConnected ? t('Reconnect') : t('Connect')}
+            </button>
+          </div>
         </form>
+      </Section>
+
+      <Section title={t('API')}>
+        <div className="login-row login-api">
+          <span className="login-api-status">
+            <span className={`dot${authorized ? ' connected' : ''}`} />
+            {authorized ? t('authorized') : t('not authorized')}
+          </span>
+          <div className="login-api-actions">
+            <button
+              type="button"
+              className="ghost small"
+              disabled={!authorized || busy !== null}
+              onClick={() => void reconnectHub()}
+            >
+              {busy === 'hub' ? '…' : t('Reconnect Referee Hub')}
+            </button>
+            <button
+              type="button"
+              className="ghost small"
+              disabled={!authorized || busy !== null}
+              onClick={() => void reconnectChat()}
+            >
+              {busy === 'chat' ? '…' : t('Reconnect Chat')}
+            </button>
+          </div>
+        </div>
       </Section>
     </div>
   );

@@ -5,7 +5,7 @@
 .audit-layout {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
-  gap: 18px;
+  gap: 16px;
   align-items: start;
 }
 
@@ -28,7 +28,13 @@
 
 .session-item.active {
   background: var(--pink-soft);
-  border-color: rgba(255, 102, 170, 0.3);
+  border-color: var(--pink-border);
+}
+
+.session-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
 }
 
 .audit-body {
@@ -71,18 +77,18 @@
 }
 
 .log-category-operation {
-  color: #8ebfff;
-  border-color: rgba(97, 179, 255, 0.4);
+  color: var(--blue-text);
+  border-color: var(--blue-border);
 }
 
 .log-category-chat {
-  color: var(--green);
-  border-color: rgba(99, 214, 155, 0.4);
+  color: var(--green-text);
+  border-color: var(--green-border);
 }
 
 .log-category-game {
-  color: #c9a2ff;
-  border-color: rgba(201, 162, 255, 0.4);
+  color: var(--pink-text);
+  border-color: var(--pink-border);
 }
 
 .log-filters {
@@ -90,6 +96,15 @@
   gap: 6px;
   flex-wrap: wrap;
   margin: 4px 0 12px;
+}
+
+.tab-count {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .log-details {
@@ -110,19 +125,19 @@
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 11px;
-  background: rgba(20, 15, 18, 0.6);
-  border-radius: 6px;
+  background: var(--bg-soft);
+  border-radius: var(--radius-sm);
 }
 
 .timeline-type {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--pink);
+  color: var(--pink-text);
 }
 
 .timeline-type.result_needs_review, .timeline-type.command_rejected {
-  color: var(--amber);
+  color: var(--amber-text);
 }
 
 .log-list {
@@ -139,16 +154,16 @@
   grid-template-columns: 130px 90px 1fr;
   gap: 8px;
   padding: 6px 8px;
-  border-radius: 6px;
-  background: rgba(20, 15, 18, 0.6);
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
 }
 
 .log-line.warn {
-  color: var(--amber);
+  color: var(--amber-text);
 }
 
 .log-line.error {
-  color: var(--red);
+  color: var(--red-text);
 }
 
 .log-scope {
@@ -184,18 +199,18 @@
 
 .match-info-team {
   padding: 4px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: 999px;
   background: var(--panel-2);
   font-weight: 600;
 }
 
 .match-info-team.red {
-  color: #ffa0b4;
+  color: var(--red-text);
 }
 
 .match-info-team.blue {
-  color: #9cc8ff;
+  color: var(--blue-text);
 }
 
 .match-info-vs {

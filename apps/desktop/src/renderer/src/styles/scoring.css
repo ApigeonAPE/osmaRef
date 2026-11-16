@@ -8,7 +8,7 @@
   align-items: center;
   gap: 12px;
   flex: none;
-  padding:2px 0;
+  padding: 2px 0;
 }
 
 .score-side {
@@ -32,7 +32,7 @@
   align-items: center;
   gap: 10px;
   padding: 5px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 2px solid transparent;
   cursor: pointer;
   user-select: none;
@@ -51,21 +51,21 @@
 }
 
 .flat-team.red {
-  color: #ff7676;
+  color: var(--red-text);
 }
 
 .flat-team.blue {
-  color: #73b9ff;
+  color: var(--blue-text);
 }
 
 .flat-team.red.active {
-  border-color: #ff5d6c;
-  background: rgba(255, 93, 108, 0.1);
+  border-color: var(--red-8);
+  background: var(--red-soft);
 }
 
 .flat-team.blue.active {
-  border-color: #3d9bff;
-  background: rgba(61, 155, 255, 0.1);
+  border-color: var(--blue-8);
+  background: var(--blue-soft);
 }
 
 .flat-score {
@@ -96,35 +96,27 @@
 .score-card {
   border-radius: var(--radius);
   border: 1px solid var(--line);
-  padding: 14px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  background: rgba(34, 26, 31, 0.7);
-  position: relative;
+  background: var(--panel-2);
   overflow: hidden;
   cursor: pointer;
   user-select: none;
 }
 
-.score-card::before {
-  content: '';
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 4px;
+.score-card.red {
+  border-color: var(--red-7);
 }
 
-.score-card.red::before {
-  background: var(--red);
-}
-
-.score-card.blue::before {
-  background: var(--blue);
+.score-card.blue {
+  border-color: var(--blue-7);
 }
 
 .score-card.active {
   border-color: var(--pink);
-  box-shadow: 0 0 0 1px var(--pink-soft);
+  background: var(--pink-soft);
 }
 
 .score-card strong {
@@ -164,7 +156,7 @@
 
 .first-team-row {
   padding: 6px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--line-soft);
 }
 
 .result-history {

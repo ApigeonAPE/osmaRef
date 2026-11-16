@@ -34,27 +34,30 @@ export class TokenVault {
   }
 
   get(): OAuthTokenSet | null {
-    if (!this.loaded) {
-      this.loaded = true;
-      this.load();
-    }
     return this.tokens;
   }
 
-  set(tokens: OAuthTokenSet | null): void {
+  /** Loads the sealed token file once the app is ready. */
+  async init(): Promise<void> {
+    if (this.loaded) return;
+    this.loaded = true;
+    await this.load();
+  }
+
+  async set(tokens: OAuthTokenSet | null): Promise<void> {
     this.loaded = true;
     this.tokens = tokens;
     if (!tokens) {
       this.removeFile();
       return;
     }
-    if (!safeStorage.isEncryptionAvailable()) {
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) {
       // Never persist bearer/refresh tokens unencrypted.
       this.removeFile();
       return;
     }
     try {
-      writeFileSync(this.file, safeStorage.encryptString(JSON.stringify(tokens)));
+      writeFileSync(this.file, await safeStorage.encryptStringAsync(JSON.stringify(tokens)));
     } catch {
       this.removeFile();
     }
@@ -65,11 +68,17 @@ export class TokenVault {
     this.removeFile();
   }
 
-  private load(): void {
+  private async load(): Promise<void> {
     if (!existsSync(this.file)) return;
-    if (!safeStorage.isEncryptionAvailable()) return;
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) return;
     try {
-      const parsed = JSON.parse(safeStorage.decryptString(readFileSync(this.file))) as OAuthTokenSet;
+      let decrypted = await safeStorage.decryptStringAsync(readFileSync(this.file));
+      if (decrypted.shouldReEncrypt) {
+        const reencrypted = await safeStorage.encryptStringAsync(decrypted.result);
+        writeFileSync(this.file, reencrypted);
+        decrypted = await safeStorage.decryptStringAsync(reencrypted);
+      }
+      const parsed = JSON.parse(decrypted.result) as OAuthTokenSet;
       if (
         typeof parsed.accessToken === 'string' &&
         typeof parsed.refreshToken === 'string' &&

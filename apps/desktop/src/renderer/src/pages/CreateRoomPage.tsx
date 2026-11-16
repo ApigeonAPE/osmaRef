@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useModel } from '../useOsmaRef';
 import { useI18n } from '../i18n';
-import { Field, Section } from '../ui';
+import { Field } from '../ui';
 import { IdInput } from '../components/IdInput';
 import { MatchInfo } from '../components/MatchInfo';
 import { Toast } from '../components/Toast';
@@ -98,7 +98,7 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
 
       {error ? <Toast message={error} onClose={() => setError(null)} /> : null}
 
-      <Section title={t('Open a room')}>
+      <div className="card">
         <div className="segmented">
           <button
             type="button"
@@ -143,7 +143,7 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
                         : null;
                     return (
                       <option key={entry.id} value={entry.id}>
-                        {stage.name} · #{index + 1}{' '}
+                        {stage.name} #{index + 1}{' '}
                         {entry.type === 'match' ? `${red ?? '?'} vs ${blue ?? '?'}` : t('Lobby')}
                       </option>
                     );
@@ -163,13 +163,9 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
               </button>
             </div>
             {model.tournaments.length === 0 ? (
-              <p className="muted small">
-                {t('No tournament is configured yet. Create one in Tournaments.')}
-              </p>
+              <p className="muted small">{t('No tournaments configured.')}</p>
             ) : selectedTournament && selectedMatches.length === 0 ? (
-              <p className="muted small">
-                {t('This tournament has no matches yet. Add one in the Tournaments page.')}
-              </p>
+              <p className="muted small">{t('No matches configured.')}</p>
             ) : null}
           </>
         ) : (
@@ -183,7 +179,7 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
                   kind="beatmap"
                   value={quickBeatmap}
                   onChange={setQuickBeatmap}
-                  placeholder={quickTransport === 'irc' ? t('optional') : '658127'}
+                  placeholder="658127"
                 />
               </Field>
               <Field label={t('Ruleset')}>
@@ -225,7 +221,7 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
             </div>
           </>
         )}
-      </Section>
+      </div>
       {mode === 'configured' && selectedTournament && selectedMatch ? (
         <MatchInfo
           tournament={selectedTournament}

@@ -15,4 +15,5 @@ export * from './referee-hub/playlist';
 export * from './web-chat/transport';
 export * from './web-chat/socket';
 export * from './results/provider';
+export * from './results/mplink';
 export * from './osu/api';

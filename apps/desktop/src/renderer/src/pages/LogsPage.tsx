@@ -135,10 +135,7 @@ export function LogsPage() {
         <header className="page-head">
           <h1>{t('Lobby logs')}</h1>
         </header>
-        <Empty
-          title={t('No room logs yet')}
-          body={t('Open a room; its operations, chat and match events are recorded here.')}
-        />
+        <Empty title={t('No room logs yet')} />
       </div>
     );
   }
@@ -185,8 +182,10 @@ export function LogsPage() {
               }}
             >
               <strong>{entry.matchName}</strong>
-              <span className="muted small">
-                {t(entry.status)} · {entry.transport} · {t('{count} entries', { count: entry.entryCount })}
+              <span className="session-meta muted small">
+                <span>{t(entry.status)}</span>
+                <span>{entry.transport}</span>
+                <span>{t('{count} entries', { count: entry.entryCount })}</span>
               </span>
             </button>
           ))}
@@ -199,7 +198,7 @@ export function LogsPage() {
                 <div>
                   <h2>{selected.matchName}</h2>
                   <p className="muted small">
-                    {t('room {room} · {transport} · best of {bestOf}', {
+                    {t('room {room} ({transport}, best of {bestOf})', {
                       room: selected.roomId ?? '—',
                       transport: selected.transport,
                       bestOf: selected.bestOf,
@@ -218,7 +217,7 @@ export function LogsPage() {
                     onClick={() => setCategory(filter)}
                   >
                     {filter === 'all' ? t('All') : t(categoryLabel(filter))}
-                    <span className="muted small"> · {counts[filter]}</span>
+                    <span className="tab-count">{counts[filter]}</span>
                   </button>
                 ))}
               </div>
@@ -241,10 +240,7 @@ export function LogsPage() {
               </div>
             </div>
           ) : (
-            <Empty
-              title={t('Select a room')}
-              body={t('Choose a room on the left to inspect its log.')}
-            />
+            <Empty title={t('Select a room')} />
           )}
         </div>
       </div>

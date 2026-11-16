@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { OsuApiClient } from '@osmaref/adapters';
+import { mapScore, OsuApiClient } from '@osmaref/adapters';
 
 describe('osu! API client beatmap metadata', () => {
   it('extracts title, artist, difficulty and mapper', async () => {
@@ -52,6 +52,45 @@ it('looks up a user by username', async () => {
   expect(requested).toContain('/users/@123/osu');
 });
 
+it('fetches a legacy multiplayer match by id', async () => {
+  let requestedUrl = '';
+  let requestedAgent = '';
+  const client = new OsuApiClient({
+    getAccessToken: async () => 'token',
+    fetchImpl: (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      requestedUrl = String(input);
+      requestedAgent = String(
+        (init?.headers as Record<string, string> | undefined)?.['user-agent'] ?? '',
+      );
+      return new Response(
+        JSON.stringify({
+          id: 122026887,
+          name: 'NOC26FALL: (A) vs (B)',
+          users: [{ id: 30174043, username: 'player' }],
+          events: [
+            {
+              id: 1,
+              game: {
+                id: 643094484,
+                beatmap_id: 4954309,
+                end_time: '2026-10-17T13:17:43Z',
+                scores: [{ user_id: 30174043, total_score: 963967 }],
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    }) as typeof fetch,
+  });
+
+  const match = await client.getMatch('122026887');
+  expect(requestedUrl).toContain('/matches/122026887');
+  expect(requestedAgent).toBe('osu!');
+  expect(match.users?.[0]?.username).toBe('player');
+  expect(match.events?.[0]?.game?.beatmap_id).toBe(4954309);
+});
+
 it('joins a chat channel through the user-scoped endpoint', async () => {
   let requestedUrl = '';
   let requestedMethod = '';
@@ -66,4 +105,33 @@ it('joins a chat channel through the user-scoped endpoint', async () => {
   await client.chatJoin('65576800', 42);
   expect(requestedMethod).toBe('PUT');
   expect(requestedUrl).toContain('/chat/channels/65576800/users/42');
+});
+
+describe('multiplayer score mapping', () => {
+  it('reads misses from the 20220705 statistics format', () => {
+    const score = mapScore({
+      user_id: 42,
+      total_score: 1_000_000,
+      accuracy: 0.98,
+      max_combo: 500,
+      statistics: { great: 211, ok: 3, meh: 1, miss: 2 },
+      mods: [{ acronym: 'HD' }],
+      passed: true,
+    });
+    expect(score.misses).toBe(2);
+  });
+
+  it('still reads the legacy count_miss key', () => {
+    const score = mapScore({
+      user_id: 42,
+      total_score: 1_000_000,
+      accuracy: 98,
+      max_combo: 500,
+      statistics: { count_miss: 4 },
+      mods: ['HD'],
+      passed: true,
+    });
+    expect(score.misses).toBe(4);
+    expect(score.accuracy).toBeCloseTo(0.98);
+  });
 });

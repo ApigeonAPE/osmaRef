@@ -16,6 +16,32 @@ export interface OsuScorePage {
   complete: boolean;
 }
 
+export interface OsuMatchUser {
+  id: number;
+  username: string;
+}
+
+export interface OsuMatchGame {
+  id: number;
+  beatmap_id: number;
+  start_time?: string | null;
+  end_time?: string | null;
+  scoring_type?: string;
+  scores?: Record<string, unknown>[];
+}
+
+export interface OsuMatchEvent {
+  id?: number;
+  game?: OsuMatchGame;
+}
+
+export interface OsuMatch {
+  id: number;
+  name?: string;
+  events?: OsuMatchEvent[];
+  users?: OsuMatchUser[];
+}
+
 export interface BeatmapDetails {
   id: number;
   title: string;
@@ -64,6 +90,11 @@ export class OsuApiClient {
       userId: Number(payload.id),
       username: String(payload.username ?? username),
     };
+  }
+
+  /** Reads a legacy multiplayer match; used to verify IRC-reported scores. */
+  async getMatch(matchId: number | string): Promise<OsuMatch> {
+    return this.request<OsuMatch>(`/matches/${encodeURIComponent(String(matchId))}`);
   }
 
   async getBeatmap(beatmapId: number): Promise<BeatmapDetails> {
@@ -159,6 +190,8 @@ export class OsuApiClient {
     const headers: Record<string, string> = {
       authorization: `Bearer ${token}`,
       accept: 'application/json',
+      // Cloudflare rejects some default HTTP clients with a 403 challenge.
+      'user-agent': 'osu!',
     };
     if (options.apiVersion !== false) headers['x-api-version'] = '20220705';
     if (options.body !== undefined) headers['content-type'] = 'application/json';

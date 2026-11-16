@@ -150,6 +150,18 @@ export interface BeatmapInfo {
   mode: string;
 }
 
+export interface BeatmapLookupFailure {
+  id: number;
+  message: string;
+  /** The API answered 404: the beatmap does not exist. */
+  notFound: boolean;
+}
+
+export interface BeatmapLookupResult {
+  beatmaps: BeatmapInfo[];
+  failed: BeatmapLookupFailure[];
+}
+
 export interface Settings {
   language: LanguageSetting;
   serverBaseUrl: string;
@@ -185,7 +197,7 @@ export const DEFAULT_SETTINGS: Settings = {
   chatFontFamily: 'Cascadia Mono, Consolas, monospace',
   chatFontSize: 13,
   chatLineHeight: 1.35,
-  storeIrcPassword: false,
+  storeIrcPassword: true,
   logLevel: 'info',
 };
 
@@ -328,6 +340,11 @@ export const SelectBeatmapInputSchema = z.object({
   slotLabel: z.string().min(1).max(12),
 });
 
+export const StartMatchInputSchema = z.object({
+  sessionId: z.string().min(1).max(128),
+  countdown: z.number().int().min(0).max(120).nullable(),
+});
+
 export const AddPlaylistBeatmapInputSchema = z.object({
   sessionId: z.string().min(1).max(128),
   beatmapId: z.number().int().positive(),
@@ -460,6 +477,7 @@ export interface DesktopApi {
       freestyle: boolean;
     }): Promise<void>;
     selectBeatmap(input: { sessionId: string; slotLabel: string }): Promise<MatchSession>;
+    startMatch(input: { sessionId: string; countdown: number | null }): Promise<void>;
     addPlaylistBeatmap(input: {
       sessionId: string;
       beatmapId: number;
@@ -496,7 +514,7 @@ export interface DesktopApi {
     /** Resolves a username from an osu! user id through the companion server. */
     lookupUser(userId: number): Promise<OsuUserSummary>;
     /** Fetches title/artist/difficulty/mapper metadata for beatmap ids. */
-    lookupBeatmaps(ids: number[]): Promise<BeatmapInfo[]>;
+    lookupBeatmaps(ids: number[]): Promise<BeatmapLookupResult>;
   };
 }
 
@@ -541,6 +559,7 @@ export const IPC = {
   sessionsSetFirstTeams: 'sessions:set-first-teams',
   sessionsSetPlaylistMods: 'sessions:set-playlist-mods',
   sessionsSelectBeatmap: 'sessions:select-beatmap',
+  sessionsStartMatch: 'sessions:start-match',
   sessionsAddPlaylistBeatmap: 'sessions:add-playlist-beatmap',
   sessionsRemovePlaylistBeatmap: 'sessions:remove-playlist-beatmap',
   sessionsInvitePlayer: 'sessions:invite-player',

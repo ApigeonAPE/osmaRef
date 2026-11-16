@@ -11,8 +11,12 @@ html, body, #root {
   margin: 0;
 }
 
+:root {
+  color-scheme: dark;
+}
+
 body {
-  background: radial-gradient(circle at 18% 0%, #2a1b24 0%, var(--bg) 55%);
+  background: var(--bg);
   color: var(--text);
   font-size: 14px;
 }
@@ -23,7 +27,7 @@ button, input, select, textarea {
 }
 
 input, select, textarea {
-  background: #1a1417;
+  background: var(--bg-soft);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 8px 10px;
@@ -34,7 +38,7 @@ input, select, textarea {
 
 input:focus, select:focus, textarea:focus {
   border-color: var(--pink);
-  box-shadow: 0 0 0 3px rgba(255, 102, 170, 0.12);
+  box-shadow: 0 0 0 3px var(--pink-a4);
 }
 
 input[type='checkbox'] {
@@ -54,7 +58,7 @@ button {
 }
 
 button:hover:not(:disabled) {
-  background: #362830;
+  background: var(--panel-3);
 }
 
 button:active:not(:disabled) {
@@ -67,14 +71,23 @@ button:disabled {
 }
 
 button.primary {
-  background: linear-gradient(180deg, #ff7ab7, var(--pink));
-  color: #26121b;
+  background: var(--pink);
+  color: var(--on-accent);
   font-weight: 700;
-  border-color: #ff8fc2;
+  border-color: transparent;
 }
 
 button.primary:hover:not(:disabled) {
-  background: linear-gradient(180deg, #ff8fc2, #ff5aa3);
+  background: var(--pink-hover);
+}
+
+button.primary.confirm-start {
+  background: var(--red-9);
+  color: var(--black-a12);
+}
+
+button.primary.confirm-start:hover:not(:disabled) {
+  background: var(--red-10);
 }
 
 button.ghost {
@@ -88,8 +101,12 @@ button.ghost:hover:not(:disabled) {
 }
 
 button.danger {
-  color: #ff9aa4;
-  border-color: rgba(255, 93, 108, 0.35);
+  color: var(--red-text);
+  border-color: var(--red-border);
+}
+
+button.danger:hover:not(:disabled) {
+  background: var(--red-soft);
 }
 
 button.small {
@@ -157,7 +174,7 @@ body.resizing-rows {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  scrollbar-color: var(--mauve-a8) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -170,14 +187,14 @@ body.resizing-rows {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--mauve-a8);
   border: 2px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background-clip: content-box;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.35);
+  background: var(--mauve-a10);
   border: 2px solid transparent;
   background-clip: content-box;
 }

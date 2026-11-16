@@ -60,22 +60,25 @@ export function ChatPanel({ sessionId, transport }: { sessionId: string; transpo
       if (message.sessionId === sessionId) byId.set(message.id, message);
     }
     const all = [...byId.values()].sort((a, b) => a.at.localeCompare(b.at));
-    // Drop the optimistic echo once the server copy of the same message arrives.
-    return all
-      .filter(
-        (message) =>
-          !(
-            message.id.startsWith('local:') &&
-            all.some(
-              (other) =>
-                other.id !== message.id &&
-                other.self &&
-                other.text === message.text &&
-                Math.abs(Date.parse(other.at) - Date.parse(message.at)) < 30_000,
-            )
-          ),
-      )
-      .slice(-200);
+    // Pair each server copy with at most one optimistic local echo, so two
+    // identical lines sent in a row keep both local copies until echoed.
+    const serverSelf = all.filter((message) => message.self && !message.id.startsWith('local:'));
+    const paired = new Set<string>();
+    const used = new Set<string>();
+    for (const message of all) {
+      if (!message.id.startsWith('local:')) continue;
+      const at = Date.parse(message.at);
+      const match = serverSelf.find(
+        (other) =>
+          !used.has(other.id) &&
+          other.text === message.text &&
+          Math.abs(Date.parse(other.at) - at) < 30_000,
+      );
+      if (!match) continue;
+      used.add(match.id);
+      paired.add(message.id);
+    }
+    return all.filter((message) => !paired.has(message.id)).slice(-200);
   }, [history, model.messages, sessionId]);
 
   useEffect(() => {
@@ -211,7 +214,7 @@ export function ChatPanel({ sessionId, transport }: { sessionId: string; transpo
               walkHistory(-1);
             }
           }}
-          placeholder={t('Message or !mp command')}
+          aria-label={t('Message')}
           disabled={sending}
         />
         <button
@@ -237,7 +240,7 @@ function ActionText({ text }: { text: string }) {
       <em>{verb}</em> [
       <a
         href={url}
-        style={{ color: '#73b9ff', textDecoration: 'underline', cursor: 'pointer' }}
+        className="chat-link"
         onClick={(event) => {
           event.preventDefault();
           void window.osmaRef.app.openExternal(url!);

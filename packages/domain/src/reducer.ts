@@ -20,6 +20,7 @@ export type DomainErrorCode =
   | 'SLOT_PROTECTED'
   | 'UNKNOWN_SLOT'
   | 'NO_ACTION_TO_UNDO'
+  | 'RESULT_NOT_FOUND'
   | 'RESULT_REQUIRED';
 
 export class DomainError extends Error {
@@ -223,6 +224,74 @@ export function recordResult(
 
   next.phase = pending.kind;
   return MatchSessionSchema.parse(next);
+}
+
+/**
+ * Replaces one already-recorded result (mplink correction) and recomputes the
+ * totals. Queue, cursor and phase are left untouched: the correction must not
+ * consume or grant actions a second time.
+ */
+export function amendResult(
+  session: MatchSession,
+  resultId: string,
+  result: BeatmapResult,
+  at = result.recordedAt,
+): MatchSession {
+  const index = session.results.findIndex((entry) => entry.id === resultId);
+  if (index < 0) {
+    throw new DomainError('RESULT_NOT_FOUND', `result ${resultId} was not recorded`);
+  }
+  const previous = session.results[index]!;
+  const results = session.results.map((entry, entryIndex) =>
+    entryIndex === index ? result : entry,
+  );
+
+  const wins = {
+    team_one: Math.max(
+      0,
+      session.wins.team_one -
+        (previous.winner === 'team_one' ? 1 : 0) +
+        (result.winner === 'team_one' ? 1 : 0),
+    ),
+    team_two: Math.max(
+      0,
+      session.wins.team_two -
+        (previous.winner === 'team_two' ? 1 : 0) +
+        (result.winner === 'team_two' ? 1 : 0),
+    ),
+  };
+  const teamScores = {
+    team_one: Math.max(
+      0,
+      session.teamScores.team_one -
+        (previous.teamValues.team_one ?? 0) +
+        (result.teamValues.team_one ?? 0),
+    ),
+    team_two: Math.max(
+      0,
+      session.teamScores.team_two -
+        (previous.teamValues.team_two ?? 0) +
+        (result.teamValues.team_two ?? 0),
+    ),
+  };
+
+  let needsReview = session.needsReview.filter(
+    (entry) => !entry.startsWith(`${previous.slotLabel}:`),
+  );
+  if (result.needsReview) {
+    needsReview = [
+      ...new Set([...needsReview, `${result.slotLabel}: score needs review`]),
+    ];
+  }
+
+  return MatchSessionSchema.parse({
+    ...session,
+    results,
+    wins,
+    teamScores,
+    needsReview,
+    updatedAt: at,
+  });
 }
 
 export function undoLast(session: MatchSession, at: string): MatchSession {

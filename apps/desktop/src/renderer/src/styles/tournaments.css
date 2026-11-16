@@ -5,7 +5,7 @@
 .editor {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   min-width: 0;
 }
 
@@ -16,13 +16,13 @@
 }
 
 .team-card {
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: rgba(26, 20, 23, 0.6);
+  background: var(--bg-soft);
 }
 
 .team-head {
@@ -70,19 +70,27 @@
 }
 
 .pool-editor, .flow-card, .match-card {
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: rgba(26, 20, 23, 0.55);
+  background: var(--bg-soft);
 }
 
 .pool-editor > .row:first-child,
 .flow-card > .row:first-child,
 .flow-triggers > .row:first-child {
   justify-content: space-between;
+}
+
+.flow-card > .panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .pool-editor > .row > strong,
@@ -123,14 +131,14 @@
 .editor-panel {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   min-width: 0;
 }
 
 .workspace-grid {
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr);
-  gap: 18px;
+  gap: 16px;
   align-items: start;
 }
 
@@ -152,26 +160,25 @@
   color: var(--muted);
   background: transparent;
   border: 1px solid transparent;
-  border-left: 2px solid transparent;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
 }
 
 .workspace-nav-item:hover:not(:disabled) {
   color: var(--text);
-  background: var(--panel);
+  background: var(--panel-2);
 }
 
 .workspace-nav-item.active {
   color: var(--text);
   font-weight: 650;
   background: var(--pink-soft);
-  border-left-color: var(--pink);
+  border-color: var(--pink-border);
 }
 
 .workspace-body {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   min-width: 0;
 }
 
@@ -201,12 +208,12 @@
 }
 
 .tournament-item:hover {
-  background: var(--panel);
+  background: var(--panel-2);
 }
 
 .tournament-item.active {
   background: var(--pink-soft);
-  border-color: rgba(255, 102, 170, 0.3);
+  border-color: var(--pink-border);
 }
 
 .tournament-item .list-name {
@@ -218,7 +225,7 @@
 .management-layout {
   display: grid;
   grid-template-columns: 190px minmax(0, 1fr);
-  gap: 18px;
+  gap: 16px;
   align-items: start;
 }
 
@@ -227,7 +234,7 @@
   top: 18px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   padding-right: 14px;
   border-right: 1px solid var(--line-soft);
 }
@@ -258,20 +265,18 @@
   color: var(--muted);
   background: transparent;
   border: 1px solid transparent;
-  border-left: 2px solid transparent;
   border-radius: var(--radius-sm);
 }
 
 .management-item:hover {
   color: var(--text);
-  background: var(--panel);
+  background: var(--panel-2);
 }
 
 .management-item.active {
   color: var(--text);
   background: var(--pink-soft);
-  border-color: rgba(255, 102, 170, 0.3);
-  border-left-color: var(--pink);
+  border-color: var(--pink-border);
 }
 
 .management-count {
@@ -282,9 +287,9 @@
 .management-content {
   min-width: 0;
   padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: rgba(26, 20, 23, 0.55);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  background: var(--bg-soft);
 }
 
 .management-content-head {
@@ -305,13 +310,13 @@
 }
 
 .management-content .tournament-item {
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
-  background: rgba(26, 20, 23, 0.45);
+  background: var(--panel);
 }
 
 .management-content .tournament-item:hover {
-  background: var(--panel);
+  background: var(--panel-2);
 }
 
 .detail-head {
@@ -355,10 +360,10 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
   padding: 12px;
-  background: rgba(26, 20, 23, 0.55);
+  background: var(--bg-soft);
 }
 
 .team-editor-head {
@@ -397,10 +402,10 @@
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: 999px;
   font-size: 12px;
-  background: rgba(34, 26, 30, 0.7);
+  background: var(--panel-2);
 }
 
 .member-remove {
@@ -413,7 +418,7 @@
 }
 
 .member-remove:hover {
-  color: var(--danger, #ff7b8a);
+  color: var(--red-text);
 }
 
 .member-chips .compact-input {
@@ -431,7 +436,7 @@
 
 .team-toggle.active {
   color: var(--text);
-  border-color: rgba(255, 102, 170, 0.5);
+  border-color: var(--pink-border);
   background: var(--pink-soft);
 }
 
@@ -442,8 +447,25 @@
   align-items: center;
 }
 
+.slot-editor > input,
+.slot-editor > select {
+  height: 34px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.slot-editor > input[aria-invalid='true'],
+.slot-editor > input[aria-invalid='true']:focus {
+  border-color: var(--red-9);
+  background: var(--red-a2);
+  box-shadow:
+    0 0 0 3px var(--red-a4),
+    0 0 16px 0 var(--red-a6);
+}
+
 .slot-editor > button {
   width: 100%;
+  height: 34px;
   padding: 6px 8px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -469,13 +491,13 @@
 }
 
 .pill.match {
-  border-color: rgba(255, 102, 170, 0.4);
-  color: var(--pink);
+  border-color: var(--pink-border);
+  color: var(--pink-text);
 }
 
 .pill.lobby {
-  border-color: rgba(120, 190, 255, 0.4);
-  color: #8ec8ff;
+  border-color: var(--blue-border);
+  color: var(--blue-text);
 }
 
 .match-summary-row {
@@ -502,12 +524,12 @@
 }
 
 .match-summary-row .match-team.red {
-  color: #ffa0b4;
+  color: var(--red-text);
   text-align: right;
 }
 
 .match-summary-row .match-team.blue {
-  color: #9cc8ff;
+  color: var(--blue-text);
 }
 
 .match-summary-row .match-score {
@@ -523,11 +545,12 @@
 }
 
 .automation-head {
-  justify-content: space-between;
+  justify-content: flex-end;
 }
 
 .help-button {
   width: 26px;
+  height: 26px;
   padding: 0;
 }
 
@@ -564,5 +587,5 @@
 }
 
 .reference-list code {
-  color: var(--pink);
+  color: var(--pink-text);
 }

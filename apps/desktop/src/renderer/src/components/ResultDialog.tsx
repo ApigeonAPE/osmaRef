@@ -84,11 +84,6 @@ export function ResultDialog({
         </>
       }
     >
-      <p className="muted small">
-        {t(
-          'Scores from all listed players are summed per team with the configured scheme. Accuracy is entered as a percentage.',
-        )}
-      </p>
       {error ? <div className="banner error">{error}</div> : null}
       {values.length === 0 ? (
         <div className="banner warn">

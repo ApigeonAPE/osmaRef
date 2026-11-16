@@ -10,6 +10,8 @@ asar: true
 extraResources:
   - from: ../../assets/HarmonyOS_Sans/LICENSE.txt
     to: licenses/HarmonyOS_Sans_LICENSE.txt
+  - from: ../../LICENSE
+    to: licenses/osmaRef_LICENSE.txt
 win:
   target:
     - zip

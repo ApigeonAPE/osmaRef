@@ -47,10 +47,12 @@ export function mapScore(raw: Record<string, unknown>): PlayerScore {
   return {
     userId: numberOr(raw.user_id, numberOr(user.id, 0)),
     username: typeof user.username === 'string' ? user.username : undefined,
-    score: numberOr(raw.total_score ?? raw.score, 0),
+    // Realtime multiplayer scores are lazer scores, so API v20220705+ always
+    // reports the standardised score as `total_score`.
+    score: numberOr(raw.total_score, 0),
     accuracy: accuracy > 1 ? accuracy / 100 : accuracy,
     maxCombo: numberOr(raw.max_combo, 0),
-    misses: numberOr(statistics.count_miss, 0),
+    misses: numberOr(statistics.miss ?? statistics.count_miss, 0),
     mods,
     passed: raw.passed !== false,
   };

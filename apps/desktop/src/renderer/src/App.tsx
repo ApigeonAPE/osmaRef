@@ -11,12 +11,12 @@ import type { ConnectionKind } from '@osmaref/contracts';
 
 type Page = 'create' | 'workbench' | 'tournaments' | 'logs' | 'login' | 'settings';
 
-const NAV: { id: Page; label: string; hint: string }[] = [
-  { id: 'create', label: 'Create room', hint: 'new room' },
-  { id: 'workbench', label: 'Workbench', hint: 'referee a room' },
-  { id: 'tournaments', label: 'Tournaments', hint: 'configurations' },
-  { id: 'logs', label: 'Lobby logs', hint: 'room history' },
-  { id: 'settings', label: 'Settings', hint: 'preferences' },
+const NAV: { id: Page; label: string }[] = [
+  { id: 'create', label: 'Create room' },
+  { id: 'workbench', label: 'Workbench' },
+  { id: 'tournaments', label: 'Tournaments' },
+  { id: 'logs', label: 'Lobby logs' },
+  { id: 'settings', label: 'Settings' },
 ];
 
 export function App() {
@@ -37,35 +37,30 @@ function Shell() {
   return (
     <div className={`app${page === 'workbench' ? ' workbench-mode' : ''}`}>
       {page !== 'workbench' ? (
-      <aside className="sidebar">
-        <div className="brand">
-          <div>
-            osmaRef
+        <aside className="sidebar">
+          <div className="brand">osmaRef</div>
+
+          <nav className="nav">
+            {NAV.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`nav-item${page === item.id ? ' active' : ''}`}
+                onClick={() => setPage(item.id)}
+              >
+                {t(item.label)}
+              </button>
+            ))}
+          </nav>
+
+          <div className="sidebar-status">
+            <StatusRow kind="irc" label="IRC (stable)" />
+            <StatusRow kind="referee_hub" label="Referee Hub (lazer)" />
+            <StatusRow kind="chat" label="Chat (osu!web)" />
           </div>
-        </div>
 
-        <nav className="nav">
-          {NAV.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`nav-item${page === item.id ? ' active' : ''}`}
-              onClick={() => setPage(item.id)}
-            >
-              <span>{t(item.label)}</span>
-              <span className="nav-hint">{t(item.hint)}</span>
-            </button>
-          ))}
-        </nav>
-
-        <div className="sidebar-status">
-          <StatusRow kind="irc" label="IRC (stable)" />
-          <StatusRow kind="referee_hub" label="Referee Hub (lazer)" />
-          <StatusRow kind="chat" label="Chat (osu!web)" />
-        </div>
-
-        <SidebarUser onOpen={() => setPage('login')} />
-      </aside>
+          <SidebarUser onOpen={() => setPage('login')} />
+        </aside>
       ) : null}
 
       <main className="main">

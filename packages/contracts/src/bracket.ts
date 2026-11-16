@@ -420,31 +420,23 @@ function buildSlots(
     }
 
     const rawCode = (raw.Mods ?? '').trim().toUpperCase();
-    const code = rawCode === 'TB' ? 'TB' : sanitizeCategory(rawCode);
-    if (rawCode && rawCode !== 'TB' && code !== rawCode) {
+    const code = sanitizeCategory(rawCode);
+    if (rawCode && code !== rawCode) {
       notes.push(
         `Stage "${stageName}" uses mod code "${rawCode}"; it was normalised to "${code}".`,
       );
     }
-    let label: string;
-    let category: string;
-
-    if (code === 'TB') {
-      label = 'TB';
-      category = 'TB';
-    } else {
-      const next = (labelCounts.get(code) ?? 0) + 1;
-      const limit = 99;
-      if (next > limit) {
-        notes.push(
-          `Stage "${stageName}" has more than ${limit} "${code}" beatmaps; the extras were skipped.`,
-        );
-        continue;
-      }
-      labelCounts.set(code, next);
-      label = `${code}${next}`;
-      category = code;
+    const next = (labelCounts.get(code) ?? 0) + 1;
+    const limit = 99;
+    if (next > limit) {
+      notes.push(
+        `Stage "${stageName}" has more than ${limit} "${code}" beatmaps; the extras were skipped.`,
+      );
+      continue;
     }
+    labelCounts.set(code, next);
+    const label = `${code}${next}`;
+    const category = code;
 
     const normalizedLabel = label.toUpperCase();
     if (usedLabels.has(normalizedLabel)) {
@@ -542,7 +534,7 @@ function matchNote(match: BracketMatch): string {
   }
   if (match.Completed) parts.push('completed');
   parts.push(match.Losers ? 'losers bracket' : 'winners bracket');
-  return parts.join(' · ');
+  return parts.join(', ');
 }
 
 function describeTeams(teamOne: string | null | undefined, teamTwo: string | null | undefined): string {

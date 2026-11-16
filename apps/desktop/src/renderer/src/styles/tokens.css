@@ -51,21 +51,60 @@
 }
 
 :root {
-  --bg: #141013;
-  --bg-soft: #1b1519;
-  --panel: #221a1f;
-  --panel-2: #2a2026;
-  --line: #3a2c33;
-  --line-soft: #2f252b;
-  --text: #f4e9ee;
-  --muted: #b9a5ae;
-  --pink: #ff66aa;
-  --pink-soft: rgba(255, 102, 170, 0.16);
-  --red: #ff5d6c;
-  --blue: #61b3ff;
-  --green: #63d69b;
-  --amber: #ffc45c;
-  --radius: 12px;
-  --radius-sm: 8px;
+  /* Radix Colors dark scales. */
+  --bg: var(--mauve-1);
+  --bg-soft: var(--mauve-2);
+  --panel: var(--mauve-3);
+  --panel-2: var(--mauve-4);
+  --panel-3: var(--mauve-5);
+  --line: var(--mauve-6);
+  --line-soft: var(--mauve-4);
+  --text: var(--mauve-12);
+  --muted: var(--mauve-11);
+  --subtle: var(--mauve-10);
+
+  --pink: var(--pink-9);
+  --pink-hover: var(--pink-10);
+  --pink-text: var(--pink-11);
+  --pink-soft: var(--pink-a3);
+  --pink-border: var(--pink-a6);
+
+  --red: var(--red-9);
+  --red-hover: var(--red-10);
+  --red-text: var(--red-11);
+  --red-soft: var(--red-a3);
+  --red-border: var(--red-a6);
+
+  --blue: var(--blue-9);
+  --blue-hover: var(--blue-10);
+  --blue-text: var(--blue-11);
+  --blue-soft: var(--blue-a3);
+  --blue-border: var(--blue-a6);
+
+  --green: var(--green-9);
+  --green-hover: var(--green-10);
+  --green-text: var(--green-11);
+  --green-soft: var(--green-a3);
+  --green-border: var(--green-a6);
+
+  --amber: var(--amber-9);
+  --amber-text: var(--amber-11);
+  --amber-soft: var(--amber-a3);
+  --amber-border: var(--amber-a6);
+
+  --cyan-text: var(--cyan-11);
+  --cyan-soft: var(--cyan-a3);
+  --cyan-border: var(--cyan-a6);
+
+  --on-accent: var(--mauve-1);
+  --on-solid: var(--white-a12);
+  --overlay: var(--black-a6);
+  --shadow: var(--black-a7);
+
+  --radius-lg: 10px;
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-xs: 4px;
+
   font-family: 'HarmonyOS Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
 }

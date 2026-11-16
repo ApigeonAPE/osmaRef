@@ -1,0 +1,261 @@
+{
+  "id": 122026887,
+  "name": "NOC 2026 FALL: (Team Falcoms) vs (白毛红瞳双马尾)",
+  "users": [
+    {
+      "id": 12031289,
+      "username": "beta dust"
+    },
+    {
+      "id": 20126778,
+      "username": "adzuki"
+    },
+    {
+      "id": 30174043,
+      "username": "Sikari_Fracture"
+    },
+    {
+      "id": 32541500,
+      "username": "Kamiina Botan"
+    },
+    {
+      "id": 32739668,
+      "username": "AkizukiKanna225"
+    },
+    {
+      "id": 34215813,
+      "username": "linjiu09"
+    },
+    {
+      "id": 37803200,
+      "username": "NiJiKa11"
+    },
+    {
+      "id": 37941525,
+      "username": "Lingyan"
+    },
+    {
+      "id": 38271402,
+      "username": "kasanagi"
+    },
+    {
+      "id": 39243177,
+      "username": "Fareeda030"
+    }
+  ],
+  "events": [
+    {
+      "id": 1000,
+      "game": {
+        "id": 643094484,
+        "beatmap_id": 4954309,
+        "start_time": "2026-10-17T13:14:24Z",
+        "end_time": "2026-10-17T13:17:43Z",
+        "scoring_type": "scorev2",
+        "scores": [
+          {
+            "user_id": 30174043,
+            "total_score": 963967,
+            "legacy_total_score": 963967,
+            "accuracy": 0.988861096615141,
+            "max_combo": 2733,
+            "statistics": {
+              "great": 875,
+              "perfect": 1816,
+              "good": 37,
+              "ok": 5
+            },
+            "mods": [],
+            "passed": true,
+            "match": {
+              "slot": 0,
+              "team": "red",
+              "pass": true
+            }
+          },
+          {
+            "user_id": 34215813,
+            "total_score": 964355,
+            "legacy_total_score": 964355,
+            "accuracy": 0.9890350482565846,
+            "max_combo": 2733,
+            "statistics": {
+              "great": 707,
+              "perfect": 1975,
+              "good": 49,
+              "ok": 1,
+              "meh": 1
+            },
+            "mods": [],
+            "passed": true,
+            "match": {
+              "slot": 1,
+              "team": "red",
+              "pass": true
+            }
+          },
+          {
+            "user_id": 12031289,
+            "total_score": 992961,
+            "legacy_total_score": 992961,
+            "accuracy": 0.997798611985868,
+            "max_combo": 2733,
+            "statistics": {
+              "great": 346,
+              "perfect": 2386,
+              "good": 1
+            },
+            "mods": [],
+            "passed": true,
+            "match": {
+              "slot": 2,
+              "team": "blue",
+              "pass": true
+            }
+          },
+          {
+            "user_id": 38271402,
+            "total_score": 958050,
+            "legacy_total_score": 958050,
+            "accuracy": 0.9913564029199883,
+            "max_combo": 1521,
+            "statistics": {
+              "miss": 1,
+              "great": 629,
+              "perfect": 2072,
+              "good": 27,
+              "ok": 2,
+              "meh": 2
+            },
+            "mods": [],
+            "passed": true,
+            "match": {
+              "slot": 3,
+              "team": "blue",
+              "pass": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": 1001,
+      "game": {
+        "id": 643095716,
+        "beatmap_id": 4368305,
+        "start_time": "2026-10-17T13:46:55Z",
+        "end_time": null,
+        "scoring_type": "scorev2",
+        "scores": []
+      }
+    },
+    {
+      "id": 1002,
+      "game": {
+        "id": 643095804,
+        "beatmap_id": 4368305,
+        "start_time": "2026-10-17T13:49:02Z",
+        "end_time": "2026-10-17T13:51:30Z",
+        "scoring_type": "scorev2",
+        "scores": [
+          {
+            "user_id": 32739668,
+            "total_score": 980177,
+            "legacy_total_score": 980177,
+            "accuracy": 0.9969575674136774,
+            "max_combo": 1102,
+            "statistics": {
+              "miss": 2,
+              "great": 194,
+              "perfect": 1731,
+              "good": 2
+            },
+            "mods": [
+              {
+                "acronym": "NF"
+              }
+            ],
+            "passed": true,
+            "match": {
+              "slot": 0,
+              "team": "red",
+              "pass": true
+            }
+          },
+          {
+            "user_id": 30174043,
+            "total_score": 968433,
+            "legacy_total_score": 968433,
+            "accuracy": 0.9902098258674757,
+            "max_combo": 1929,
+            "statistics": {
+              "great": 648,
+              "perfect": 1257,
+              "good": 24
+            },
+            "mods": [
+              {
+                "acronym": "NF"
+              }
+            ],
+            "passed": true,
+            "match": {
+              "slot": 1,
+              "team": "red",
+              "pass": true
+            }
+          },
+          {
+            "user_id": 38271402,
+            "total_score": 975830,
+            "legacy_total_score": 975830,
+            "accuracy": 0.9925128963448316,
+            "max_combo": 1929,
+            "statistics": {
+              "great": 545,
+              "perfect": 1368,
+              "good": 16
+            },
+            "mods": [
+              {
+                "acronym": "NF"
+              }
+            ],
+            "passed": true,
+            "match": {
+              "slot": 2,
+              "team": "blue",
+              "pass": true
+            }
+          },
+          {
+            "user_id": 37803200,
+            "total_score": 890491,
+            "legacy_total_score": 890491,
+            "accuracy": 0.9720487129150414,
+            "max_combo": 736,
+            "statistics": {
+              "miss": 3,
+              "great": 683,
+              "perfect": 1140,
+              "good": 92,
+              "ok": 7,
+              "meh": 4
+            },
+            "mods": [
+              {
+                "acronym": "NF"
+              }
+            ],
+            "passed": true,
+            "match": {
+              "slot": 3,
+              "team": "blue",
+              "pass": true
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
