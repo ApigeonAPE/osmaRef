@@ -15,3 +15,7 @@ coverage/
 smoke-package/
 smoke-data/
 *.tmp
+BUGS.md
+DOC.md
+PLAN.md
+TODO.md
