@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BUILTIN_WIN_BY_RULE_ID } from './winby';
 import {
   TournamentSchema,
   createEmptyTournament,
@@ -246,15 +247,10 @@ export function convertBracketToTournament(
       bestOf,
       bans,
       protects: 0,
+      winCondition: tournament.platform === 'lazer' ? 'score' : 'score_v2',
+      winByRuleId: BUILTIN_WIN_BY_RULE_ID,
       slots: buildSlots(raw.Beatmaps ?? [], id, stageName, tournament.mode, notes),
       flow: buildFlow(id, stageName, bans, notes),
-      scoringScheme: {
-        id: `score_${id}`,
-        name: 'Score V2',
-        winCondition: 'score_v2',
-        aggregation: 'sum',
-        modMultipliers: {},
-      },
       matches: [],
     };
     stages.push(stage);
@@ -329,7 +325,6 @@ export function convertBracketToTournament(
         scoreBlue: Number.isInteger(raw.Team2Score) ? Math.max(0, raw.Team2Score!) : 0,
       },
       roomMode: 'team_versus',
-      winCondition: 'score_v2',
       notes: matchNote(raw).slice(0, 1000),
     });
   }
@@ -461,8 +456,6 @@ function buildSlots(
             ? null
             : MODE_RULESET[mode],
       ...modsForCategory(category),
-      winCondition: null,
-      winConditionWinner: null,
     });
   }
   return slots;

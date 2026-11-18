@@ -18,8 +18,6 @@ function slot(overrides: Partial<MappoolSlot> & Pick<MappoolSlot, 'id' | 'label'
     requiredMods: [],
     allowedMods: [],
     freestyle: false,
-    winCondition: null,
-    winConditionWinner: null,
     ...overrides,
   };
 }
@@ -35,7 +33,6 @@ function twoTeamMatch(id = 'm1') {
     scheduledAt: '2026-01-01T00:00:00.000Z',
     result: { scoreRed: 0, scoreBlue: 0 },
     roomMode: 'team_versus' as const,
-    winCondition: 'score_v2' as const,
   };
 }
 
@@ -142,7 +139,6 @@ describe('tournament schema (stages v4)', () => {
       type: 'lobby',
       teamIds: [],
       roomMode: 'head_to_head',
-      winCondition: 'score',
     });
     expect(TournamentSchema.safeParse(tournament).success).toBe(false);
   });
@@ -154,7 +150,6 @@ describe('tournament schema (stages v4)', () => {
       type: 'lobby',
       teamIds: [0],
       roomMode: 'head_to_head',
-      winCondition: 'score',
     });
     expect(TournamentSchema.safeParse(tournament).success).toBe(true);
     tournament.stages[0]!.matches[0] = {
@@ -162,7 +157,6 @@ describe('tournament schema (stages v4)', () => {
       type: 'lobby',
       teamIds: [0, 1],
       roomMode: 'head_to_head',
-      winCondition: 'score',
     };
     expect(TournamentSchema.safeParse(tournament).success).toBe(true);
   });
@@ -175,7 +169,6 @@ describe('tournament schema (stages v4)', () => {
       type: 'lobby',
       teamIds: [0, 1, 2],
       roomMode: 'head_to_head',
-      winCondition: 'score',
     });
     expect(TournamentSchema.safeParse(tournament).success).toBe(true);
   });
@@ -197,7 +190,6 @@ describe('platform room options', () => {
     tournament.platform = 'lazer';
     tournament.stages[0]!.matches.push({
       ...twoTeamMatch(),
-      winCondition: 'score',
       roomMode: 'tag_coop',
     });
     const messages = validateTournamentReferences(tournament)
@@ -207,51 +199,55 @@ describe('platform room options', () => {
     expect(TournamentSchema.safeParse(tournament).success).toBe(false);
   });
 
-  it('rejects Score V2 as a lazer room win condition', () => {
+  it('ignores the room win condition on lazer', () => {
     const tournament = createEmptyTournament('Lazer Cup');
     tournament.platform = 'lazer';
-    tournament.stages[0]!.matches.push({
-      ...twoTeamMatch(),
-      winCondition: 'score_v2',
-    });
-    expect(TournamentSchema.safeParse(tournament).success).toBe(false);
-  });
-
-  it('accepts combo and accuracy on lazer', () => {
-    const tournament = createEmptyTournament('Lazer Cup');
-    tournament.platform = 'lazer';
-    tournament.stages[0]!.matches.push({
-      ...twoTeamMatch(),
-      winCondition: 'combo',
-    });
+    tournament.stages[0]!.winCondition = 'score_v2';
     expect(TournamentSchema.safeParse(tournament).success).toBe(true);
-    tournament.stages[0]!.matches[0]!.winCondition = 'accuracy';
+    tournament.stages[0]!.winCondition = 'combo';
+    expect(TournamentSchema.safeParse(tournament).success).toBe(true);
+    tournament.stages[0]!.winCondition = 'accuracy';
     expect(TournamentSchema.safeParse(tournament).success).toBe(true);
   });
 
-  it('migrates a stored lazer Score V2 room condition to Score', () => {
+  it('defaults a missing room win condition to Score', () => {
     const tournament = createEmptyTournament('Lazer Cup');
     tournament.platform = 'lazer';
-    tournament.stages[0]!.matches.push({
-      ...twoTeamMatch(),
-      winCondition: 'score',
-    });
     const raw = JSON.parse(JSON.stringify(tournament)) as {
-      stages: { matches: { winCondition: string }[] }[];
+      stages: { winCondition?: string }[];
     };
-    raw.stages[0]!.matches[0]!.winCondition = 'score_v2';
+    delete raw.stages[0]!.winCondition;
+    const parsed = TournamentSchema.safeParse(raw);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.stages[0]?.winCondition).toBe('score');
+  });
+
+  it('migrates a stored lazer room condition without applying it', () => {
+    const tournament = createEmptyTournament('Lazer Cup');
+    tournament.platform = 'lazer';
+    tournament.stages[0]!.matches.push(twoTeamMatch());
+    const raw = JSON.parse(JSON.stringify(tournament)) as {
+      schemaVersion: number;
+      stages: { winCondition?: string; winByRuleId?: string; matches: { winCondition?: string }[] }[];
+    };
+    raw.schemaVersion = 4;
+    const stage = raw.stages[0]!;
+    delete stage.winCondition;
+    delete stage.winByRuleId;
+    stage.matches[0]!.winCondition = 'score_v2';
     const parsed = parseTournament(raw);
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
-    expect(parsed.data.stages[0]?.matches[0]?.winCondition).toBe('score');
+    expect(parsed.data.stages[0]?.winCondition).toBe('score_v2');
   });
 
   it('accepts all room options on stable', () => {
     const tournament = createEmptyTournament('Stable Cup');
+    tournament.stages[0]!.winCondition = 'combo';
     tournament.stages[0]!.matches.push({
       ...twoTeamMatch(),
       roomMode: 'tag_team_versus',
-      winCondition: 'combo',
     });
     expect(TournamentSchema.safeParse(tournament).success).toBe(true);
   });

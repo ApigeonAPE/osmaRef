@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { writeFileSync } from 'node:fs';
 import { createAppStore } from './store';
 import { SettingsStore } from './settings';
+import { WinByStore } from './winby-store';
 import { TokenVault } from './token-vault';
 import { ServerClient } from './server-client';
 import { ConnectionManager } from './connections';
@@ -57,6 +58,7 @@ async function bootstrap(): Promise<void> {
   const userData = app.getPath('userData');
   const store = await createAppStore(join(userData, 'data'));
   const settings = new SettingsStore(join(userData, 'config'));
+  const winby = new WinByStore(join(userData, 'config'));
   const vault = new TokenVault(join(userData, 'credentials'));
   await settings.init();
   await vault.init();
@@ -72,6 +74,7 @@ async function bootstrap(): Promise<void> {
   const connections = new ConnectionManager({
     store,
     settings,
+    winby,
     server,
     logger,
     // Replaced by registerIpc once the window exists.
@@ -85,6 +88,7 @@ async function bootstrap(): Promise<void> {
     server,
     connections,
     importer,
+    winby,
     logger,
     getWindow: () => mainWindow,
   });

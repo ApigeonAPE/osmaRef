@@ -49,14 +49,20 @@ async function main() {
     outfile: resolve(desktopRoot, 'out/preload/index.js'),
   });
 
-  // @microsoft/signalr loads `ws` and `eventsource` through computed requires,
-  // which esbuild cannot follow. The packaged app has no node_modules, so ship
-  // bundled copies at the paths Node resolves from the main bundle.
-  for (const name of ['ws', 'eventsource']) {
+  // @microsoft/signalr loads `ws`, `eventsource`, `tough-cookie` and
+  // `fetch-cookie` through computed requires, which esbuild cannot follow. The
+  // packaged app has no node_modules, so ship bundled copies at the paths Node
+  // resolves from the main bundle. `fetch-cookie` must use the outer
+  // `tough-cookie` copy so both share the same Cookie classes.
+  for (const name of ['ws', 'eventsource', 'tough-cookie', 'fetch-cookie']) {
     const outfile = resolve(desktopRoot, `out/main/node_modules/${name}/index.js`);
     await build({
       ...common,
-      external: ['bufferutil', 'utf-8-validate'],
+      external: [
+        'bufferutil',
+        'utf-8-validate',
+        ...(name === 'fetch-cookie' ? ['tough-cookie'] : []),
+      ],
       entryPoints: [require.resolve(name)],
       outfile,
     });

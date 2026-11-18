@@ -87,10 +87,12 @@ export function MatchInfo({
             <dt>{t('Room mode')}</dt>
             <dd>{teamModeLabel(match.roomMode)}</dd>
           </div>
-          <div>
-            <dt>{t('Win condition')}</dt>
-            <dd>{winConditionLabel(match.winCondition)}</dd>
-          </div>
+          {tournament.platform === 'stable' ? (
+            <div>
+              <dt>{t('Win condition')}</dt>
+              <dd>{winConditionLabel(stage.winCondition)}</dd>
+            </div>
+          ) : null}
           {group ? (
             <div>
               <dt>{t('Group')}</dt>

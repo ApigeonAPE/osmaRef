@@ -1,4 +1,5 @@
 export * from './tournament';
+export * from './winby';
 export * from './bracket';
 export * from './session';
 export * from './room';

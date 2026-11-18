@@ -310,6 +310,7 @@ export const zhCN: Record<string, string> = {
   'match created': '比赛创建',
   'beatmap started': '谱面开始',
   'beatmap completed': '谱面结束',
+  'score updated': '比分更新',
   'action applied': '动作执行',
   'Import preview': '导入预览',
   'Import as new tournament': '导入为新赛事',

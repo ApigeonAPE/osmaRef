@@ -6,7 +6,6 @@ import {
   closeRoomSession,
   createSession,
   captureMatchPlayers,
-  evaluateBeatmap,
   setFirstTeams,
   recordResult,
   reopenRoomSession,
@@ -16,7 +15,6 @@ import {
   renderTemplate,
   protectedSlotLabels,
   usedSlotLabels,
-  type EvaluateInput,
 } from '@osmaref/domain';
 import {
   MatchSessionSchema,
@@ -24,8 +22,6 @@ import {
   type BeatmapResult,
   type CreateSessionInput,
   type MatchFlow,
-  type PlayerScore,
-  type ScoringScheme,
 } from '@osmaref/contracts';
 
 const TEAM_ONE = 'team_red';
@@ -75,44 +71,6 @@ function at(second: number): string {
   return `2026-01-01T00:00:${String(second).padStart(2, '0')}.000Z`;
 }
 
-const scheme: ScoringScheme = {
-  id: 'score',
-  name: 'Score',
-  winCondition: 'score',
-  aggregation: 'sum',
-  modMultipliers: { HD: 1.06, HR: 1.1 },
-};
-
-function player(userId: number, score: number, mods: string[] = []): PlayerScore {
-  return {
-    userId,
-    score,
-    accuracy: 0.9,
-    maxCombo: 100,
-    misses: 0,
-    mods,
-    passed: true,
-  };
-}
-
-function evaluation(scores: PlayerScore[], winCondition: ScoringScheme['winCondition'] = 'score') {
-  const input: EvaluateInput = {
-    slotLabel: 'NM1',
-    beatmapId: 111,
-    scores,
-    teamOneId: TEAM_ONE,
-    teamTwoId: TEAM_TWO,
-    memberTeam: new Map([
-      [1, TEAM_ONE],
-      [2, TEAM_TWO],
-    ]),
-    scheme: { ...scheme, winCondition },
-    recordedAt: at(1),
-    source: 'referee_hub',
-  };
-  return evaluateBeatmap(input);
-}
-
 function result(winner: 'team_one' | 'team_two', slot: string, second: number): BeatmapResult {
   return {
     id: `${slot}-${second}`,
@@ -120,6 +78,7 @@ function result(winner: 'team_one' | 'team_two', slot: string, second: number): 
     beatmapId: 100 + second,
     scores: [],
     winner,
+    winByRuleId: null,
     teamValues: {
       team_one: winner === 'team_one' ? 1000 : 500,
       team_two: winner === 'team_two' ? 1000 : 500,
@@ -244,7 +203,7 @@ describe('match state machine', () => {
       ...first.results[0]!,
       winner: 'team_two' as const,
       teamValues: { team_one: 400, team_two: 500 },
-      scores: [player(1, 400), player(2, 500)],
+      scores: [],
     };
     const next = amendResult(first, corrected.id, corrected, at(2));
     expect(next.results).toHaveLength(1);
@@ -466,10 +425,18 @@ describe('match state machine', () => {
   });
 
   it('does not award a point for a tie and flags the result', () => {
-    const tie = evaluation([player(1, 1000), player(2, 1000)]);
-    expect(tie.result.winner).toBeNull();
-    expect(tie.needsReview).toBe(true);
-
+    const tie: BeatmapResult = {
+      id: 'NM1-tie',
+      slotLabel: 'NM1',
+      beatmapId: 11,
+      scores: [],
+      winner: null,
+      winByRuleId: 'builtin:higher-score',
+      teamValues: { team_one: 1000, team_two: 1000 },
+      source: 'manual',
+      recordedAt: at(4),
+      needsReview: true,
+    };
     let state = session(1);
     state = applyAction(state, {
       kind: 'ban',
@@ -495,7 +462,7 @@ describe('match state machine', () => {
       byUserId: 1,
       at: at(3),
     });
-    state = recordResult(state, tie.result);
+    state = recordResult(state, tie);
     expect(state.wins).toEqual({ team_one: 0, team_two: 0 });
     expect(state.needsReview.length).toBeGreaterThan(0);
   });
@@ -601,95 +568,7 @@ describe('match state machine', () => {
   });
 });
 
-describe('scoring', () => {
-  it('applies mod multipliers to score', () => {
-    const evaluationResult = evaluation([player(1, 1000, ['HD']), player(2, 1050)]);
-    expect(evaluationResult.result.teamValues.team_one).toBeCloseTo(1060);
-    expect(evaluationResult.result.winner).toBe('team_one');
-  });
-
-  it('treats lower misses as better', () => {
-    const low = evaluation([player(1, 900), player(2, 900)], 'misses');
-    // both zero misses: tie
-    expect(low.result.winner).toBeNull();
-
-    const withMisses = evaluateBeatmap({
-      slotLabel: 'NM1',
-      beatmapId: 1,
-      scores: [
-        { ...player(1, 900), misses: 1 },
-        { ...player(2, 900), misses: 3 },
-      ],
-      teamOneId: TEAM_ONE,
-      teamTwoId: TEAM_TWO,
-      memberTeam: new Map([
-        [1, TEAM_ONE],
-        [2, TEAM_TWO],
-      ]),
-      scheme: { ...scheme, winCondition: 'misses' },
-      recordedAt: at(1),
-      source: 'manual',
-    });
-    expect(withMisses.result.winner).toBe('team_one');
-  });
-
-  it('flags a score whose user is not on either team', () => {
-    const result = evaluateBeatmap({
-      slotLabel: 'NM1',
-      beatmapId: 1,
-      scores: [player(1, 100), player(99, 200)],
-      teamOneId: TEAM_ONE,
-      teamTwoId: TEAM_TWO,
-      memberTeam: new Map([[1, TEAM_ONE]]),
-      scheme,
-      recordedAt: at(1),
-      source: 'manual',
-    });
-    expect(result.needsReview).toBe(true);
-    expect(result.reviewReason).toMatch(/team/);
-  });
-
-  it('honours per-beatmap win condition overrides', () => {
-    const accuracy = evaluateBeatmap({
-      slotLabel: 'HD1',
-      beatmapId: 1,
-      scores: [
-        { ...player(1, 900000), accuracy: 0.98 },
-        { ...player(2, 800000), accuracy: 1.0 },
-      ],
-      teamOneId: TEAM_ONE,
-      teamTwoId: TEAM_TWO,
-      memberTeam: new Map([
-        [1, TEAM_ONE],
-        [2, TEAM_TWO],
-      ]),
-      scheme,
-      winCondition: 'accuracy',
-      recordedAt: at(1),
-      source: 'manual',
-    });
-    expect(accuracy.result.winner).toBe('team_two');
-    expect(accuracy.result.teamValues.team_one).toBeCloseTo(0.98);
-
-    const lowestScore = evaluateBeatmap({
-      slotLabel: 'FM1',
-      beatmapId: 2,
-      scores: [player(1, 500000), player(2, 900000)],
-      teamOneId: TEAM_ONE,
-      teamTwoId: TEAM_TWO,
-      memberTeam: new Map([
-        [1, TEAM_ONE],
-        [2, TEAM_TWO],
-      ]),
-      scheme,
-      winCondition: 'score',
-      winner: 'lowest',
-      recordedAt: at(1),
-      source: 'manual',
-    });
-    expect(lowestScore.result.winner).toBe('team_one');
-  });
-
+describe('protect', () => {
   it('treats protect as protection, not as a consumed map', () => {
     const protectFlow: MatchFlow = {
       id: 'protect_flow',

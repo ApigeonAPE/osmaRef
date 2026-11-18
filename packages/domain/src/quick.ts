@@ -1,10 +1,11 @@
 import {
+  BUILTIN_WIN_BY_RULE_ID,
+  TOURNAMENT_SCHEMA_VERSION,
   TournamentSchema,
   emptyAutomationMessages,
   type Match,
   type MatchFlow,
   type Platform,
-  type ScoringScheme,
   type Stage,
   type Tournament,
   type TournamentMode,
@@ -57,13 +58,6 @@ export function buildQuickTournament(options: QuickRoomOptions): Tournament {
     ],
     triggers: [],
   };
-  const scoring: ScoringScheme = {
-    id: 'score_quick',
-    name: roomWinCondition === 'score_v2' ? 'Score V2' : 'Score',
-    winCondition: roomWinCondition,
-    aggregation: 'sum',
-    modMultipliers: {},
-  };
   const match: Match = {
     id: 'match_quick',
     type: 'match',
@@ -74,7 +68,6 @@ export function buildQuickTournament(options: QuickRoomOptions): Tournament {
     scheduledAt: now,
     result: { scoreRed: 0, scoreBlue: 0 },
     roomMode: options.matchType,
-    winCondition: roomWinCondition,
   };
   const stage: Stage = {
     id: 'stage_quick',
@@ -85,6 +78,8 @@ export function buildQuickTournament(options: QuickRoomOptions): Tournament {
     bestOf,
     bans: 0,
     protects: 0,
+    winCondition: roomWinCondition,
+    winByRuleId: BUILTIN_WIN_BY_RULE_ID,
     slots: beatmapId
       ? [
           {
@@ -97,18 +92,15 @@ export function buildQuickTournament(options: QuickRoomOptions): Tournament {
             requiredMods: [],
             allowedMods: [],
             freestyle: false,
-            winCondition: null,
-            winConditionWinner: null,
           },
         ]
       : [],
     flow,
-    scoringScheme: scoring,
     matches: [match],
   };
 
   const tournament: Tournament = {
-    schemaVersion: 4,
+    schemaVersion: TOURNAMENT_SCHEMA_VERSION,
     id: `adhoc_${suffix}`,
     name: options.name,
     abbreviation: 'QUICK',

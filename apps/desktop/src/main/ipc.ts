@@ -1,4 +1,5 @@
-import { ipcMain, shell, type BrowserWindow } from 'electron';
+import { ipcMain, dialog, shell, type BrowserWindow } from 'electron';
+import { readFileSync, writeFileSync } from 'node:fs';
 import {
   AdjustScoreInputSchema,
   ApplyActionInputSchema,
@@ -29,6 +30,7 @@ import type { ServerClient } from './server-client';
 import type { ConnectionManager } from './connections';
 import type { TournamentImporter } from './importer';
 import type { AppLogger } from './logger';
+import type { WinByStore } from './winby-store';
 import { exportRuntimeLog, exportSessionLog } from './log-export';
 
 export interface IpcContext {
@@ -37,6 +39,7 @@ export interface IpcContext {
   server: ServerClient;
   connections: ConnectionManager;
   importer: TournamentImporter;
+  winby: WinByStore;
   logger: AppLogger;
   getWindow: () => BrowserWindow | null;
 }
@@ -111,6 +114,43 @@ export function registerIpc(ctx: IpcContext): void {
     ctx.logger.getDiagnostics(typeof limit === 'number' ? limit : 200),
   );
   handle(IPC.appExportRuntimeLog, () => exportRuntimeLog(ctx.store));
+
+  handle(IPC.winbyList, () => ctx.winby.list());
+  handle(IPC.winbyImportFile, async () => {
+    const window = ctx.getWindow();
+    const options = {
+      title: 'Import Win-by rule',
+      filters: [{ name: 'JavaScript', extensions: ['js', 'mjs'] }],
+      properties: ['openFile' as const],
+    };
+    const result = window
+      ? await dialog.showOpenDialog(window, options)
+      : await dialog.showOpenDialog(options);
+    const path = result.filePaths[0];
+    if (result.canceled || !path) return null;
+    return ctx.winby.add(readFileSync(path, 'utf8'));
+  });
+  handle(IPC.winbyExport, async (id) => {
+    const rule = ctx.winby.get(String(id));
+    if (!rule) throw new Error('Win-by rule not found');
+    const window = ctx.getWindow();
+    const name = rule.name.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 60) || 'win-by';
+    const options = {
+      title: 'Export Win-by rule',
+      defaultPath: `${name}.js`,
+      filters: [{ name: 'JavaScript', extensions: ['js'] }],
+    };
+    const result = window
+      ? await dialog.showSaveDialog(window, options)
+      : await dialog.showSaveDialog(options);
+    if (result.canceled || !result.filePath) return null;
+    writeFileSync(result.filePath, rule.source, 'utf8');
+    return result.filePath;
+  });
+  handle(IPC.winbyRemove, (id) => {
+    ctx.winby.remove(String(id));
+    return ctx.winby.list();
+  });
 
   handle(IPC.tournamentsList, () => ctx.store.listTournaments());
   handle(IPC.tournamentsGet, (id) => ctx.store.getTournament(String(id)));

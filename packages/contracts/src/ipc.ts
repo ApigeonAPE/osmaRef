@@ -8,6 +8,7 @@ import {
   type SessionEvent,
 } from './session';
 import { RoomSnapshotSchema, type RoomSnapshot } from './room';
+import type { WinByRule } from './winby';
 
 export const ConnectionKindSchema = z.enum(['irc', 'referee_hub', 'chat']);
 export type ConnectionKind = z.infer<typeof ConnectionKindSchema>;
@@ -493,6 +494,13 @@ export interface DesktopApi {
     exportLog(sessionId: string): Promise<string | null>;
     deleteLog(sessionId: string): Promise<void>;
   };
+  winby: {
+    /** Built-in rule first, then custom rules stored under the app profile. */
+    list(): Promise<WinByRule[]>;
+    importFile(): Promise<WinByRule | null>;
+    exportFile(id: string): Promise<string | null>;
+    remove(id: string): Promise<WinByRule[]>;
+  };
   connection: {
     connectIrc(input: { username: string; password?: string; host?: string; port?: number; useTls?: boolean; channels?: string[] }): Promise<AppState>;
     /** Connects with saved credentials when `ircAutoConnect` is enabled. */
@@ -546,6 +554,11 @@ export const IPC = {
   sessionsListLogs: 'sessions:list-logs',
   sessionsExportLog: 'sessions:export-log',
   sessionsDeleteLog: 'sessions:delete-log',
+
+  winbyList: 'winby:list',
+  winbyImportFile: 'winby:import-file',
+  winbyExport: 'winby:export',
+  winbyRemove: 'winby:remove',
   sessionsGet: 'sessions:get',
   sessionsOpen: 'sessions:open',
   sessionsOpenQuick: 'sessions:open-quick',

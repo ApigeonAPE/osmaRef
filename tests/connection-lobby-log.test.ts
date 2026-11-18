@@ -15,6 +15,7 @@ import { createAppStore } from '../apps/desktop/src/main/store';
 import type { SettingsStore } from '../apps/desktop/src/main/settings';
 import type { ServerClient } from '../apps/desktop/src/main/server-client';
 import type { AppLogger } from '../apps/desktop/src/main/logger';
+import { WinByStore } from '../apps/desktop/src/main/winby-store';
 
 function snapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
   return RoomSnapshotSchema.parse({
@@ -46,6 +47,7 @@ describe('ConnectionManager lobby log integration', () => {
     const manager = new ConnectionManager({
       store,
       settings,
+      winby: new WinByStore(dir),
       server,
       logger,
       emit: (event) => emitted.push(event),

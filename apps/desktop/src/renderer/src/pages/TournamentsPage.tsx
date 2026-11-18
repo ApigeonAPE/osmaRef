@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   AUTOMATION_TRIGGERS,
+  BUILTIN_WIN_BY_RULE_ID,
   PLATFORM_TEAM_MODES,
   PLATFORM_WIN_CONDITIONS,
   TOURNAMENT_MODES,
-  WinConditionSchema,
   composeSlotLabel,
   normalizeRoomMode,
-  normalizeRoomWinCondition,
   slotLabelSequence,
   type Platform,
   type RoomWinCondition,
@@ -24,7 +23,7 @@ import {
   type Tournament,
   type TournamentMode,
   type ValidationIssue,
-  type WinCondition,
+  type WinByRule,
 } from '@osmaref/contracts';
 import { useModel } from '../useOsmaRef';
 import { useI18n } from '../i18n';
@@ -36,7 +35,7 @@ import { Toast } from '../components/Toast';
 const RULESET_LABELS = ['osu!', 'osu!taiko', 'osu!catch', 'osu!mania'];
 
 type WorkspaceView = 'basics' | 'teams' | 'stages' | 'automation';
-type StageView = 'groups' | 'mappool' | 'flow' | 'scoring' | 'matches';
+type StageView = 'groups' | 'mappool' | 'flow' | 'winby' | 'matches';
 
 const WORKSPACE_VIEWS: { id: WorkspaceView; label: string }[] = [
   { id: 'basics', label: 'Basics' },
@@ -474,10 +473,6 @@ export function TournamentsPage() {
                                   for (const stage of next.stages) {
                                     for (const match of stage.matches) {
                                       match.roomMode = normalizeRoomMode(platform, match.roomMode);
-                                      match.winCondition = normalizeRoomWinCondition(
-                                        platform,
-                                        match.winCondition,
-                                      );
                                     }
                                   }
                                 })
@@ -947,6 +942,8 @@ function StagesEditor({
         bestOf: 9,
         bans: 1,
         protects: 0,
+        winCondition: 'score_v2',
+        winByRuleId: BUILTIN_WIN_BY_RULE_ID,
         slots: [],
         flow: {
           id: `flow_${id}`,
@@ -968,13 +965,6 @@ function StagesEditor({
             },
           ],
           triggers: [],
-        },
-        scoringScheme: {
-          id: `score_${id}`,
-          name: 'Score V2',
-          winCondition: 'score_v2',
-          aggregation: 'sum',
-          modMultipliers: {},
         },
         matches: [],
       });
@@ -1060,6 +1050,24 @@ function StagesEditor({
                 }
               />
             </Field>
+            {draft.platform === 'stable' ? (
+              <Field label={t('Win condition')}>
+                <select
+                  value={activeStage.winCondition}
+                  onChange={(event) =>
+                    edit((next) => {
+                      next.stages[stageIndex]!.winCondition = event.target.value as RoomWinCondition;
+                    })
+                  }
+                >
+                  {PLATFORM_WIN_CONDITIONS.stable.map((condition) => (
+                    <option key={condition} value={condition}>
+                      {winConditionLabel(condition)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
             <Field label={t('Bans per team')}>
               <input
                 type="number"
@@ -1135,10 +1143,10 @@ function StagesEditor({
             </button>
             <button
               type="button"
-              className={`tab${resolvedStageView === 'scoring' ? ' active' : ''}`}
-              onClick={() => setStageView('scoring')}
+              className={`tab${resolvedStageView === 'winby' ? ' active' : ''}`}
+              onClick={() => setStageView('winby')}
             >
-              {t('Scoring')}
+              {t('Win-by')}
             </button>
             <button
               type="button"
@@ -1165,8 +1173,8 @@ function StagesEditor({
           {resolvedStageView === 'flow' ? (
             <FlowEditor draft={draft} edit={edit} stage={activeStage} stageIndex={stageIndex} />
           ) : null}
-          {resolvedStageView === 'scoring' ? (
-            <ScoringEditor draft={draft} edit={edit} stage={activeStage} stageIndex={stageIndex} />
+          {resolvedStageView === 'winby' ? (
+            <WinByEditor edit={edit} stage={activeStage} stageIndex={stageIndex} />
           ) : null}
           {resolvedStageView === 'matches' ? (
             <MatchesEditor draft={draft} edit={edit} stage={activeStage} stageIndex={stageIndex} />
@@ -1292,8 +1300,6 @@ function PoolEditor({
         requiredMods: [],
         allowedMods: [],
         freestyle: false,
-        winCondition: null,
-        winConditionWinner: null,
       });
     });
   };
@@ -1675,38 +1681,77 @@ function FlowEditor({
     </div>
   );
 }
-function ScoringEditor({
+function WinByEditor({
   edit,
   stage,
   stageIndex,
 }: {
-  draft: Tournament;
   edit: (mutator: (tournament: Tournament) => void) => void;
   stage: Stage;
   stageIndex: number;
 }) {
   const { t } = useI18n();
+  const [rules, setRules] = useState<WinByRule[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    window.osmaRef.winby
+      .list()
+      .then((entries) => {
+        if (alive) setRules(entries);
+      })
+      .catch((cause: unknown) => {
+        if (alive) setError(cause instanceof Error ? cause.message : String(cause));
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const importRule = async (): Promise<void> => {
+    try {
+      const rule = await window.osmaRef.winby.importFile();
+      if (!rule) return;
+      setRules(await window.osmaRef.winby.list());
+      edit((next) => {
+        next.stages[stageIndex]!.winByRuleId = rule.id;
+      });
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
 
   return (
     <div className="flow-card">
       <div className="form-grid">
-        <Field label={t('Win condition')}>
+        <Field label={t('Win-by rule')}>
           <select
-            value={stage.scoringScheme.winCondition}
+            value={stage.winByRuleId}
             onChange={(event) =>
               edit((next) => {
-                next.stages[stageIndex]!.scoringScheme.winCondition = event.target.value as WinCondition;
+                next.stages[stageIndex]!.winByRuleId = event.target.value;
               })
             }
           >
-            {WinConditionSchema.options.map((condition) => (
-              <option key={condition} value={condition}>
-                {t(condition)}
+            {rules.map((rule) => (
+              <option key={rule.id} value={rule.id}>
+                {rule.name}
               </option>
             ))}
+            {rules.some((rule) => rule.id === stage.winByRuleId) ? null : (
+              <option value={stage.winByRuleId}>{stage.winByRuleId}</option>
+            )}
           </select>
         </Field>
       </div>
+      <div className="row-actions">
+        <button type="button" className="ghost small" onClick={() => void importRule()}>
+          {t('Import')}
+        </button>
+      </div>
+      {error ? <p className="errorText">{error}</p> : null}
     </div>
   );
 }
@@ -1746,9 +1791,6 @@ function MatchesEditor({
         refereeIds: [],
         scheduledAt: new Date().toISOString(),
         result: { scoreRed: 0, scoreBlue: 0 },
-        winCondition: (draft.platform === 'lazer'
-          ? 'score'
-          : 'score_v2') as RoomWinCondition,
         notes: undefined,
       };
       if (type === 'lobby') {
@@ -1957,24 +1999,6 @@ function MatchesEditor({
                         ))}
                       </select>
                     </Field>
-                    <Field label={t('Win condition')}>
-                      <select
-                        value={match.winCondition}
-                        onChange={(event) =>
-                          patchMatch(
-                            index,
-                            (target) =>
-                              (target.winCondition = event.target.value as RoomWinCondition),
-                          )
-                        }
-                      >
-                        {PLATFORM_WIN_CONDITIONS[draft.platform].map((condition) => (
-                          <option key={condition} value={condition}>
-                            {winConditionLabel(condition)}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
                     <Field label={t('Referees (user ids)')}>
                       <input
                         value={match.refereeIds.join(', ')}
@@ -2142,6 +2166,8 @@ function automationTriggerLabel(trigger: (typeof AUTOMATION_TRIGGERS)[number]): 
       return 'beatmap started';
     case 'beatmap_completed':
       return 'beatmap completed';
+    case 'score_updated':
+      return 'score updated';
     case 'match_finished':
       return 'match finished';
     case 'action_applied':

@@ -8,6 +8,7 @@ import { createAppStore } from '../apps/desktop/src/main/store';
 import type { SettingsStore } from '../apps/desktop/src/main/settings';
 import type { ServerClient } from '../apps/desktop/src/main/server-client';
 import type { AppLogger } from '../apps/desktop/src/main/logger';
+import { WinByStore } from '../apps/desktop/src/main/winby-store';
 
 /** The lines BanchoBot posts itself while the referee drives an IRC room. */
 const BANCHO_LIFECYCLE = [
@@ -37,6 +38,7 @@ async function createHarness() {
   const manager = new ConnectionManager({
     store,
     settings,
+    winby: new WinByStore(dir),
     server,
     logger,
     emit: (event) => emitted.push(event),

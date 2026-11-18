@@ -1,17 +1,20 @@
 import { z } from 'zod';
+import { BUILTIN_WIN_BY_RULE_ID } from './winby';
 
 /**
  * Versioned tournament configuration.
  *
- * The configuration is deliberately declarative: no imported script may run.
- * Every rule (scoring, messaging) is data that the domain layer interprets.
+ * Apart from explicitly imported Win-by rules, the configuration is
+ * declarative: every other rule (messaging, flows) is data that the domain
+ * layer interprets.
  *
- * v4 owns the platform at the tournament root, stores phase-based match flows
- * and stage ban/protect counts, and keeps match IDs independent of their
- * displayed order.
+ * v5 moves the room win condition to the stage and replaces the internal
+ * scoring scheme with a Win-by rule id. v4 owned the platform at the
+ * tournament root, stored phase-based match flows and stage ban/protect
+ * counts, and kept match IDs independent of their displayed order.
  */
 
-export const TOURNAMENT_SCHEMA_VERSION = 4 as const;
+export const TOURNAMENT_SCHEMA_VERSION = 5 as const;
 
 /**
  * Tournament ids are six random characters: digits plus lower-case letters
@@ -66,51 +69,21 @@ export const PLATFORM_TEAM_MODES: Record<Platform, MatchType[]> = {
 
 export const PLATFORM_WIN_CONDITIONS: Record<Platform, RoomWinCondition[]> = {
   stable: ['score', 'score_v2', 'accuracy', 'combo'],
-  /** lazer has no Score V2 room win condition. */
-  lazer: ['score', 'accuracy', 'combo'],
+  /** lazer has no room win condition; the stage value is ignored. */
+  lazer: [],
 };
 
 export function isTeamModeAllowed(platform: Platform, mode: MatchType): boolean {
   return PLATFORM_TEAM_MODES[platform].includes(mode);
 }
 
-export function isWinConditionAllowed(
-  platform: Platform,
-  condition: RoomWinCondition,
-): boolean {
-  return PLATFORM_WIN_CONDITIONS[platform].includes(condition);
-}
-
-/** Returns the supported value closest to the requested one. */
 export function normalizeRoomMode(platform: Platform, mode: MatchType): MatchType {
   if (isTeamModeAllowed(platform, mode)) return mode;
   return platform === 'stable' ? 'team_versus' : 'team_versus';
 }
 
-export function normalizeRoomWinCondition(
-  platform: Platform,
-  condition: RoomWinCondition,
-): RoomWinCondition {
-  if (isWinConditionAllowed(platform, condition)) return condition;
-  return platform === 'lazer' ? 'score' : 'score_v2';
-}
-
 export const TransportKindSchema = z.enum(['irc', 'referee_hub']);
 export type TransportKind = z.infer<typeof TransportKindSchema>;
-
-/** Win conditions supported by the internal score engine. */
-export const WinConditionSchema = z.enum([
-  'score',
-  'score_v2',
-  'accuracy',
-  'combo',
-  'misses',
-]);
-export type WinCondition = z.infer<typeof WinConditionSchema>;
-
-/** Which side of the comparison wins a beatmap. */
-export const WinConditionWinnerSchema = z.enum(['highest', 'lowest']);
-export type WinConditionWinner = z.infer<typeof WinConditionWinnerSchema>;
 
 /**
  * Mod/category code of a slot. osu!'s tournament client uses arbitrary short
@@ -212,9 +185,6 @@ export const MappoolSlotSchema = z.object({
   requiredMods: z.array(z.string().min(1).max(16)).default([]),
   allowedMods: z.array(z.string().min(1).max(16)).default([]),
   freestyle: z.boolean().default(false),
-  winCondition: WinConditionSchema.nullable().default(null),
-  /** null means derive from the condition (misses => lowest, otherwise highest). */
-  winConditionWinner: WinConditionWinnerSchema.nullable().default(null),
   note: z.string().max(500).optional(),
 });
 export type MappoolSlot = z.infer<typeof MappoolSlotSchema>;
@@ -279,18 +249,6 @@ export const MatchFlowSchema = z.object({
 });
 export type MatchFlow = z.infer<typeof MatchFlowSchema>;
 
-export const ScoringSchemeSchema = z.object({
-  id: IdSchema,
-  name: z.string().min(1).max(64),
-  winCondition: WinConditionSchema.default('score'),
-  aggregation: z.enum(['sum', 'average', 'max']).default('sum'),
-  /** Multipliers applied to a player's raw value, keyed by mod acronym. */
-  modMultipliers: z.record(z.number().positive()).default({}),
-  /** Free-form note shown in the UI; never executed. */
-  note: z.string().max(500).optional(),
-});
-export type ScoringScheme = z.infer<typeof ScoringSchemeSchema>;
-
 const MatchBaseSchema = z.object({
   id: IdSchema,
   /** Optional group membership for group-stage fixtures. */
@@ -300,8 +258,6 @@ const MatchBaseSchema = z.object({
   scheduledAt: UtcTimestampSchema,
   /** Lobby retains a zero result for shape consistency but does not use it. */
   result: MatchResultSchema.default({ scoreRed: 0, scoreBlue: 0 }),
-  /** Room win condition; platform-specific options are enforced below. */
-  winCondition: RoomWinConditionSchema.default('score'),
   notes: z.string().max(1000).optional(),
 });
 
@@ -332,9 +288,12 @@ export const StageSchema = z
     bans: z.number().int().min(0).max(10).default(0),
     /** How many protects each team gets; used by phases with `useStageCount`. */
     protects: z.number().int().min(0).max(10).default(0),
+    /** Room win condition applied when this stage creates a stable room. */
+    winCondition: RoomWinConditionSchema.default('score'),
+    /** Global Win-by rule used to decide each beatmap. */
+    winByRuleId: z.string().min(1).max(128).default(BUILTIN_WIN_BY_RULE_ID),
     slots: z.array(MappoolSlotSchema).default([]),
     flow: MatchFlowSchema,
-    scoringScheme: ScoringSchemeSchema,
     matches: z.array(MatchSchema).default([]),
   })
   .refine((stage) => stage.bestOf % 2 === 1, {
@@ -347,6 +306,7 @@ export const AUTOMATION_TRIGGERS = [
   'match_created',
   'beatmap_started',
   'beatmap_completed',
+  'score_updated',
   'match_finished',
   'action_applied',
 ] as const;
@@ -360,6 +320,7 @@ export const AutomationMessagesSchema = z.object({
   match_created: z.array(AutomationMessageSchema).default([]),
   beatmap_started: z.array(AutomationMessageSchema).default([]),
   beatmap_completed: z.array(AutomationMessageSchema).default([]),
+  score_updated: z.array(AutomationMessageSchema).default([]),
   match_finished: z.array(AutomationMessageSchema).default([]),
   action_applied: z.array(AutomationMessageSchema).default([]),
 });
@@ -370,6 +331,7 @@ export function emptyAutomationMessages(): AutomationMessages {
     match_created: [],
     beatmap_started: [],
     beatmap_completed: [],
+    score_updated: [],
     match_finished: [],
     action_applied: [],
   };
@@ -576,15 +538,6 @@ export function validateTournamentReferences(
         });
       }
     });
-    for (const [mod, multiplier] of Object.entries(stage.scoringScheme.modMultipliers)) {
-      if (!Number.isFinite(multiplier) || multiplier <= 0) {
-        issues.push({
-          path: [...stagePath, 'scoringScheme', 'modMultipliers', mod],
-          message: 'multiplier must be a positive finite number',
-        });
-      }
-    }
-
     stage.matches.forEach((match, matchIndex) => {
       const matchPath = [...stagePath, 'matches', matchIndex];
       if (matchIds.has(match.id)) {
@@ -595,12 +548,6 @@ export function validateTournamentReferences(
         issues.push({
           path: [...matchPath, 'roomMode'],
           message: `team mode "${match.roomMode}" is not available on the ${tournament.platform} platform`,
-        });
-      }
-      if (!isWinConditionAllowed(tournament.platform, match.winCondition)) {
-        issues.push({
-          path: [...matchPath, 'winCondition'],
-          message: `win condition "${match.winCondition}" is not available on the ${tournament.platform} platform`,
         });
       }
       if (match.groupId !== null && !groupIds.has(match.groupId)) {
@@ -706,35 +653,62 @@ export function parseTournament(input: unknown) {
 
 export function migrateTournament(input: unknown): unknown {
   if (!isRecord(input)) return input;
-  if (input.schemaVersion !== TOURNAMENT_SCHEMA_VERSION) return input;
+  if (input.schemaVersion !== 4 && input.schemaVersion !== TOURNAMENT_SCHEMA_VERSION) {
+    return input;
+  }
+  const version = input.schemaVersion;
   const platform: Platform = input.platform === 'lazer' ? 'lazer' : 'stable';
   const stages = Array.isArray(input.stages)
     ? input.stages.map((stage) => {
         if (!isRecord(stage)) return stage;
-        const matches = Array.isArray(stage.matches)
+        const legacyMatches = Array.isArray(stage.matches) ? stage.matches : [];
+        const firstMatch = legacyMatches.find(isRecord);
+        const legacyCondition =
+          version === 4 && firstMatch && typeof firstMatch.winCondition === 'string'
+            ? (firstMatch.winCondition as RoomWinCondition)
+            : null;
+        const rawCondition =
+          typeof stage.winCondition === 'string'
+            ? stage.winCondition
+            : legacyCondition;
+        const parsedCondition = RoomWinConditionSchema.safeParse(rawCondition);
+        const winCondition = parsedCondition.success ? parsedCondition.data : 'score';
+        const nextStage: Record<string, unknown> = { ...stage };
+        delete nextStage.scoringScheme;
+        nextStage.winCondition = winCondition;
+        nextStage.winByRuleId =
+          typeof stage.winByRuleId === 'string' && stage.winByRuleId.length > 0
+            ? stage.winByRuleId
+            : BUILTIN_WIN_BY_RULE_ID;
+        nextStage.slots = Array.isArray(stage.slots)
+          ? stage.slots.map((slot) => {
+              if (!isRecord(slot)) return slot;
+              const nextSlot = { ...slot };
+              delete nextSlot.winCondition;
+              delete nextSlot.winConditionWinner;
+              return nextSlot;
+            })
+          : stage.slots;
+        nextStage.matches = Array.isArray(stage.matches)
           ? stage.matches.map((match) => {
               if (!isRecord(match)) return match;
+              const nextMatch = { ...match };
+              delete nextMatch.winCondition;
               return {
-                ...match,
+                ...nextMatch,
                 roomMode:
                   typeof match.roomMode === 'string'
                     ? normalizeRoomMode(platform, match.roomMode as MatchType)
                     : match.roomMode,
-                winCondition:
-                  typeof match.winCondition === 'string'
-                    ? normalizeRoomWinCondition(
-                        platform,
-                        match.winCondition as RoomWinCondition,
-                      )
-                    : match.winCondition,
               };
             })
           : stage.matches;
-        return { ...stage, matches };
+        return nextStage;
       })
     : input.stages;
   return {
     ...input,
+    schemaVersion: TOURNAMENT_SCHEMA_VERSION,
     platform,
     stages,
     automation: migrateAutomation(input.automation),
@@ -795,13 +769,6 @@ function migrateAutomation(input: unknown): AutomationMessages {
 }
 export function createEmptyTournament(name: string, now = new Date()): Tournament {
   const timestamp = now.toISOString();
-  const scoringScheme: ScoringScheme = {
-    id: 'score_default',
-    name: 'Score V2',
-    winCondition: 'score_v2',
-    aggregation: 'sum',
-    modMultipliers: {},
-  };
   return {
     schemaVersion: TOURNAMENT_SCHEMA_VERSION,
     id: createTournamentId(),
@@ -824,6 +791,8 @@ export function createEmptyTournament(name: string, now = new Date()): Tournamen
         bestOf: 9,
         bans: 1,
         protects: 0,
+        winCondition: 'score_v2',
+        winByRuleId: BUILTIN_WIN_BY_RULE_ID,
         slots: [],
         flow: {
           id: 'flow_stage_1',
@@ -846,7 +815,6 @@ export function createEmptyTournament(name: string, now = new Date()): Tournamen
           ],
           triggers: [],
         },
-        scoringScheme,
         matches: [],
       },
     ],
@@ -875,10 +843,6 @@ export function findStage(tournament: Tournament, stageId: string): Stage | unde
 
 /** @deprecated Use findStage. */
 export const findRound = findStage;
-
-export function findScoring(tournament: Tournament, stageId: string): ScoringScheme | undefined {
-  return findStage(tournament, stageId)?.scoringScheme;
-}
 
 export function findMatch(tournament: Tournament, matchId: string): Match | undefined {
   return tournament.stages.flatMap((stage) => stage.matches).find((match) => match.id === matchId);

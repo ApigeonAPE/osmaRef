@@ -15,6 +15,7 @@ import {
   type SessionEvent,
   type Settings,
   type Tournament,
+  type WinByRule,
 } from '@osmaref/contracts';
 
 const invoke = <T>(channel: string, ...args: unknown[]): Promise<T> =>
@@ -79,6 +80,12 @@ const api: DesktopApi = {
     listLogs: () => invoke<LobbyLogSummary[]>(IPC.sessionsListLogs),
     exportLog: (sessionId) => invoke<string | null>(IPC.sessionsExportLog, sessionId),
     deleteLog: (sessionId) => invoke<void>(IPC.sessionsDeleteLog, sessionId),
+  },
+  winby: {
+    list: () => invoke<WinByRule[]>(IPC.winbyList),
+    importFile: () => invoke<WinByRule | null>(IPC.winbyImportFile),
+    exportFile: (id) => invoke<string | null>(IPC.winbyExport, id),
+    remove: (id) => invoke<WinByRule[]>(IPC.winbyRemove, id),
   },
   connection: {
     connectIrc: (input) => invoke(IPC.connectionConnectIrc, input),

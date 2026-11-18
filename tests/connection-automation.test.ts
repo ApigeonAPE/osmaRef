@@ -16,6 +16,7 @@ import { createAppStore } from '../apps/desktop/src/main/store';
 import type { SettingsStore } from '../apps/desktop/src/main/settings';
 import type { ServerClient } from '../apps/desktop/src/main/server-client';
 import type { AppLogger } from '../apps/desktop/src/main/logger';
+import { WinByStore } from '../apps/desktop/src/main/winby-store';
 
 describe('automatic messages in an IRC room', () => {
   it('sends each configured message in order and echoes it locally', async () => {
@@ -38,6 +39,7 @@ describe('automatic messages in an IRC room', () => {
     const manager = new ConnectionManager({
       store,
       settings,
+      winby: new WinByStore(dir),
       server,
       logger,
       emit: (event) => emitted.push(event),
@@ -109,6 +111,7 @@ describe('automatic messages in an IRC room', () => {
     const manager = new ConnectionManager({
       store,
       settings,
+      winby: new WinByStore(dir),
       server,
       logger,
       emit: (event) => emitted.push(event),
@@ -127,8 +130,6 @@ describe('automatic messages in an IRC room', () => {
           requiredMods: [],
           allowedMods: [],
           freestyle: false,
-          winCondition: null,
-          winConditionWinner: null,
         },
       ];
       stage.matches.push({
@@ -141,7 +142,6 @@ describe('automatic messages in an IRC room', () => {
         scheduledAt: '2026-01-01T00:00:00.000Z',
         result: { scoreRed: 0, scoreBlue: 0 },
         roomMode: 'team_versus',
-        winCondition: 'score',
       });
       tournament.automation.action_applied = ['{{slot}}'];
       store.saveTournament(tournament);

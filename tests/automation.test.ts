@@ -40,7 +40,6 @@ describe('automatic messages', () => {
       scheduledAt: '2026-01-01T00:00:00.000Z',
       result: { scoreRed: 0, scoreBlue: 0 },
       roomMode: 'team_versus',
-      winCondition: 'score',
     });
     const session = {
       id: 's',
@@ -53,6 +52,7 @@ describe('automatic messages', () => {
       teamTwoId: '1',
       tournamentRevision: 1,
       configSnapshot: tournament,
+      winBy: null,
       rulesetId: 0,
       matchType: 'team_versus' as const,
       transport: 'irc' as const,

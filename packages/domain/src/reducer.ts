@@ -49,6 +49,7 @@ export function createSession(input: CreateSessionInput, flow: MatchFlow): Match
     teamOneId: input.teamOneId,
     teamTwoId: input.teamTwoId,
     configSnapshot: input.configSnapshot ?? null,
+    winBy: input.winBy ?? null,
     rulesetId: input.rulesetId,
     matchType: input.matchType,
     transport: input.transport,

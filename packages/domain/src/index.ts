@@ -1,5 +1,5 @@
 export * from './flow';
-export * from './scoring';
+export * from './winby';
 export * from './reducer';
 export * from './automation';
 export * from './quick';

@@ -1,14 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import {
+  BUILTIN_WIN_BY_RULE,
   findMatch,
   findRound,
-  findScoring,
   findSlotByLabel,
   findStageForMatch,
   findTeam,
   matchTeamIds,
   buildRoomName,
   matchSessionName,
+  slotLabelSequence,
+  winBySnapshot,
   type AppState,
   type AutomationTrigger,
   type BeatmapInfo,
@@ -45,7 +47,7 @@ import {
   closeRoomSession,
   createSession,
   diffRoomSnapshots,
-  evaluateBeatmap,
+  evaluateWinBy,
   automationMessagesFor,
   expandAutomationMessages,
   type TemplateContext,
@@ -85,6 +87,8 @@ import type { AppStore } from './store';
 import type { ServerClient } from './server-client';
 import type { SettingsStore } from './settings';
 import type { AppLogger } from './logger';
+import type { WinByStore } from './winby-store';
+import { runWinBy } from './winby';
 const MODE_RULESETS: Record<Exclude<TournamentMode, 'multi'>, number> = {
   osu: 0,
   taiko: 1,
@@ -105,6 +109,7 @@ function resolveTournamentRuleset(
 export interface ConnectionManagerDeps {
   store: AppStore;
   settings: SettingsStore;
+  winby: WinByStore;
   server: ServerClient;
   logger: AppLogger;
   emit: (event: DesktopEvent) => void;
@@ -118,6 +123,7 @@ interface ChatTarget {
 export class ConnectionManager {
   private readonly store: AppStore;
   private readonly settings: SettingsStore;
+  private readonly winby: WinByStore;
   private readonly server: ServerClient;
   private readonly logger: AppLogger;
   private emit: (event: DesktopEvent) => void;
@@ -174,6 +180,7 @@ export class ConnectionManager {
   constructor(deps: ConnectionManagerDeps) {
     this.store = deps.store;
     this.settings = deps.settings;
+    this.winby = deps.winby;
     this.server = deps.server;
     this.logger = deps.logger;
     this.emit = deps.emit;
@@ -631,7 +638,7 @@ export class ConnectionManager {
       rulesetId: resolveTournamentRuleset(tournament.mode, stage.slots),
       ...(beatmapId ? { beatmapId } : {}),
       teamMode: match.roomMode,
-      winCondition: match.winCondition,
+      winCondition: tournament.platform === 'lazer' ? 'score' : stage.winCondition,
       maxParticipants,
     });
 
@@ -821,6 +828,8 @@ export class ConnectionManager {
     chatOnly?: boolean;
   }): Promise<MatchSession> {
     const now = new Date().toISOString();
+    const stage = findStageForMatch(params.tournament, params.match.id);
+    const winBy = stage ? this.winby.get(stage.winByRuleId) : null;
     const session = createSession(
       {
         id: `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
@@ -846,6 +855,7 @@ export class ConnectionManager {
         bans: params.bans,
         protects: params.protects,
         configSnapshot: params.configSnapshot,
+        winBy: winBy ? winBySnapshot(winBy) : null,
         firstTeamsSet: params.firstTeamsSet ?? false,
         now,
       },
@@ -938,6 +948,17 @@ export class ConnectionManager {
       `score ${input.side} ${input.delta > 0 ? '+' : ''}${input.delta}`,
       { wins: next.wins },
     );
+    if (
+      next.wins.team_one !== session.wins.team_one ||
+      next.wins.team_two !== session.wins.team_two
+    ) {
+      const tournament = this.tournamentForSession(next);
+      if (tournament) {
+        this.runAutomation(tournament, next, 'score_updated', {
+          winner: input.side === 'team_one' ? 'team_one' : 'team_two',
+        });
+      }
+    }
     this.emit({ type: 'session_updated', session: next });
     return next;
   }
@@ -1305,36 +1326,14 @@ export class ConnectionManager {
     const tournament = this.tournamentForSession(session);
     if (!tournament) throw new Error('tournament not found');
     const match = findMatch(tournament, session.matchId);
-    const scoring = match ? findStageForMatch(tournament, match.id)?.scoringScheme : undefined;
-    if (!scoring) throw new Error('scoring scheme not found');
-    const pool = match ? findStageForMatch(tournament, match.id) : undefined;
-    const slot = pool ? findSlotByLabel(pool, input.slotLabel) : undefined;
+    const stage = match ? findStageForMatch(tournament, match.id) : undefined;
+    const slot = stage ? findSlotByLabel(stage, input.slotLabel) : undefined;
     const beatmapId = slot?.beatmapId ?? input.beatmapId ?? session.currentBeatmapId;
     if (!beatmapId) {
       throw new Error(`unknown mappool slot "${input.slotLabel}" and no beatmap id supplied`);
     }
 
     const snapshot = this.snapshots.get(session.id) ?? null;
-    const isTeamVersus = (snapshot?.matchType ?? session.matchType) === 'team_versus';
-    const rosterById = new Map<number, string>();
-    for (const team of tournament.teams) {
-      for (const member of team.members) rosterById.set(member.userId, String(team.id));
-    }
-
-    const roomTeamById = new Map<number, 'red' | 'blue'>();
-    const addRoomPlayer = (player: {
-      userId: number;
-      username?: string;
-      team: 'red' | 'blue' | null;
-    }) => {
-      if (player.team) roomTeamById.set(player.userId, player.team);
-    };
-    session.matchPlayers.forEach(addRoomPlayer);
-    if (session.matchPlayers.length === 0) {
-      (snapshot?.players ?? []).forEach(addRoomPlayer);
-    }
-
-    const memberTeam = new Map<number, string>(rosterById);
     const knownNames = new Map<number, string>();
     for (const team of tournament.teams) {
       for (const member of team.members) knownNames.set(member.userId, member.username);
@@ -1351,58 +1350,60 @@ export class ConnectionManager {
       .filter((score) => score.userId > 0)
       .map((score) => {
         const username = score.username ?? knownNames.get(score.userId);
-        if (isTeamVersus) {
-          // Hub/IRC scores carry user ids; only fall back to the red/blue teams
-          // captured at map start when the roster has no matching entry.
-          let teamId = rosterById.get(score.userId);
-          if (!teamId) {
-            const color = roomTeamById.get(score.userId);
-            if (color === 'red') teamId = session.teamOneId;
-            else if (color === 'blue') teamId = session.teamTwoId;
-          }
-          if (teamId) memberTeam.set(score.userId, teamId);
-        }
         return { ...score, username };
       });
 
     const recordedAt = new Date().toISOString();
+    const winBy =
+      session.winBy ??
+      winBySnapshot(
+        (stage ? this.winby.get(stage.winByRuleId) : null) ?? BUILTIN_WIN_BY_RULE,
+      );
+    const players = session.matchPlayers.length
+      ? session.matchPlayers
+      : (snapshot?.players ?? []);
+    const [teamOneMembers, teamTwoMembers] = this.winByTeamMembers(
+      session,
+      tournament,
+      players,
+    );
     const evaluation =
       session.matchKind === 'lobby'
         ? null
-        : evaluateBeatmap({
-            slotLabel: input.slotLabel,
-            beatmapId,
+        : evaluateWinBy({
             scores,
-            teamOneId: session.teamOneId,
-            teamTwoId: session.teamTwoId,
-            memberTeam,
-            scheme: scoring,
-            winCondition: slot?.winCondition ?? match?.winCondition ?? scoring.winCondition,
-            winner: slot?.winConditionWinner,
-            recordedAt,
-            source: input.source,
+            players,
+            teamOneMembers,
+            teamTwoMembers,
+            teamSize: tournament.teamSize,
+            beatmapId,
+            category: slot?.category ?? null,
+            sequence: Number(slotLabelSequence(input.slotLabel)) || 0,
+            decide: (slots, map, teams) => runWinBy(winBy.source, slots, map, teams),
           });
-    const result: BeatmapResult = evaluation?.result ?? {
+    const needsReview = evaluation?.needsReview ?? false;
+    const result: BeatmapResult = {
       id: `${input.slotLabel}:${recordedAt}`,
       slotLabel: input.slotLabel,
       beatmapId,
       scores,
-      winner: null,
-      teamValues: { team_one: null, team_two: null },
+      winner: evaluation?.winner ?? null,
+      teamValues: evaluation?.teamValues ?? { team_one: null, team_two: null },
       source: input.source,
       recordedAt,
-      needsReview: false,
+      winByRuleId: evaluation ? winBy.ruleId : null,
+      needsReview,
     };
 
     const next = recordSessionResult(session, result);
     this.persistSession(next);
     this.appendEvent(
       next,
-      evaluation?.needsReview ? 'result_needs_review' : 'result_recorded',
-      `${input.slotLabel}: ${result.winner ?? (evaluation?.needsReview ? 'needs review' : 'recorded')}`,
+      needsReview ? 'result_needs_review' : 'result_recorded',
+      `${input.slotLabel}: ${result.winner ?? (needsReview ? 'needs review' : 'recorded')}`,
       result,
     );
-    if (evaluation?.needsReview) {
+    if (needsReview && evaluation?.reviewReason) {
       this.emiteSystemChat(next, `Result for ${input.slotLabel} needs review: ${evaluation.reviewReason}`);
     }
 
@@ -1411,6 +1412,16 @@ export class ConnectionManager {
       slot: input.slotLabel,
       beatmap_id: String(beatmapId),
     });
+    if (
+      next.wins.team_one !== session.wins.team_one ||
+      next.wins.team_two !== session.wins.team_two
+    ) {
+      this.runAutomation(tournament, next, 'score_updated', {
+        winner: result.winner ?? '',
+        slot: input.slotLabel,
+        beatmap_id: String(beatmapId),
+      });
+    }
     if (next.status === 'finished') {
       this.runAutomation(tournament, next, 'match_finished');
       this.syncMatchResult(tournament, next);
@@ -1457,7 +1468,17 @@ export class ConnectionManager {
     const next = undoLast(session, new Date().toISOString());
     this.persistSession(next);
     this.appendEvent(next, 'manual_adjustment', 'undo of the last action');
-    if (tournament) this.syncMatchResult(tournament, next);
+    if (tournament) {
+      if (
+        next.wins.team_one !== session.wins.team_one ||
+        next.wins.team_two !== session.wins.team_two
+      ) {
+        this.runAutomation(tournament, next, 'score_updated', {
+          winner: next.wins.team_one !== session.wins.team_one ? 'team_one' : 'team_two',
+        });
+      }
+      this.syncMatchResult(tournament, next);
+    }
     this.emit({ type: 'session_updated', session: next });
     return next;
   }
@@ -1852,8 +1873,9 @@ export class ConnectionManager {
   }
 
   /**
-   * IRC only reports each player's total score, so automatic recording is
-   * limited to score-based win conditions. Anything else is left to the referee.
+   * IRC reports only total scores. They are still handed to the active Win-by
+   * rule; a rule that needs richer data returns null and the result is flagged
+   * for review instead of being guessed.
    */
   private async handleIrcMatchFinished(session: MatchSession): Promise<void> {
     const slotLabel = session.currentSlotLabel;
@@ -1863,21 +1885,10 @@ export class ConnectionManager {
     }
     const tournament = this.tournamentForSession(session);
     const match = tournament ? findMatch(tournament, session.matchId) : undefined;
-    const scoring = tournament && match ? findStageForMatch(tournament, match.id)?.scoringScheme : undefined;
     const pool = tournament && match ? findStageForMatch(tournament, match.id) : undefined;
     const slot = pool ? findSlotByLabel(pool, slotLabel) : undefined;
-    if (!tournament || !scoring || !slot) {
+    if (!tournament || !slot) {
       this.emiteSystemChat(session, 'cannot resolve the match configuration; enter the result manually');
-      return;
-    }
-
-    const matchWinCondition = match?.winCondition;
-    const condition = slot.winCondition ?? matchWinCondition ?? scoring.winCondition;
-    if (condition !== 'score' && condition !== 'score_v2') {
-      this.emiteSystemChat(
-        session,
-        `IRC only reports scores, so "${condition}" cannot be recorded automatically`,
-      );
       return;
     }
 
@@ -2019,6 +2030,26 @@ export class ConnectionManager {
     return teamByUser;
   }
 
+  /** Roster ids, falling back to the room teams when no roster is stored. */
+  private winByTeamMembers(
+    session: MatchSession,
+    tournament: Tournament,
+    players: readonly { userId: number }[],
+  ): [number[], number[]] {
+    const teamByUser = this.memberTeamFor(session, tournament);
+    const membersFor = (teamId: string, rosterId: string): number[] => {
+      const roster = findTeam(tournament, rosterId)?.members.map((member) => member.userId) ?? [];
+      if (roster.length > 0) return roster;
+      return players
+        .filter((player) => teamByUser.get(player.userId) === teamId)
+        .map((player) => player.userId);
+    };
+    return [
+      membersFor(session.teamOneId, session.teamOneId),
+      membersFor(session.teamTwoId, session.teamTwoId),
+    ];
+  }
+
   /** Merges the latest mplink game with the IRC report for one beatmap. */
   private async mplinkScores(
     session: MatchSession,
@@ -2084,8 +2115,9 @@ export class ConnectionManager {
       const match = tournament ? findMatch(tournament, session.matchId) : undefined;
       const stage = tournament && match ? findStageForMatch(tournament, match.id) : undefined;
       const slot = stage ? findSlotByLabel(stage, result.slotLabel) : undefined;
-      const scoring = stage?.scoringScheme;
-      if (!tournament || !scoring || !slot) return;
+      if (!tournament || !stage || !slot) return;
+      const winBy =
+        session.winBy ?? winBySnapshot(this.winby.get(stage.winByRuleId) ?? BUILTIN_WIN_BY_RULE);
       const teamByUser = this.memberTeamFor(session, tournament);
       const teamSize =
         (this.snapshots.get(session.id)?.matchType ?? session.matchType) === 'team_versus'
@@ -2117,20 +2149,37 @@ export class ConnectionManager {
       }
       if (!merged || !scoresDiffer(result.scores, merged)) return;
 
-      const evaluation = evaluateBeatmap({
+      const players = session.matchPlayers.length
+        ? session.matchPlayers
+        : (this.snapshots.get(session.id)?.players ?? []);
+      const [teamOneMembers, teamTwoMembers] = this.winByTeamMembers(
+        session,
+        tournament,
+        players,
+      );
+      const evaluation = evaluateWinBy({
+        scores: merged,
+        players,
+        teamOneMembers,
+        teamTwoMembers,
+        teamSize,
+        beatmapId: result.beatmapId,
+        category: slot.category,
+        sequence: Number(slotLabelSequence(result.slotLabel)) || 0,
+        decide: (slots, map, teams) => runWinBy(winBy.source, slots, map, teams),
+      });
+      const corrected: BeatmapResult = {
+        id: result.id,
         slotLabel: result.slotLabel,
         beatmapId: result.beatmapId,
         scores: merged,
-        teamOneId: session.teamOneId,
-        teamTwoId: session.teamTwoId,
-        memberTeam: this.memberTeamFor(session, tournament),
-        scheme: scoring,
-        winCondition: slot.winCondition ?? match?.winCondition ?? scoring.winCondition,
-        winner: slot.winConditionWinner,
-        recordedAt: result.recordedAt,
+        winner: evaluation.winner,
+        teamValues: evaluation.teamValues,
         source: 'irc',
-      });
-      const corrected: BeatmapResult = { ...evaluation.result, id: result.id, source: 'irc' };
+        recordedAt: result.recordedAt,
+        winByRuleId: winBy.ruleId,
+        needsReview: evaluation.needsReview,
+      };
       if (!scoresDiffer(result.scores, corrected.scores)) return;
 
       const next = amendResult(session, result.id, corrected, new Date().toISOString());
@@ -2144,8 +2193,18 @@ export class ConnectionManager {
       if (evaluation.needsReview) {
         this.emiteSystemChat(
           next,
-          `Result for ${result.slotLabel} needs review: ${evaluation.reviewReason}`,
+          `Result for ${result.slotLabel} needs review: ${evaluation.reviewReason ?? 'unknown reason'}`,
         );
+      }
+      if (
+        next.wins.team_one !== session.wins.team_one ||
+        next.wins.team_two !== session.wins.team_two
+      ) {
+        this.runAutomation(tournament, next, 'score_updated', {
+          winner: corrected.winner ?? '',
+          slot: result.slotLabel,
+          beatmap_id: String(result.beatmapId),
+        });
       }
       if (next.status === 'finished') this.syncMatchResult(tournament, next);
       this.emit({ type: 'session_updated', session: next });
@@ -2881,7 +2940,10 @@ export class ConnectionManager {
     extra: Partial<TemplateContext>,
   ): TemplateContext {
     const lastResult = session.results.at(-1);
-    const usesCurrentMap = trigger === 'beatmap_completed' || trigger === 'match_finished';
+    const usesCurrentMap =
+      trigger === 'beatmap_completed' ||
+      trigger === 'score_updated' ||
+      trigger === 'match_finished';
     const extraBeatmapId = Number(extra.beatmap_id);
     const beatmapId =
       Number.isInteger(extraBeatmapId) && extraBeatmapId > 0

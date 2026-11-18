@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { WinByRuleSnapshotSchema } from './winby';
 import {
   FlowTriggerSchema,
   MatchTypeSchema,
@@ -78,6 +79,8 @@ export const BeatmapResultSchema = z.object({
     .default({ team_one: null, team_two: null }),
   source: ResultSourceSchema.default('manual'),
   recordedAt: z.string().min(1),
+  /** Win-by rule that decided this beatmap, kept for auditability. */
+  winByRuleId: z.string().min(1).max(128).nullable().default(null),
   needsReview: z.boolean().default(false),
 });
 export type BeatmapResult = z.infer<typeof BeatmapResultSchema>;
@@ -118,7 +121,10 @@ export const MatchSessionSchema = z.object({
       (value) => (value == null ? null : migrateTournament(value)),
       TournamentSchema.nullable(),
     )
+    .nullable()
     .default(null),
+  /** Frozen Win-by rule used by this session. */
+  winBy: WinByRuleSnapshotSchema.nullable().default(null),
   rulesetId: RulesetIdSchema.default(0),
   matchType: MatchTypeSchema.default('team_versus'),
   transport: TransportKindSchema.default('irc'),
@@ -271,6 +277,8 @@ export interface CreateSessionInput {
   bestOf: number;
   /** Embedded configuration for rooms created without a stored tournament. */
   configSnapshot?: Tournament | null;
+  /** Frozen Win-by rule; null falls back to the built-in rule. */
+  winBy?: z.infer<typeof WinByRuleSnapshotSchema> | null;
   /** Quick rooms have no meaningful first-team setup. */
   firstTeamsSet?: boolean;
   now: string;

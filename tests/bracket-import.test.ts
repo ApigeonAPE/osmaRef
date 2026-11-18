@@ -31,9 +31,12 @@ describe('osu! tournament bracket import', () => {
     expect(tournament.id).toMatch(TOURNAMENT_ID_PATTERN);
     expect(tournament.mode).toBe('mania');
     expect(tournament.teamSize).toBe(4);
-    expect(tournament.stages.every((stage) => stage.scoringScheme.winCondition === 'score_v2')).toBe(
-      true,
-    );
+    expect(
+      tournament.stages.every(
+        (stage) =>
+          stage.winCondition === 'score_v2' && stage.winByRuleId === 'builtin:higher-score',
+      ),
+    ).toBe(true);
   });
 
   it('maps teams with zero-based ids, rosters and seeds', () => {
@@ -109,7 +112,6 @@ describe('osu! tournament bracket import', () => {
     expect(matchTwo.teamBlueId).toBe(1);
     expect(matchTwo.scheduledAt).toBe('2026-10-25T13:00:00.000Z');
     expect(matchTwo.result).toEqual({ scoreRed: 5, scoreBlue: 6 });
-    expect(matchTwo.winCondition).toBe('score_v2');
     expect(matchTwo.roomMode).toBe('team_versus');
     expect(matchTwo.notes).toContain('score 5-6');
 

@@ -4,6 +4,7 @@ import {
   normalizeIrcEndpoint,
   type LanguageSetting,
   type Settings,
+  type WinByRule,
 } from '@osmaref/contracts';
 import harmonyLicense from '@assets/HarmonyOS_Sans/LICENSE.txt?raw';
 import { ModSelector } from '../components/ModSelector';
@@ -203,6 +204,8 @@ export function SettingsPage() {
           </button>
         </div>
       </Section>
+
+      <WinBySection />
 
         <Section
           title={t('Bancho IRC')}
@@ -421,6 +424,110 @@ export function SettingsPage() {
         </Modal>
       ) : null}
     </div>
+  );
+}
+
+function WinBySection() {
+  const { t } = useI18n();
+  const [rules, setRules] = useState<WinByRule[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const refresh = async () => {
+    setRules(await window.osmaRef.winby.list());
+  };
+
+  useEffect(() => {
+    void refresh().catch((cause: unknown) => setError(errorText(cause)));
+  }, []);
+
+  const importRule = async () => {
+    setBusy('import');
+    setError(null);
+    try {
+      const rule = await window.osmaRef.winby.importFile();
+      if (rule) await refresh();
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const exportRule = async (id: string) => {
+    setBusy(id);
+    setError(null);
+    try {
+      await window.osmaRef.winby.exportFile(id);
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const removeRule = async (rule: WinByRule) => {
+    if (
+      !window.confirm(
+        t('Delete this rule? Matches using it fall back to the built-in rule.'),
+      )
+    ) {
+      return;
+    }
+    setBusy(rule.id);
+    setError(null);
+    try {
+      setRules(await window.osmaRef.winby.remove(rule.id));
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Section
+      title={t('Win-by rules')}
+      actions={
+        <button
+          type="button"
+          className="ghost small"
+          disabled={busy !== null}
+          onClick={() => void importRule()}
+        >
+          {t('Import')}
+        </button>
+      }
+    >
+      <div className="win-by-rules">
+        {rules.map((rule) => (
+          <div className="settings-mod-row" key={rule.id}>
+            <span>{rule.name}</span>
+            <div className="row-actions">
+              <button
+                type="button"
+                className="ghost small"
+                disabled={busy !== null}
+                onClick={() => void exportRule(rule.id)}
+              >
+                {t('Export')}
+              </button>
+              {rule.builtIn ? null : (
+                <button
+                  type="button"
+                  className="ghost small danger"
+                  disabled={busy !== null}
+                  onClick={() => void removeRule(rule)}
+                >
+                  {t('Delete')}
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      {error ? <p className="errorText">{error}</p> : null}
+    </Section>
   );
 }
 
