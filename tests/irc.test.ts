@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeIrcEndpoint } from '@osmaref/contracts';
 import {
   LineBuffer,
   parseIrcLine,
@@ -11,7 +10,6 @@ import {
   applyBanchoEvent,
   createBanchoRoomState,
   formatIrcLoginFailure,
-  ircConnectTargets,
   IrcMatchTransport,
   type TransportEvent,
 } from '@osmaref/adapters';
@@ -59,37 +57,6 @@ describe('IRC line parsing', () => {
   });
 });
 
-describe('IRC endpoints', () => {
-  it('normalises official Bancho ports to their matching TLS mode', () => {
-    expect(normalizeIrcEndpoint('irc.ppy.sh', 6667, true)).toEqual({ port: 6667, useTls: false });
-    expect(normalizeIrcEndpoint('irc.ppy.sh', 6697, false)).toEqual({ port: 6697, useTls: true });
-    expect(normalizeIrcEndpoint('IRC.PPY.SH', 6667, false)).toEqual({ port: 6667, useTls: false });
-  });
-
-  it('leaves custom servers on their configured endpoint', () => {
-    expect(normalizeIrcEndpoint('irc.example.net', 6667, true)).toEqual({
-      port: 6667,
-      useTls: true,
-    });
-    expect(normalizeIrcEndpoint('irc.ppy.sh', 7000, true)).toEqual({ port: 7000, useTls: true });
-  });
-
-  it('tries the configured endpoint first, then the other standard IRC port', () => {
-    expect(ircConnectTargets('irc.ppy.sh', 6667, true)).toEqual([
-      { port: 6667, useTls: false },
-      { port: 6697, useTls: true },
-    ]);
-    expect(ircConnectTargets('irc.ppy.sh', 6697, true)).toEqual([
-      { port: 6697, useTls: true },
-      { port: 6667, useTls: false },
-    ]);
-    expect(ircConnectTargets('irc.example.net', 7000, false)).toEqual([
-      { port: 7000, useTls: false },
-      { port: 6667, useTls: false },
-      { port: 6697, useTls: true },
-    ]);
-  });
-});
 
 describe('IRC countdown events', () => {
   // `!mp start 10` is answered twice: "Queued the match to start in 10 seconds"

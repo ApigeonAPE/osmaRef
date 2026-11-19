@@ -97,9 +97,3 @@ export function formatDateTime(iso: string | null): string {
   if (Number.isNaN(date.getTime())) return iso;
   return date.toLocaleString();
 }
-
-export function clampNumber(value: string, min: number, max: number, fallback: number): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.min(max, Math.max(min, Math.round(parsed)));
-}

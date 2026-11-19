@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
-  findRound,
   findMatch,
   findSlotByLabel,
   findStageForMatch,
@@ -10,7 +9,14 @@ import {
   type BeatmapInfo,
   type BeatmapLookupFailure,
   type RoomPlayer,
+  type Platform,
 } from '@osmaref/contracts';
+import {
+  formatRandomPickMessage,
+  parseRollReply,
+  shuffleSlots,
+  type RollReply,
+} from '@osmaref/domain';
 import { useModel } from '../useOsmaRef';
 import { useI18n } from '../i18n';
 import { Empty, Section } from '../ui';
@@ -21,6 +27,24 @@ import { JoinRoomDialog } from '../components/JoinRoomDialog';
 import { Toast } from '../components/Toast';
 import { IdInput } from '../components/IdInput';
 import { ResultDialog, type ResultRow } from '../components/ResultDialog';
+import { MappoolSlotRow } from '../components/MappoolSlotRow';
+import { RandomPickDialog, type RandomPickScope } from '../components/RandomPickDialog';
+import { RandomRollDialog } from '../components/RandomRollDialog';
+
+const DEFAULT_RANDOM_PROMPT = 'Will pick ONE map randomly from the list below.';
+/** Chat backends rate-limit bursts; keep the pool listing readable and deliverable. */
+const RANDOM_PICK_SEND_INTERVAL_MS = 400;
+const ROLL_LISTEN_TIMEOUT_MS = 10_000;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+interface RollWait {
+  sessionId: string;
+  platform: Platform;
+  baseline: Set<string>;
+}
 
 export function WorkbenchPage({
   sessionId,
@@ -61,6 +85,25 @@ export function WorkbenchPage({
   const startConfirmRef = useRef<{ firstAt: number; timeout: ReturnType<typeof setTimeout> } | null>(
     null,
   );
+  const [randomOpen, setRandomOpen] = useState(false);
+  const [randomScope, setRandomScope] = useState<RandomPickScope>('remaining');
+  const [randomPrompt, setRandomPrompt] = useState(DEFAULT_RANDOM_PROMPT);
+  const [randomSlots, setRandomSlots] = useState<MappoolSlot[]>([]);
+  const [randomConfirming, setRandomConfirming] = useState(false);
+  const randomConfirmRef = useRef<{ firstAt: number; timeout: ReturnType<typeof setTimeout> } | null>(
+    null,
+  );
+  const randomFlowRef = useRef<{ id: number; slots: MappoolSlot[] } | null>(null);
+  const [rollWait, setRollWait] = useState<RollWait | null>(null);
+  const [rollSlots, setRollSlots] = useState<MappoolSlot[]>([]);
+  const [rollResult, setRollResult] = useState<{
+    username: string;
+    score: string;
+    index: string;
+  } | null>(null);
+  const finishRollRef = useRef<(reply: RollReply | null) => void>(() => {});
+  const messagesRef = useRef(model.messages);
+  messagesRef.current = model.messages;
   const [resizing, setResizing] = useState<string | null>(null);
 
   const channelSessions = useMemo(
@@ -85,7 +128,11 @@ export function WorkbenchPage({
     if (valid) return;
     const preferred =
       channelSessions.find((session) => session.id === model.state?.activeSessionId) ??
-      channelSessions.find((session) => session.status === 'active' && session.roomId !== null) ??
+      channelSessions.find(
+        (session) =>
+          (session.status === 'active' || session.status === 'finished') &&
+          session.roomId !== null,
+      ) ??
       channelSessions[0] ??
       null;
     setActiveId(preferred?.id ?? null);
@@ -94,6 +141,7 @@ export function WorkbenchPage({
   useEffect(() => {
     return () => {
       if (startConfirmRef.current) clearTimeout(startConfirmRef.current.timeout);
+      if (randomConfirmRef.current) clearTimeout(randomConfirmRef.current.timeout);
     };
   }, []);
 
@@ -104,7 +152,54 @@ export function WorkbenchPage({
     setStartConfirming(false);
   }, [activeId]);
 
+  useEffect(() => {
+    randomFlowRef.current = null;
+    if (randomConfirmRef.current) {
+      clearTimeout(randomConfirmRef.current.timeout);
+      randomConfirmRef.current = null;
+    }
+    setRandomConfirming(false);
+    setRandomOpen(false);
+    setRollWait(null);
+    setRollSlots([]);
+    setRollResult(null);
+  }, [activeId]);
+
+  finishRollRef.current = (reply) => {
+    if (!randomFlowRef.current) return;
+    setRollWait(null);
+    setRollResult({
+      username: reply?.username ?? '',
+      score: reply ? String(reply.score) : '',
+      index: reply ? String(reply.score) : '',
+    });
+  };
+
+  useEffect(() => {
+    if (!rollWait) return;
+    const reply = messagesRef.current.reduce<RollReply | null>((found, message) => {
+      if (found) return found;
+      if (message.sessionId !== rollWait.sessionId || message.self) return null;
+      if (rollWait.baseline.has(message.id)) return null;
+      const fromBot =
+        rollWait.platform === 'stable'
+          ? message.username.toLowerCase() === 'banchobot'
+          : message.system;
+      return fromBot ? parseRollReply(message.text, rollWait.platform) : null;
+    }, null);
+    if (reply) finishRollRef.current(reply);
+  }, [model.messages, rollWait]);
+
+  useEffect(() => {
+    if (!rollWait) return;
+    const timer = setTimeout(() => finishRollRef.current(null), ROLL_LISTEN_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [rollWait]);
+
   const session = model.sessions.find((entry) => entry.id === activeId) ?? null;
+  // A finished match does not close its room: keep every room operation
+  // available until the referee actually closes it.
+  const roomOpen = session?.status === 'active' || session?.status === 'finished';
   const tournament = session
     ? session.configSnapshot ?? model.tournaments.find((entry) => entry.id === session.tournamentId) ?? null
     : null;
@@ -114,6 +209,8 @@ export function WorkbenchPage({
   const match = session && tournament ? findMatch(tournament, session.matchId) ?? null : null;
   const round = session && tournament && match ? findStageForMatch(tournament, match.id) ?? null : null;
   const pool = round ? { slots: round.slots } : null;
+  const platform: Platform =
+    tournament?.platform ?? (session?.transport === 'referee_hub' ? 'lazer' : 'stable');
   const pending = session ? session.queue[session.cursor] ?? null : null;
   const lastAction = session?.actions.at(-1) ?? null;
   const room = session ? model.snapshots[session.id] ?? null : null;
@@ -321,7 +418,7 @@ export function WorkbenchPage({
   };
 
   const adjustScore = (side: 'team_one' | 'team_two', delta: number) => {
-    if (!session || session.status !== 'active') return;
+    if (!session || (session.status !== 'active' && session.status !== 'finished')) return;
     void run('score', () =>
       window.osmaRef.sessions.adjustScore({ sessionId: session.id, side, delta }),
     );
@@ -411,7 +508,7 @@ export function WorkbenchPage({
 
   const applySlot = (slot: MappoolSlot) => {
     if (!session || busyRef.current !== null) return;
-    if (isLobby) {
+    if (isLobby || session.status === 'finished') {
       void run('select', () =>
         window.osmaRef.sessions.selectBeatmap({
           sessionId: session.id,
@@ -473,6 +570,118 @@ export function WorkbenchPage({
     });
     return map;
   }, [session]);
+
+  const resetRandomConfirm = () => {
+    if (randomConfirmRef.current) {
+      clearTimeout(randomConfirmRef.current.timeout);
+      randomConfirmRef.current = null;
+    }
+    setRandomConfirming(false);
+  };
+
+  const scopeCandidates = (scope: RandomPickScope): MappoolSlot[] => {
+    const all = pool?.slots ?? [];
+    if (scope === 'all') return all;
+    return all.filter((slot) => !usedBySlot.has(normalizeSlotLabel(slot.label)));
+  };
+
+  const abortRandomFlow = () => {
+    randomFlowRef.current = null;
+    resetRandomConfirm();
+    setRandomOpen(false);
+    setRollWait(null);
+    setRollSlots([]);
+    setRollResult(null);
+  };
+
+  const openRandomPick = () => {
+    if (!pool || pool.slots.length === 0) return;
+    abortRandomFlow();
+    setRandomScope('remaining');
+    setRandomSlots(shuffleSlots(scopeCandidates('remaining')));
+    setRandomOpen(true);
+  };
+
+  const changeRandomScope = (scope: RandomPickScope) => {
+    resetRandomConfirm();
+    setRandomScope(scope);
+    setRandomSlots(shuffleSlots(scopeCandidates(scope)));
+  };
+
+  const confirmRandomRoll = (slot: MappoolSlot) => {
+    randomFlowRef.current = null;
+    setRollWait(null);
+    setRollResult(null);
+    applySlot(slot);
+  };
+
+  const startRandomFlow = () => {
+    if (!session || randomSlots.length === 0) return;
+    const flowSlots = randomSlots;
+    const flow = { id: (randomFlowRef.current?.id ?? 0) + 1, slots: flowSlots };
+    randomFlowRef.current = flow;
+    const cancelled = () => randomFlowRef.current !== flow;
+    setRandomOpen(false);
+    const target = session;
+    void (async () => {
+      try {
+        const prompt = randomPrompt.trim();
+        if (prompt) {
+          await model.sendChat(target.id, prompt);
+          if (cancelled()) return;
+          await delay(RANDOM_PICK_SEND_INTERVAL_MS);
+        }
+        for (let index = 0; index < flowSlots.length; index += 1) {
+          if (cancelled()) return;
+          const slot = flowSlots[index];
+          if (!slot) continue;
+          await model.sendChat(
+            target.id,
+            formatRandomPickMessage(index + 1, slot, beatmaps[slot.beatmapId]),
+          );
+          if (cancelled()) return;
+          await delay(RANDOM_PICK_SEND_INTERVAL_MS);
+        }
+        if (cancelled()) return;
+        setRollSlots(flowSlots);
+        setRollWait({
+          sessionId: target.id,
+          platform,
+          baseline: new Set(messagesRef.current.map((message) => message.id)),
+        });
+        await model.sendChat(
+          target.id,
+          `${platform === 'stable' ? '!roll' : '/roll'} ${flowSlots.length}`,
+        );
+      } catch (cause) {
+        if (cancelled()) return;
+        abortRandomFlow();
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    })();
+  };
+
+  const handleRandomConfirmClick = () => {
+    const now = Date.now();
+    const pending = randomConfirmRef.current;
+    if (!pending) {
+      const timeout = setTimeout(() => {
+        randomConfirmRef.current = null;
+        setRandomConfirming(false);
+      }, 5000);
+      randomConfirmRef.current = { firstAt: now, timeout };
+      setRandomConfirming(true);
+      return;
+    }
+    const elapsed = now - pending.firstAt;
+    if (elapsed < 500) return;
+    if (elapsed >= 5000) {
+      resetRandomConfirm();
+      return;
+    }
+    resetRandomConfirm();
+    startRandomFlow();
+  };
 
   const startColumnResize = (
     side: 'left' | 'right',
@@ -778,7 +987,7 @@ export function WorkbenchPage({
                               <span className="player-remove">
                                 {player &&
                                 session.transport === 'referee_hub' &&
-                                session.status === 'active' ? (
+                                roomOpen ? (
                                   <button
                                     type="button"
                                     className="ghost small playlist-remove-button"
@@ -905,7 +1114,7 @@ export function WorkbenchPage({
                 <div className="playlist-scroll">
               {room ? (
                 <div className="room-playlist">
-                  {session.status === 'active' ? (
+                  {roomOpen ? (
                     <div className="playlist-head">
                       <div className="playlist-start">
                         <select
@@ -977,7 +1186,7 @@ export function WorkbenchPage({
                       >
                         <span className="playlist-remove">
                           {session.transport === 'referee_hub' &&
-                          session.status === 'active' &&
+                          roomOpen &&
                           (entry.played || playlistViews.length > 1) ? (
                             <button
                               type="button"
@@ -1039,7 +1248,7 @@ export function WorkbenchPage({
                         </div>
                         <span className="playlist-actions">
                           {session.transport === 'referee_hub' &&
-                          session.status === 'active' ? (
+                          roomOpen ? (
                             <button
                               type="button"
                               className="ghost small"
@@ -1100,7 +1309,7 @@ export function WorkbenchPage({
                 <button
                   type="button"
                   className="ghost small"
-                  disabled={busy !== null || session.status !== 'active'}
+                  disabled={busy !== null || !roomOpen}
                   onClick={() => setFirstTeamsOpen(true)}
                 >
                   {t('First teams')}
@@ -1114,7 +1323,7 @@ export function WorkbenchPage({
                   >
                     {t('Leave channel')}
                   </button>
-                ) : session.status === 'active' ? (
+                ) : roomOpen ? (
                   <button
                     type="button"
                     className="ghost small"
@@ -1156,6 +1365,14 @@ export function WorkbenchPage({
                   title={t('Mappool')}
                   actions={
                     <div className="pool-head-actions">
+                      <button
+                        type="button"
+                        className="ghost small"
+                        onClick={openRandomPick}
+                        disabled={isQuickRoom || !pool || pool.slots.length === 0}
+                      >
+                        {t('Random')}
+                      </button>
                       <input
                         className="pool-search"
                         value={poolSearch}
@@ -1193,14 +1410,15 @@ export function WorkbenchPage({
                         (pending?.kind === 'ban' || pending?.kind === 'protect') && protectedSlot;
                       const actionable =
                         busy === null &&
-                        session.status === 'active' &&
+                        roomOpen &&
                         (isLobby ||
+                          session.status === 'finished' ||
                           (!used &&
                             session.phase !== 'playing' &&
                             Boolean(pending) &&
                             !blockedByProtection));
                       const isLast =
-                        session.status === 'active' &&
+                        roomOpen &&
                         lastAction?.slotLabel !== null &&
                         lastAction?.slotLabel !== undefined &&
                         normalizeSlotLabel(lastAction.slotLabel) ===
@@ -1212,90 +1430,27 @@ export function WorkbenchPage({
                         : protectedSlot
                           ? { kind: 'protect', teamId: protector ?? null }
                           : null;
-                      const teamClass =
-                        action?.teamId === session.teamOneId
-                          ? ' team-one'
-                          : action?.teamId === session.teamTwoId
-                            ? ' team-two'
-                            : '';
-                      const actionClass = action ? ` action-${action.kind}` : '';
                       return (
-                        <div
+                        <MappoolSlotRow
                           key={slot.id}
-                          className={`pool-row${teamClass}${actionClass}${
-                            current ? ' current' : ''
-                          }${actionable ? ' actionable' : ''}`}
-                          role={actionable ? 'button' : undefined}
-                          tabIndex={actionable ? 0 : -1}
-                          onClick={() => {
-                            if (actionable) applySlot(slot);
-                          }}
-                          onKeyDown={(event) => {
-                            if (actionable && (event.key === 'Enter' || event.key === ' ')) {
-                              event.preventDefault();
-                              applySlot(slot);
-                            }
-                          }}
-                          onContextMenu={(event) => {
-                            event.preventDefault();
-                            if (!isLast || busy !== null) return;
-                            void run('undo', () =>
-                              window.osmaRef.sessions.undo(session.id),
-                            );
-                          }}
+                          slot={slot}
+                          info={info}
+                          failure={failure}
+                          action={action}
+                          current={Boolean(current)}
+                          actionable={actionable}
+                          teamOneId={session.teamOneId}
+                          teamTwoId={session.teamTwoId}
                           title={`beatmap ${slot.beatmapId}${
                             action ? `, ${action.kind} by ${teamName(action.teamId)}` : ''
                           }${failure ? `, ${failure.message}` : ''}`}
-                        >
-                          <span className="playlist-slot">
-                            <span className="slot-tag">{slot.label}</span>
-                          </span>
-                          <div className="playlist-main">
-                            <div className="beatmap-title">
-                              {info
-                                ? `${info.title} - ${info.artist}`
-                                : `Beatmap #${slot.beatmapId}`}
-                              {!info && failure ? (
-                                <span
-                                  className={`beatmap-state${failure.notFound ? ' missing' : ' failed'}`}
-                                >
-                                  {failure.notFound ? t('not found') : t('lookup failed')}
-                                </span>
-                              ) : null}
-                            </div>
-                            <div className="beatmap-meta">
-                              {info ? modeLabel(info.mode, slot.rulesetId ?? 0) : rulesetName(slot.rulesetId ?? 0)} #
-                              {slot.beatmapId}
-                              {info?.difficultyName ? ` [${info.difficultyName}]` : ''} -{' '}
-                              {info?.mapper || '—'}
-                            </div>
-                          </div>
-                          <div className="playlist-mods">
-                            {slot.requiredMods.map((mod) => (
-                              <span className="mod-chip required" key={`req-${mod}`}>
-                                {mod}
-                              </span>
-                            ))}
-                            {slot.allowedMods.map((mod) => (
-                              <span className="mod-chip allowed" key={`allow-${mod}`}>
-                                {mod}
-                              </span>
-                            ))}
-                            {slot.freestyle ? (
-                              <span className="mod-chip allowed">Freestyle</span>
-                            ) : null}
-                            {slot.requiredMods.length === 0 &&
-                            slot.allowedMods.length === 0 &&
-                            !slot.freestyle ? (
-                              <span className="mod-chip">NM</span>
-                            ) : null}
-                          </div>
-                          {action && action.kind !== 'pick' ? (
-                            <span className="pool-overlay" aria-hidden="true">
-                              <span className="pool-overlay-icon" />
-                            </span>
-                          ) : null}
-                        </div>
+                          onActivate={() => applySlot(slot)}
+                          onContextMenu={(event) => {
+                            event.preventDefault();
+                            if (!isLast || busy !== null) return;
+                            void run('undo', () => window.osmaRef.sessions.undo(session.id));
+                          }}
+                        />
                       );
                     })}
                   </div>
@@ -1405,6 +1560,31 @@ export function WorkbenchPage({
           onSave={saveFirstTeams}
         />
       ) : null}
+      {randomOpen && pool ? (
+        <RandomPickDialog
+          slots={randomSlots}
+          scope={randomScope}
+          prompt={randomPrompt}
+          beatmaps={beatmaps}
+          failures={beatmapFailures}
+          confirming={randomConfirming}
+          onScopeChange={changeRandomScope}
+          onPromptChange={setRandomPrompt}
+          onConfirm={handleRandomConfirmClick}
+          onClose={abortRandomFlow}
+        />
+      ) : null}
+      {rollResult && session ? (
+        <RandomRollDialog
+          key={`${rollResult.username}:${rollResult.score}:${rollResult.index}`}
+          result={rollResult}
+          slots={rollSlots}
+          beatmaps={beatmaps}
+          failures={beatmapFailures}
+          onConfirm={confirmRandomRoll}
+          onClose={abortRandomFlow}
+        />
+      ) : null}
       {joinOpen ? (
         <JoinRoomDialog
           initialTransport={channel}
@@ -1485,53 +1665,3 @@ function roomRef(roomId: string | null): string {
   return roomId;
 }
 
-function modeLabel(mode: string, fallbackRulesetId: number): string {
-  switch (mode.toLowerCase()) {
-    case 'osu':
-      return 'osu!';
-    case 'taiko':
-      return 'osu!taiko';
-    case 'fruits':
-    case 'catch':
-      return 'osu!catch';
-    case 'mania':
-      return 'osu!mania';
-    default:
-      return rulesetName(fallbackRulesetId);
-  }
-}
-
-function ScoreCard({
-  name,
-  wins,
-  color,
-  active,
-  label,
-  onAdjust,
-}: {
-  name: string;
-  wins: number;
-  color: 'red' | 'blue';
-  active: boolean;
-  label: string;
-  onAdjust: (delta: number) => void;
-}) {
-  const { t } = useI18n();
-  return (
-    <div
-      className={`score-card ${color}${active ? ' active' : ''}`}
-      role="group"
-      aria-label={`${label} ${name}: ${wins}`}
-      title={`${t('left click +1')} / ${t('right click -1')}`}
-      onClick={() => onAdjust(1)}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        onAdjust(-1);
-      }}
-    >
-      <span className="muted small">{label}</span>
-      <strong>{name}</strong>
-      <span className="score-number">{wins}</span>
-    </div>
-  );
-}

@@ -94,10 +94,6 @@ export function toPrivmsg(message: IrcMessage): Privmsg | null {
   return { from: message.nick, target, text };
 }
 
-export function isChannel(target: string): boolean {
-  return target.startsWith('#');
-}
-
 export function roomIdFromChannel(channel: string): string | null {
   const match = /^#mp_(\d+)$/i.exec(channel);
   return match?.[1] ?? null;

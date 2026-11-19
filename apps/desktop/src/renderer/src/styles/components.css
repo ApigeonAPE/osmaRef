@@ -328,6 +328,7 @@
 }
 
 .modal-body {
+  min-height: 0;
   padding: 18px;
   overflow: auto;
   display: flex;

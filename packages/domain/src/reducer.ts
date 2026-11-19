@@ -91,7 +91,7 @@ export interface ApplyActionInput {
 }
 
 export function applyAction(session: MatchSession, input: ApplyActionInput): MatchSession {
-  if (session.status !== 'active') {
+  if (session.status !== 'active' && session.status !== 'finished') {
     throw new DomainError('SESSION_NOT_ACTIVE', `session is ${session.status}`);
   }
   if (session.phase === 'playing' || session.currentSlotLabel !== null) {
@@ -169,7 +169,7 @@ export function recordResult(
   result: BeatmapResult,
   at = result.recordedAt,
 ): MatchSession {
-  if (session.status !== 'active') {
+  if (session.status !== 'active' && session.status !== 'finished') {
     throw new DomainError('SESSION_NOT_ACTIVE', `session is ${session.status}`);
   }
   if (session.matchKind === 'lobby') {

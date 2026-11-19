@@ -287,11 +287,3 @@ export interface CreateSessionInput {
 export function requiredWins(bestOf: number): number {
   return Math.floor(bestOf / 2) + 1;
 }
-
-export function currentPendingAction(session: MatchSession): PendingAction | null {
-  return session.queue[session.cursor] ?? null;
-}
-
-export function isSessionEditable(session: MatchSession): boolean {
-  return session.status === 'active';
-}

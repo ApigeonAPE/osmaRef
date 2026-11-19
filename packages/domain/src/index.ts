@@ -6,3 +6,4 @@ export * from './quick';
 export * from './results';
 export * from './room-log';
 export * from './log-export';
+export * from './random-pick';

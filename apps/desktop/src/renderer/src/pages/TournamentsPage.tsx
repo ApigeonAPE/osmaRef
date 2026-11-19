@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AUTOMATION_TRIGGERS,
   BUILTIN_WIN_BY_RULE_ID,
@@ -18,6 +18,7 @@ import {
   type RemoteTournamentSummary,
   type RulesetId,
   type Stage,
+  type MappoolBeatmapInfo,
   type StageGroup,
   type Team,
   type Tournament,
@@ -34,14 +35,15 @@ import { Toast } from '../components/Toast';
 
 const RULESET_LABELS = ['osu!', 'osu!taiko', 'osu!catch', 'osu!mania'];
 
-type WorkspaceView = 'basics' | 'teams' | 'stages' | 'automation';
+type WorkspaceView = 'basics' | 'teams' | 'stages' | 'webhooks' | 'automation';
 type StageView = 'groups' | 'mappool' | 'flow' | 'winby' | 'matches';
 
 const WORKSPACE_VIEWS: { id: WorkspaceView; label: string }[] = [
   { id: 'basics', label: 'Basics' },
   { id: 'teams', label: 'Teams' },
   { id: 'stages', label: 'Stages' },
-  { id: 'automation', label: 'Message triggers' },
+  { id: 'webhooks', label: 'Webhooks' },
+  { id: 'automation', label: 'Triggers' },
 ];
 
 function isPoolPlaceholderIssue(issue: ValidationIssue): boolean {
@@ -62,18 +64,27 @@ function slotModLabel(slot: Stage['slots'][number]): string {
 
 function BeatmapIdField({
   beatmapId,
-  invalid,
+  cached,
+  onResolved,
   onChange,
 }: {
   beatmapId: number;
-  invalid: boolean;
+  cached: MappoolBeatmapInfo | null;
+  onResolved: (info: MappoolBeatmapInfo | null) => void;
   onChange: (value: string) => void;
 }) {
   const { t } = useI18n();
   const [localInvalid, setLocalInvalid] = useState(false);
+  const resolvedRef = useRef(onResolved);
+  resolvedRef.current = onResolved;
+  const cachedId = cached?.id ?? null;
 
   useEffect(() => {
     if (beatmapId <= 0) {
+      setLocalInvalid(false);
+      return;
+    }
+    if (cachedId === beatmapId) {
       setLocalInvalid(false);
       return;
     }
@@ -83,26 +94,28 @@ function BeatmapIdField({
       void window.osmaRef.osu
         .lookupBeatmaps([beatmapId])
         .then((result) => {
-          if (!cancelled) {
-            setLocalInvalid(!result.beatmaps.some((beatmap) => beatmap.id === beatmapId));
-          }
+          if (cancelled) return;
+          const info = result.beatmaps.find((beatmap) => beatmap.id === beatmapId) ?? null;
+          setLocalInvalid(info === null);
+          resolvedRef.current(info);
         })
         .catch(() => {
-          if (!cancelled) setLocalInvalid(true);
+          if (cancelled) return;
+          setLocalInvalid(true);
         });
     }, 400);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [beatmapId]);
+  }, [beatmapId, cachedId]);
 
   return (
     <IdInput
       kind="beatmap"
       value={beatmapId > 0 ? String(beatmapId) : ''}
       placeholder={t('Beatmap id')}
-      aria-invalid={beatmapId <= 0 || localInvalid || invalid}
+      aria-invalid={beatmapId <= 0 || localInvalid}
       onChange={onChange}
     />
   );
@@ -125,7 +138,6 @@ export function TournamentsPage() {
   const [pendingIds, setPendingIds] = useState<Set<number>>(new Set());
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [memberInput, setMemberInput] = useState<Record<number, string>>({});
-  const [invalidBeatmapIds, setInvalidBeatmapIds] = useState<Set<number>>(new Set());
   const [mappoolRequest, setMappoolRequest] = useState(0);
 
   useEffect(() => {
@@ -190,7 +202,6 @@ export function TournamentsPage() {
     setSelectedId(id);
     setActiveStageId(null);
     setWorkspaceView('basics');
-    setInvalidBeatmapIds(new Set());
   };
 
   const closeDetail = () => {
@@ -200,11 +211,6 @@ export function TournamentsPage() {
     setDraft(null);
     setActiveStageId(null);
     setWorkspaceView('basics');
-    setInvalidBeatmapIds(new Set());
-  };
-
-  const clearInvalidBeatmaps = () => {
-    setInvalidBeatmapIds((previous) => (previous.size > 0 ? new Set() : previous));
   };
 
   const save = async () => {
@@ -230,28 +236,7 @@ export function TournamentsPage() {
     setBusy(true);
     setError(null);
     setNotice(null);
-    setInvalidBeatmapIds(new Set());
     try {
-      const beatmapIds = Array.from(
-        new Set(draft.stages.flatMap((stage) => stage.slots.map((slot) => slot.beatmapId))),
-      );
-      if (beatmapIds.length > 0) {
-        const result = await window.osmaRef.osu.lookupBeatmaps(beatmapIds);
-        const found = new Set(result.beatmaps.map((beatmap) => beatmap.id));
-        const invalid = new Set(beatmapIds.filter((id) => !found.has(id)));
-        setInvalidBeatmapIds(invalid);
-        if (invalid.size > 0) {
-          const stage = draft.stages.find((entry) =>
-            entry.slots.some((slot) => invalid.has(slot.beatmapId)),
-          );
-          if (stage) {
-            setActiveStageId(stage.id);
-            setWorkspaceView('stages');
-            setMappoolRequest((value) => value + 1);
-          }
-          return;
-        }
-      }
       const saved = await model.saveTournament(structuredClone(draft));
       setDraft(structuredClone(saved));
       setDirty(false);
@@ -274,7 +259,6 @@ export function TournamentsPage() {
       setDraft(structuredClone(created));
       setActiveStageId(null);
       setWorkspaceView('basics');
-      setInvalidBeatmapIds(new Set());
     } catch (cause) {
       setError(errorText(cause));
     } finally {
@@ -551,9 +535,11 @@ export function TournamentsPage() {
                         activeStage={activeStage}
                         onSelectStage={setActiveStageId}
                         mappoolRequest={mappoolRequest}
-                        invalidBeatmapIds={invalidBeatmapIds}
-                        onBeatmapEdited={clearInvalidBeatmaps}
                       />
+                    ) : null}
+
+                    {workspaceView === 'webhooks' ? (
+                      <WebhooksEditor draft={draft} edit={edit} />
                     ) : null}
 
                     {workspaceView === 'automation' ? (
@@ -911,16 +897,12 @@ function StagesEditor({
   activeStage,
   onSelectStage,
   mappoolRequest,
-  invalidBeatmapIds,
-  onBeatmapEdited,
 }: {
   draft: Tournament;
   edit: (mutator: (tournament: Tournament) => void) => void;
   activeStage: Stage | null;
   onSelectStage: (id: string | null) => void;
   mappoolRequest: number;
-  invalidBeatmapIds: Set<number>;
-  onBeatmapEdited: () => void;
 }) {
   const { t } = useI18n();
   const [stageView, setStageView] = useState<StageView>('mappool');
@@ -1166,8 +1148,6 @@ function StagesEditor({
               edit={edit}
               stage={activeStage}
               stageIndex={stageIndex}
-              invalidBeatmapIds={invalidBeatmapIds}
-              onBeatmapEdited={onBeatmapEdited}
             />
           ) : null}
           {resolvedStageView === 'flow' ? (
@@ -1274,15 +1254,11 @@ function PoolEditor({
   edit,
   stage,
   stageIndex,
-  invalidBeatmapIds,
-  onBeatmapEdited,
 }: {
   draft: Tournament;
   edit: (mutator: (tournament: Tournament) => void) => void;
   stage: Stage;
   stageIndex: number;
-  invalidBeatmapIds: Set<number>;
-  onBeatmapEdited: () => void;
 }) {
   const { t } = useI18n();
   const [modSlotId, setModSlotId] = useState<string | null>(null);
@@ -1296,6 +1272,7 @@ function PoolEditor({
         label: '',
         category: '',
         beatmapId: 0,
+        beatmap: null,
         rulesetId: null,
         requiredMods: [],
         allowedMods: [],
@@ -1360,11 +1337,29 @@ function PoolEditor({
               />
               <BeatmapIdField
                 beatmapId={slot.beatmapId}
-                invalid={invalidBeatmapIds.has(slot.beatmapId)}
-                onChange={(value) => {
-                  onBeatmapEdited();
-                  patchSlot(index, (target) => (target.beatmapId = Number(value) || 0));
+                cached={slot.beatmap}
+                onResolved={(info) => {
+                  const current = slot.beatmap;
+                  const unchanged =
+                    current === info ||
+                    (current !== null &&
+                      info !== null &&
+                      current.id === info.id &&
+                      current.title === info.title &&
+                      current.artist === info.artist &&
+                      current.mapper === info.mapper &&
+                      current.difficultyName === info.difficultyName);
+                  if (unchanged) return;
+                  patchSlot(index, (target) => {
+                    target.beatmap = info;
+                  });
                 }}
+                onChange={(value) =>
+                  patchSlot(index, (target) => {
+                    target.beatmapId = Number(value) || 0;
+                    target.beatmap = null;
+                  })
+                }
               />
               <select
                 value={slot.rulesetId ?? ''}
@@ -1843,10 +1838,7 @@ function MatchesEditor({
         {stage.matches.map((match, index) => {
           const open = expanded.has(match.id);
           const left = match.type === 'match' ? teamName(match.teamRedId) : t('Lobby');
-          const right =
-            match.type === 'match'
-              ? teamName(match.teamBlueId)
-              : t('{count} team(s)', { count: match.teamIds.length });
+          const right = match.type === 'match' ? teamName(match.teamBlueId) : `#${index + 1}`;
           return (
             <div className="match-editor" key={match.id}>
               <div className="match-summary-row">
@@ -2056,6 +2048,75 @@ function MatchesEditor({
     </div>
   );
 }
+function WebhooksEditor({
+  draft,
+  edit,
+}: {
+  draft: Tournament;
+  edit: (mutator: (tournament: Tournament) => void) => void;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <Section
+      title={t('Webhooks')}
+      actions={
+        <button
+          type="button"
+          className="ghost small"
+          onClick={() =>
+            edit((next) => {
+              next.webhooks.push({ kind: 'discord', name: 'Discord', url: '', triggers: [] });
+            })
+          }
+        >
+          {t('+ Webhook')}
+        </button>
+      }
+    >
+      {draft.webhooks.map((webhook, index) => (
+        <div className="row webhook-row" key={`webhook-${index}`}>
+          <Field label={t('Name')}>
+            <input
+              value={webhook.name}
+              onChange={(event) =>
+                edit((next) => {
+                  const current = next.webhooks[index];
+                  if (!current) return;
+                  current.name = event.target.value;
+                })
+              }
+            />
+          </Field>
+          <Field label={t('Address')}>
+            <input
+              value={webhook.url}
+              onChange={(event) =>
+                edit((next) => {
+                  const current = next.webhooks[index];
+                  if (!current) return;
+                  current.url = event.target.value;
+                })
+              }
+            />
+          </Field>
+          <button
+            type="button"
+            className="ghost small danger"
+            onClick={() =>
+              edit((next) => {
+                next.webhooks.splice(index, 1);
+              })
+            }
+          >
+            ×
+          </button>
+        </div>
+      ))}
+    </Section>
+  );
+}
+
 function AutomationEditor({
   draft,
   edit,
@@ -2067,8 +2128,9 @@ function AutomationEditor({
   const [helpOpen, setHelpOpen] = useState(false);
 
   return (
-    <div className="flow-card">
-      <div className="panel-head automation-head">
+    <Section
+      title={t('Triggers')}
+      actions={
         <button
           type="button"
           className="ghost small help-button"
@@ -2078,8 +2140,8 @@ function AutomationEditor({
         >
           ?
         </button>
-      </div>
-
+      }
+    >
       {AUTOMATION_TRIGGERS.map((trigger) => (
         <div className="automation-group" key={trigger}>
           <div className="row automation-group-head">
@@ -2089,20 +2151,20 @@ function AutomationEditor({
               className="ghost small"
               onClick={() =>
                 edit((next) => {
-                  next.automation[trigger].push('');
+                  next.automation[trigger].push({ type: 'chat', template: '' });
                 })
               }
             >
               {t('+ Message')}
             </button>
           </div>
-          {draft.automation[trigger].map((message, index) => (
+          {draft.automation[trigger].map((action, index) => (
             <div className="row" key={`${trigger}-${index}`}>
               <input
-                value={message}
+                value={action.template}
                 onChange={(event) =>
                   edit((next) => {
-                    next.automation[trigger][index] = event.target.value;
+                    next.automation[trigger][index] = { ...action, template: event.target.value };
                   })
                 }
               />
@@ -2119,6 +2181,24 @@ function AutomationEditor({
               </button>
             </div>
           ))}
+          {draft.webhooks.map((webhook, index) => (
+            <label className="row" key={`${trigger}-webhook-${index}`}>
+              <input
+                type="checkbox"
+                checked={webhook.triggers.includes(trigger)}
+                onChange={(event) =>
+                  edit((next) => {
+                    const current = next.webhooks[index];
+                    if (!current) return;
+                    current.triggers = event.target.checked
+                      ? [...current.triggers, trigger]
+                      : current.triggers.filter((value) => value !== trigger);
+                  })
+                }
+              />
+              <span>{webhook.name || t('Webhook')}</span>
+            </label>
+          ))}
         </div>
       ))}
 
@@ -2134,7 +2214,7 @@ function AutomationEditor({
           </ul>
         </Modal>
       ) : null}
-    </div>
+    </Section>
   );
 }
 

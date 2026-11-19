@@ -128,6 +128,9 @@ function createWindow(): void {
     show: false,
     backgroundColor: '#141013',
     title: 'osmaRef',
+    // Packaged builds inherit the icon embedded in osmaRef.exe by electron-builder;
+    // only an unpackaged run needs the file on disk.
+    ...(app.isPackaged ? {} : { icon: join(__dirname, '../../build/icon.ico') }),
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

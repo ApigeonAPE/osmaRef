@@ -1,7 +1,6 @@
 import { EventEmitter } from 'node:events';
 import net from 'node:net';
 import tls from 'node:tls';
-import { normalizeIrcEndpoint } from '@osmaref/contracts';
 import {
   LineBuffer,
   parseIrcLine,
@@ -19,34 +18,6 @@ export interface IrcClientOptions {
   realname?: string;
   /** Milliseconds to wait for the welcome numeric. */
   connectTimeoutMs?: number;
-  /** Milliseconds to wait when retrying an alternate endpoint. */
-  fallbackTimeoutMs?: number;
-}
-
-export interface IrcEndpoint {
-  port: number;
-  useTls: boolean;
-}
-
-/**
- * Endpoints to try for one login, in order.
- *
- * The configured endpoint comes first (normalised to Bancho's plaintext 6667 /
- * TLS 6697 pair). The other standard IRC port follows so a stale TLS/port
- * combination or a blocked port cannot strand the client.
- */
-export function ircConnectTargets(host: string, port: number, useTls: boolean): IrcEndpoint[] {
-  const primary = normalizeIrcEndpoint(host, port, useTls);
-  const targets: IrcEndpoint[] = [{ port: primary.port, useTls: primary.useTls }];
-  for (const candidate of [
-    { port: 6667, useTls: false },
-    { port: 6697, useTls: true },
-  ]) {
-    if (!targets.some((target) => target.port === candidate.port && target.useTls === candidate.useTls)) {
-      targets.push(candidate);
-    }
-  }
-  return targets;
 }
 
 /**
@@ -63,7 +34,6 @@ export class IrcClient extends EventEmitter {
   private connected = false;
   private lastServerError: string | null = null;
   private readonly serverMessages: string[] = [];
-  private hadServerResponse = false;
 
   constructor(options: IrcClientOptions) {
     super();
@@ -81,46 +51,10 @@ export class IrcClient extends EventEmitter {
     this.serverMessages.length = 0;
     this.lastServerError = null;
 
-    const targets = ircConnectTargets(
-      this.options.host,
-      this.options.port,
-      this.options.useTls ?? false,
-    );
-    const failures: string[] = [];
-
-    for (const [index, target] of targets.entries()) {
-      try {
-        await this.attempt({
-          ...this.options,
-          port: target.port,
-          useTls: target.useTls,
-          connectTimeoutMs:
-            index === 0
-              ? (this.options.connectTimeoutMs ?? 20_000)
-              : (this.options.fallbackTimeoutMs ?? 8_000),
-        });
-        return;
-      } catch (error) {
-        failures.push(
-          `${target.port}${target.useTls ? ' (TLS)' : ' (plaintext)'}: ${errorMessage(error)}`,
-        );
-        const replied = this.hadServerResponse;
-        // Release anything the failed attempt left behind before retrying.
-        this.destroy();
-        // A server that answered (bad token, throttle, ban) answers the next
-        // endpoint the same way; retrying only risks a throttle and hides the
-        // real reason. Silent timeouts and refused/handshake failures retry.
-        if (replied) throw error;
-      }
-    }
-
-    throw new Error(
-      `IRC connection to ${this.options.host} failed (${failures.join('; ')})`,
-    );
+    await this.attempt(this.options);
   }
 
   private attempt(options: IrcClientOptions): Promise<void> {
-    this.hadServerResponse = false;
     this.connected = false;
     this.lines.reset();
     this.serverMessages.length = 0;
@@ -167,7 +101,6 @@ export class IrcClient extends EventEmitter {
       });
 
       socket.on('data', (chunk: string) => {
-        if (chunk.length > 0) this.hadServerResponse = true;
         for (const line of this.lines.push(chunk)) {
           this.handleLine(line);
         }
@@ -297,12 +230,6 @@ export class IrcClient extends EventEmitter {
 }
 
 export type { IrcMessage, Privmsg };
-
-export interface IrcNotice {
-  from: string;
-  target: string;
-  text: string;
-}
 
 /**
  * Builds a human explanation for a pre-login disconnect.

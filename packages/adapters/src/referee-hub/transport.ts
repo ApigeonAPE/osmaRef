@@ -396,7 +396,9 @@ export class RefereeHubTransport implements MatchTransport {
           joined.push(snapshot);
           this.emit({ type: 'room_joined', snapshot });
         } catch (error) {
-          if (!listed.has(roomId)) {
+          // A dropped connection is not proof that the room is gone. Only trust
+          // the missing-from-list signal while the hub link is actually up.
+          if (!listed.has(roomId) && this.isConnected) {
             this.rooms.delete(roomId);
             this.emit({ type: 'room_closed', roomId });
           } else {

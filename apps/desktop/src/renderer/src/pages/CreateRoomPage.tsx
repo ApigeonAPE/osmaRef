@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { DEFAULT_QUICK_BEST_OF } from '@osmaref/domain';
 import { useModel } from '../useOsmaRef';
 import { useI18n } from '../i18n';
 import { Field } from '../ui';
@@ -18,7 +19,7 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
   const [quickRuleset, setQuickRuleset] = useState(0);
   const [quickMatchType, setQuickMatchType] = useState<'head_to_head' | 'team_versus'>('team_versus');
   const [quickTransport, setQuickTransport] = useState<'irc' | 'referee_hub'>('referee_hub');
-  const [quickMax, setQuickMax] = useState(8);
+  const [quickMax, setQuickMax] = useState(4);
 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +82,7 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
         matchType: quickMatchType,
         transport: quickTransport,
         maxParticipants: quickMax,
-        bestOf: 9,
+        bestOf: DEFAULT_QUICK_BEST_OF,
       });
       await model.refreshSessions();
       onCreated(created.id);
@@ -151,7 +152,14 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
                 </select>
               </Field>
               <Field label={t('Platform')}>
-                <span className="muted small">{selectedTournament?.platform ?? 'stable'}</span>
+                <select
+                  key={selectedTournament?.platform ?? 'stable'}
+                  defaultValue={selectedTournament?.platform ?? 'stable'}
+                  disabled
+                >
+                  <option value="stable">stable</option>
+                  <option value="lazer">lazer</option>
+                </select>
               </Field>
               <button
                 type="button"
@@ -201,11 +209,11 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
               </Field>
             </div>
             <div className="open-row">
-              <Field label={t('Max participants')}>
+              <Field label={t('Team size')}>
                 <input
                   type="number"
                   min={0}
-                  max={16}
+                  max={7}
                   value={quickMax}
                   onChange={(event) => setQuickMax(Number(event.target.value) || 0)}
                 />

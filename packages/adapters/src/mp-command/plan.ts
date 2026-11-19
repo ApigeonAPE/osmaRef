@@ -39,13 +39,13 @@ export function buildMpPlan(command: MpCommand, ctx: MpContext): PlanResult {
       );
 
     case 'make':
-      return unsupported(
+      return err(
         'MP_UNSUPPORTED',
         '!mp make is only available in Bancho IRC mode; create Referee Hub rooms from the create-room dialog.',
       );
 
     case 'makeprivate':
-      return unsupported(
+      return err(
         'MP_UNSUPPORTED',
         '!mp makeprivate is not available through the Referee Hub API: room history privacy has no hub equivalent.',
       );
@@ -224,13 +224,13 @@ export function buildMpPlan(command: MpCommand, ctx: MpContext): PlanResult {
 
     case 'host':
     case 'clearhost':
-      return unsupported(
+      return err(
         'MP_UNSUPPORTED',
         '!mp host and !mp clearhost have no Referee Hub equivalent; manage referees instead.',
       );
 
     case 'timer':
-      return unsupported(
+      return err(
         'MP_UNSUPPORTED',
         '!mp timer (a general room timer) has no hub equivalent. !mp start <seconds> controls the match start countdown only.',
       );
@@ -261,7 +261,7 @@ function planSize(size: number, ctx: MpContext): PlanResult {
 function planSet(teamMode: number, scoreMode: number | null, ctx: MpContext): PlanResult {
   const matchType = SUPPORTED_TEAM_MODES[teamMode];
   if (!matchType) {
-    return unsupported(
+    return err(
       'MP_BAD_TEAMMODE',
       teamMode === 1 || teamMode === 3
         ? 'Tag Co-op and Tag Team VS are not supported by the Referee Hub'
@@ -269,7 +269,7 @@ function planSet(teamMode: number, scoreMode: number | null, ctx: MpContext): Pl
     );
   }
   if (scoreMode !== null) {
-    return unsupported(
+    return err(
       'MP_UNSUPPORTED',
       'the score mode argument of !mp set has no Referee Hub equivalent; the hub scores with lazer rules',
     );
@@ -435,9 +435,5 @@ function ok(actions: HubAction[], effects: LocalEffect[], summary: string): Plan
 }
 
 function err(code: MpError['code'], message: string): PlanResult {
-  return { ok: false, error: { code, message } };
-}
-
-function unsupported(code: MpError['code'], message: string): PlanResult {
   return { ok: false, error: { code, message } };
 }

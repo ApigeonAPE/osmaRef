@@ -544,8 +544,14 @@
   padding: 0;
 }
 
-.automation-head {
-  justify-content: flex-end;
+.webhook-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
+  align-items: end;
+}
+
+.webhook-row .field input {
+  width: 100%;
 }
 
 .help-button {

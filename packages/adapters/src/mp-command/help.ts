@@ -42,7 +42,3 @@ export const MP_HELP_TEXT = [
   'Type !mp help in chat to print this list again.',
   ...MP_COMPATIBILITY.map((row) => `${row.command}  [${row.support}]  ${row.note}`),
 ].join('\n');
-
-export function compatibilityFor(command: string): MpCompatibilityRow | undefined {
-  return MP_COMPATIBILITY.find((row) => row.command.split(/\s+/)[0] === command);
-}

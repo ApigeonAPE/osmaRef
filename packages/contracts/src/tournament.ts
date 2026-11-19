@@ -14,7 +14,7 @@ import { BUILTIN_WIN_BY_RULE_ID } from './winby';
  * counts, and kept match IDs independent of their displayed order.
  */
 
-export const TOURNAMENT_SCHEMA_VERSION = 5 as const;
+export const TOURNAMENT_SCHEMA_VERSION = 6 as const;
 
 /**
  * Tournament ids are six random characters: digits plus lower-case letters
@@ -164,6 +164,15 @@ export const RefereeSchema = z.object({
 });
 export type Referee = z.infer<typeof RefereeSchema>;
 
+export const MappoolBeatmapInfoSchema = z.object({
+  id: z.number().int().positive(),
+  title: z.string().default(''),
+  artist: z.string().default(''),
+  mapper: z.string().default(''),
+  difficultyName: z.string().default(''),
+});
+export type MappoolBeatmapInfo = z.infer<typeof MappoolBeatmapInfoSchema>;
+
 export const MappoolSlotSchema = z.object({
   id: IdSchema,
   /**
@@ -180,6 +189,8 @@ export const MappoolSlotSchema = z.object({
     ),
   category: MappoolCategorySchema,
   beatmapId: z.number().int().positive(),
+  /** Snapshot of the beatmap metadata resolved when the id was edited. */
+  beatmap: MappoolBeatmapInfoSchema.nullable().default(null),
   /** null selects the beatmap's native ruleset; otherwise this may request conversion. */
   rulesetId: RulesetOverrideSchema,
   requiredMods: z.array(z.string().min(1).max(16)).default([]),
@@ -316,13 +327,25 @@ export type AutomationTrigger = z.infer<typeof AutomationTriggerSchema>;
 /** One automatic chat message; empty strings are kept in the editor but not sent. */
 export const AutomationMessageSchema = z.string().max(500);
 
+/**
+ * One action a trigger runs. Chat is the only kind for now; additional kinds
+ * (webhook, ...) extend this union without changing the trigger map.
+ */
+export const AutomationActionSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('chat'),
+    template: AutomationMessageSchema,
+  }),
+]);
+export type AutomationAction = z.infer<typeof AutomationActionSchema>;
+
 export const AutomationMessagesSchema = z.object({
-  match_created: z.array(AutomationMessageSchema).default([]),
-  beatmap_started: z.array(AutomationMessageSchema).default([]),
-  beatmap_completed: z.array(AutomationMessageSchema).default([]),
-  score_updated: z.array(AutomationMessageSchema).default([]),
-  match_finished: z.array(AutomationMessageSchema).default([]),
-  action_applied: z.array(AutomationMessageSchema).default([]),
+  match_created: z.array(AutomationActionSchema).default([]),
+  beatmap_started: z.array(AutomationActionSchema).default([]),
+  beatmap_completed: z.array(AutomationActionSchema).default([]),
+  score_updated: z.array(AutomationActionSchema).default([]),
+  match_finished: z.array(AutomationActionSchema).default([]),
+  action_applied: z.array(AutomationActionSchema).default([]),
 });
 export type AutomationMessages = z.infer<typeof AutomationMessagesSchema>;
 
@@ -336,6 +359,27 @@ export function emptyAutomationMessages(): AutomationMessages {
     action_applied: [],
   };
 }
+
+/**
+ * One webhook target. Discord is the only kind for now; other kinds (generic
+ * HTTP, Slack, ...) extend this union without touching tournaments.
+ */
+export const WebhookSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('discord'),
+    name: z.string().min(1).max(100),
+    url: z
+      .string()
+      .trim()
+      .url()
+      .max(500)
+      .refine((value) => value.startsWith('https://'), {
+        message: 'discord webhook urls must use https',
+      }),
+    triggers: z.array(AutomationTriggerSchema).default([]),
+  }),
+]);
+export type Webhook = z.infer<typeof WebhookSchema>;
 
 export const TournamentSourceSchema = z.object({
   provider: z.enum(['file', 'http']),
@@ -374,6 +418,7 @@ export const TournamentSchema = z
     teams: z.array(TeamSchema).default([]),
     stages: z.array(StageSchema).default([]),
     automation: AutomationMessagesSchema.default({}),
+    webhooks: z.array(WebhookSchema).default([]),
     revision: z.number().int().min(1).default(1),
     createdAt: TimestampSchema,
     updatedAt: TimestampSchema,
@@ -605,18 +650,6 @@ export function composeSlotLabel(category: string, sequence: string): string {
   return `${category}${sequence}`;
 }
 
-export const SLOT_LABEL_PATTERN = /^(?=.*[A-Za-z])[A-Za-z0-9]{1,12}$/;
-
-export const DEFAULT_FREEMOD_POOL = [
-  'HD',
-  'HR',
-  'EZ',
-  'DT',
-  'FL',
-  'HT',
-  'SO',
-  'NF',
-] as const;
 
 export const KNOWN_MODS = [
   'NM',
@@ -711,61 +744,12 @@ export function migrateTournament(input: unknown): unknown {
     schemaVersion: TOURNAMENT_SCHEMA_VERSION,
     platform,
     stages,
-    automation: migrateAutomation(input.automation),
+    automation: input.automation,
     abbreviation:
       typeof input.abbreviation === 'string'
         ? normalizeAbbreviation(input.abbreviation)
         : input.abbreviation,
   };
-}
-const LEGACY_TEMPLATE_KEYS: Record<string, string> = {
-  team_one: 'team_red',
-  team_two: 'team_blue',
-  score_one: 'score_red',
-  score_two: 'score_blue',
-};
-
-function normalizeAutomationMessage(template: string): string {
-  return template.replace(/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g, (_match, key: string) => {
-    const mapped = LEGACY_TEMPLATE_KEYS[key] ?? key;
-    return `{{${mapped}}}`;
-  });
-}
-
-function migrateAutomation(input: unknown): AutomationMessages {
-  const messages = emptyAutomationMessages();
-  if (Array.isArray(input)) {
-    for (const rule of input) {
-      if (!isRecord(rule) || rule.enabled === false) continue;
-      const trigger =
-        typeof rule.trigger === 'string' &&
-        (AUTOMATION_TRIGGERS as readonly string[]).includes(rule.trigger)
-          ? (rule.trigger as AutomationTrigger)
-          : null;
-      if (!trigger) continue;
-      const actions = Array.isArray(rule.actions) ? rule.actions : [];
-      for (const action of actions) {
-        if (!isRecord(action)) continue;
-        if (action.type === 'chat' && typeof action.template === 'string') {
-          messages[trigger].push(normalizeAutomationMessage(action.template));
-        } else if (action.type === 'notice' && typeof action.message === 'string') {
-          messages[trigger].push(normalizeAutomationMessage(action.message));
-        }
-      }
-    }
-    return messages;
-  }
-  if (isRecord(input)) {
-    for (const trigger of AUTOMATION_TRIGGERS) {
-      const value = input[trigger];
-      messages[trigger] = Array.isArray(value)
-        ? value
-            .filter((entry): entry is string => typeof entry === 'string')
-            .map(normalizeAutomationMessage)
-        : [];
-    }
-  }
-  return messages;
 }
 export function createEmptyTournament(name: string, now = new Date()): Tournament {
   const timestamp = now.toISOString();
@@ -819,6 +803,7 @@ export function createEmptyTournament(name: string, now = new Date()): Tournamen
       },
     ],
     automation: emptyAutomationMessages(),
+    webhooks: [],
     revision: 1,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -834,15 +819,9 @@ export function slugify(value: string): string {
     .slice(0, 40);
 }
 
-/** Source alias retained while downstream modules move from rounds to stages. */
-export type Round = Stage;
-
 export function findStage(tournament: Tournament, stageId: string): Stage | undefined {
   return tournament.stages.find((stage) => stage.id === stageId);
 }
-
-/** @deprecated Use findStage. */
-export const findRound = findStage;
 
 export function findMatch(tournament: Tournament, matchId: string): Match | undefined {
   return tournament.stages.flatMap((stage) => stage.matches).find((match) => match.id === matchId);
@@ -874,14 +853,12 @@ export function buildRoomName(
   match: Match,
 ): string {
   if (match.type === 'lobby') {
-    return `${tournament.abbreviation} ${stage.name} lobby`.slice(0, 160);
+    const index = stage.matches.indexOf(match) + 1;
+    return `${tournament.abbreviation}: (Lobby) vs (#${Math.max(1, index)})`.slice(0, 160);
   }
-  return `${tournament.abbreviation} ${matchSessionName(tournament, stage, match)}`.slice(0, 160);
-}
-
-/** Index of a match inside its stage, used for the displayed #number. */
-export function matchIndex(stage: Stage, matchId: string): number {
-  return stage.matches.findIndex((match) => match.id === matchId);
+  const red = findTeam(tournament, match.teamRedId)?.name ?? `Team ${match.teamRedId}`;
+  const blue = findTeam(tournament, match.teamBlueId)?.name ?? `Team ${match.teamBlueId}`;
+  return `${tournament.abbreviation}: (${red}) vs (${blue})`.slice(0, 160);
 }
 
 export function findTeam(tournament: Tournament, teamId: TeamId | string): Team | undefined {
@@ -896,25 +873,6 @@ export function findSlotByLabel(
 ): MappoolSlot | undefined {
   const normalized = normalizeSlotLabel(label);
   return stage.slots.find((slot) => normalizeSlotLabel(slot.label) === normalized);
-}
-
-export function allParticipants(tournament: Tournament): TeamMember[] {
-  return tournament.teams.flatMap((team) => team.members);
-}
-
-export function renderRoomName(
-  template: string,
-  context: {
-    tournament: string;
-    stage: string;
-    team_one: string;
-    team_two: string;
-  },
-): string {
-  return template.replace(/\{(\w+)\}/g, (match, key: string) => {
-    const value = (context as Record<string, string>)[key];
-    return value ?? match;
-  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

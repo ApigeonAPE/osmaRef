@@ -68,7 +68,6 @@ export type MpErrorCode =
   | 'MP_BAD_SLOT'
   | 'MP_BAD_MOD'
   | 'MP_BAD_SIZE'
-  | 'MP_NO_BEATMAP'
   | 'MP_BAD_COUNTDOWN'
   | 'MP_NOT_TEAM_VERSUS'
   | 'MP_BAD_TEAMMODE'
@@ -117,8 +116,7 @@ export type HubAction =
 export type LocalEffect =
   | { type: 'help' }
   | { type: 'showSettings' }
-  | { type: 'showReferees' }
-  | { type: 'notice'; level: 'info' | 'warn'; message: string };
+  | { type: 'showReferees' };
 
 export interface MpPlan {
   actions: HubAction[];
@@ -144,8 +142,6 @@ export interface MpContext {
 export type PlanResult =
   | { ok: true; plan: MpPlan }
   | { ok: false; error: MpError };
-
-export const DEFAULT_MAX_PARTICIPANTS = 16;
 
 export const SUPPORTED_TEAM_MODES: Record<number, 'head_to_head' | 'team_versus'> = {
   0: 'head_to_head',

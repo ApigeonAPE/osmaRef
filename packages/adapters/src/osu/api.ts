@@ -206,7 +206,6 @@ export class OsuApiClient {
       const text = await response.text().catch(() => '');
       throw new Error(`osu! API ${path} failed (${response.status}): ${text.slice(0, 200)}`);
     }
-    if (response.status === 204) return undefined as T;
     const text = await response.text();
     if (text.length > 4 * 1024 * 1024) {
       throw new Error('osu! API response is too large');

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   TournamentSchema,
+  buildRoomName,
   composeSlotLabel,
   createEmptyTournament,
   findSlotByLabel,
@@ -14,6 +15,7 @@ import {
 function slot(overrides: Partial<MappoolSlot> & Pick<MappoolSlot, 'id' | 'label' | 'beatmapId'>): MappoolSlot {
   return {
     category: 'NM',
+    beatmap: null,
     rulesetId: null,
     requiredMods: [],
     allowedMods: [],
@@ -35,6 +37,33 @@ function twoTeamMatch(id = 'm1') {
     roomMode: 'team_versus' as const,
   };
 }
+
+describe('room names', () => {
+  it('uses the abbreviation and bracketed team names', () => {
+    const tournament = createEmptyTournament('Test Cup');
+    tournament.abbreviation = 'TC';
+    tournament.teams = [
+      { id: 0, name: 'Alpha', captainUserId: null, members: [], seed: null },
+      { id: 1, name: 'Beta', captainUserId: null, members: [], seed: null },
+    ];
+    const stage = tournament.stages[0]!;
+    const match = { ...twoTeamMatch('m1'), teamRedId: 0, teamBlueId: 1 };
+    expect(buildRoomName(tournament, stage, match)).toBe('TC: (Alpha) vs (Beta)');
+  });
+
+  it('numbers lobby rooms within the stage', () => {
+    const tournament = createEmptyTournament('Test Cup');
+    tournament.abbreviation = 'TC';
+    const stage = tournament.stages[0]!;
+    const lobby = (id: string) => ({
+      ...twoTeamMatch(id),
+      type: 'lobby' as const,
+      teamIds: [0, 1],
+    });
+    stage.matches = [lobby('l1'), twoTeamMatch('m1'), lobby('l2')];
+    expect(buildRoomName(tournament, stage, stage.matches[2]!)).toBe('TC: (Lobby) vs (#3)');
+  });
+});
 
 describe('tournament schema (stages v4)', () => {
   it('accepts a freshly created tournament', () => {

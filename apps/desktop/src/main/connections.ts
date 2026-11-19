@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import {
   BUILTIN_WIN_BY_RULE,
   findMatch,
-  findRound,
   findSlotByLabel,
   findStageForMatch,
   findTeam,
@@ -33,6 +32,7 @@ import {
   type SessionEventType,
   type Tournament,
   type TournamentMode,
+  type Webhook,
   sessionEventCategory,
   toLobbyLogSession,
 } from '@osmaref/contracts';
@@ -40,6 +40,7 @@ import {
   adjustWins,
   amendResult,
   applyAction as applySessionAction,
+  DEFAULT_QUICK_BEST_OF,
   buildQuickTournament,
   buildTemplateContext,
   captureMatchPlayers,
@@ -48,7 +49,7 @@ import {
   createSession,
   diffRoomSnapshots,
   evaluateWinBy,
-  automationMessagesFor,
+  automationActionsFor,
   expandAutomationMessages,
   type TemplateContext,
   linkRoom,
@@ -74,6 +75,8 @@ import {
   hasCompleteTeamScores,
   mergeScores,
   mplinkGames,
+  buildDiscordWebhookPayload,
+  sendDiscordWebhook,
   scoresDiffer,
   selectLatestGame,
   type ChatEnvelope,
@@ -213,7 +216,11 @@ export class ConnectionManager {
       },
       connections: [...this.statuses.values()],
       rooms: sessions
-        .filter((session) => session.status === 'active' && session.roomId !== null)
+        .filter(
+          (session) =>
+            (session.status === 'active' || session.status === 'finished') &&
+            session.roomId !== null,
+        )
         .map((session) => ({
           sessionId: session.id,
           roomId: session.roomId!,
@@ -357,9 +364,7 @@ export class ConnectionManager {
       useTls: input.useTls ?? settings.ircUseTls,
       username: input.username.replace(/\s+/g, '_'),
       password,
-      channels: (input.channels ?? settings.ircDefaultChannels).map((channel) =>
-        channel.startsWith('#') ? channel : `#${channel}`,
-      ),
+      channels: input.channels ?? settings.ircDefaultChannels,
     });
     this.setStatus('irc', 'connecting', `${settings.ircHost}:${settings.ircPort}`);
     const off = transport.onEvent((event) => this.onTransportEvent('irc', event));
@@ -386,16 +391,6 @@ export class ConnectionManager {
     return this.getAppState();
   }
 
-  private async chatWebsocketUrl(): Promise<string> {
-    const configured = this.settings.get().chatWebsocketUrl;
-    if (/^wss?:\/\//i.test(configured) && configured !== 'wss://osu.ppy.sh/websocket') {
-      return configured;
-    }
-    // `/notifications` requires the lazer-only `*` scope; the public notification
-    // host accepts normal OAuth scopes (chat.read).
-    return 'wss://notify.ppy.sh';
-  }
-
   private async startWebChatSocket(): Promise<boolean> {
     if (!this.webChat) return false;
     const generation = ++this.chatGeneration;
@@ -404,7 +399,7 @@ export class ConnectionManager {
       this.socket = null;
     }
     const socket = new OsuChatSocket({
-      url: await this.chatWebsocketUrl(),
+      url: this.settings.get().chatWebsocketUrl,
       getAccessToken: () => this.server.accessToken(),
       onMessage: (payload) => this.webChat?.ingest(payload),
       onStatus: (socketStatus, detail) => {
@@ -484,7 +479,11 @@ export class ConnectionManager {
 
   private async rejoinChatChannels(): Promise<void> {
     for (const session of this.store.listSessions()) {
-      if (session.status !== 'active' || session.transport !== 'referee_hub') continue;
+      if (
+        (session.status !== 'active' && session.status !== 'finished') ||
+        session.transport !== 'referee_hub'
+      )
+        continue;
       if (!this.channels.has(session.id)) continue;
       await this.ensureChatChannel(session, this.snapshots.get(session.id));
     }
@@ -516,7 +515,7 @@ export class ConnectionManager {
       getAccessToken: () => this.server.accessToken(),
       onResync: (snapshots) => {
         for (const snapshot of snapshots) {
-          const session = this.findSessionByRoom(snapshot.roomId);
+          const session = this.findSessionByRoom('referee_hub', snapshot.roomId);
           if (session) {
             const safe = sanitizeSnapshot(snapshot);
             this.snapshots.set(session.id, safe);
@@ -701,8 +700,8 @@ export class ConnectionManager {
     if (!match || !flow) throw new Error('failed to build the quick room configuration');
 
     const quickWinCondition = input.transport === 'referee_hub' ? 'score' : 'score_v2';
-    const requested = Math.round(input.maxParticipants);
-    const maxParticipants = requested <= 0 ? 0 : Math.min(16, Math.max(2, requested));
+    const maxParticipants =
+      input.maxParticipants <= 0 ? 0 : Math.min(16, input.maxParticipants * 2 + 2);
 
     const snapshot = await transport.createRoom({
       name,
@@ -762,7 +761,7 @@ export class ConnectionManager {
       .listSessions()
       .find(
         (session) =>
-          session.status === 'active' &&
+          (session.status === 'active' || session.status === 'finished') &&
           session.transport === kind &&
           session.roomId === roomId,
       );
@@ -781,11 +780,15 @@ export class ConnectionManager {
     const snapshot = chatOnly
       ? this.chatChannelSnapshot(chatChannel ?? roomId, chatChannel ?? roomId)
       : await transport.joinRoom(roomId);
-    const activeItem =
-      snapshot.playlist.find((item) => item.id === snapshot.currentPlaylistItemId) ??
-      snapshot.playlist.find((item) => !item.wasPlayed) ??
-      snapshot.playlist[0];
-    const bestOf = 9;
+    const activeItem = snapshot.playlist.find(
+      (item) => item.id === snapshot.currentPlaylistItemId,
+    );
+    // A joined room has no tournament; reuse the best-of of the session that
+    // already belonged to this room instead of inventing one.
+    const previousSession = this.store
+      .listSessions()
+      .find((session) => session.transport === kind && session.roomId === roomId);
+    const bestOf = previousSession?.bestOf ?? DEFAULT_QUICK_BEST_OF;
     const tournament = buildQuickTournament({
       name: snapshot.name,
       beatmapId: snapshot.currentBeatmapId ?? activeItem?.beatmapId ?? null,
@@ -939,7 +942,8 @@ export class ConnectionManager {
     delta: number;
   }): Promise<MatchSession> {
     const session = this.requireSession(input.sessionId);
-    if (session.status !== 'active') throw new Error('the room is no longer active');
+    if (session.status !== 'active' && session.status !== 'finished')
+      throw new Error('the room is no longer active');
     const next = adjustWins(session, input.side, input.delta, new Date().toISOString());
     this.persistSession(next);
     this.appendEvent(
@@ -968,7 +972,8 @@ export class ConnectionManager {
     assignments: { stepId: string; teamId: string }[];
   }): Promise<MatchSession> {
     const session = this.requireSession(input.sessionId);
-    if (session.status !== 'active') throw new Error('the room is no longer active');
+    if (session.status !== 'active' && session.status !== 'finished')
+      throw new Error('the room is no longer active');
     const next = setSessionFirstTeams(session, input.assignments);
     this.persistSession(next);
     this.appendEvent(next, 'manual_adjustment', 'first teams updated', {
@@ -1014,8 +1019,8 @@ export class ConnectionManager {
    */
   async selectBeatmap(input: { sessionId: string; slotLabel: string }): Promise<MatchSession> {
     const session = this.requireSession(input.sessionId);
-    if (session.matchKind !== 'lobby') {
-      throw new Error('direct beatmap selection is only available for lobby fixtures');
+    if (session.matchKind !== 'lobby' && session.status !== 'finished') {
+      throw new Error('direct beatmap selection is only available for lobby fixtures or finished rooms');
     }
     const tournament = this.tournamentForSession(session);
     if (!tournament) throw new Error('tournament not found');
@@ -1052,7 +1057,8 @@ export class ConnectionManager {
 
   async startMatch(input: { sessionId: string; countdown: number | null }): Promise<void> {
     const session = this.requireSession(input.sessionId);
-    if (session.status !== 'active') throw new Error('the match is not active');
+    if (session.status !== 'active' && session.status !== 'finished')
+      throw new Error('the match is not active');
     if (!session.roomId) throw new Error('the match has no room id yet');
     const transport = session.transport === 'irc' ? this.irc : this.hub;
     if (!transport) throw new Error('connect to the match platform first');
@@ -1211,7 +1217,7 @@ export class ConnectionManager {
 
   async removeSession(sessionId: string): Promise<void> {
     const session = this.requireSession(sessionId);
-    if (session.status === 'active') {
+    if (session.status === 'active' || session.status === 'finished') {
       throw new Error('close the room before removing it');
     }
     this.snapshots.delete(sessionId);
@@ -1615,7 +1621,9 @@ export class ConnectionManager {
   }
 
   /**
-   * Re-joins rooms that were active before the app restarted.
+   * Re-joins rooms that were active before the app restarted. Finished rooms
+   * stay joined as well: a finished match does not close its hub room, so the
+   * referee keeps the chat channel and can still manage it until it is closed.
    *
    * IRC: rejoin `#mp_<id>` and ask BanchoBot for `!mp settings` so the snapshot
    * (name, team mode, players) is authoritative again.
@@ -1627,7 +1635,7 @@ export class ConnectionManager {
       .listSessions()
       .filter(
         (session) =>
-          session.status === 'active' &&
+          (session.status === 'active' || session.status === 'finished') &&
           session.roomId !== null &&
           session.transport === kind,
       );
@@ -1674,7 +1682,9 @@ export class ConnectionManager {
         this.appendEvent(session, 'transport_event', `restored ${kind} room ${roomId}`);
       } catch (error) {
         this.log('warn', 'room', `could not restore room ${roomId}: ${errorMessage(error)}`);
-        this.emiteSystemChat(session, `could not rejoin room ${roomId}: ${errorMessage(error)}`);
+        if (session.status === 'active') {
+          this.emiteSystemChat(session, `could not rejoin room ${roomId}: ${errorMessage(error)}`);
+        }
       }
     }
   }
@@ -1691,7 +1701,7 @@ export class ConnectionManager {
 
   private async confirmRoomClosed(session: MatchSession): Promise<void> {
     if (
-      session.status !== 'active' ||
+      (session.status !== 'active' && session.status !== 'finished') ||
       this.closingSessions.has(session.id) ||
       this.verifyingRooms.has(session.id)
     ) {
@@ -1704,13 +1714,20 @@ export class ConnectionManager {
         await this.hub.joinRoom(roomId);
         return;
       } catch (error) {
-        this.diagnose('warn', 'referee_hub', `room ${roomId} is not joinable: ${errorMessage(error)}`);
+        const detail = errorMessage(error);
+        this.diagnose('warn', 'referee_hub', `room ${roomId} is not joinable: ${detail}`);
+        // Without a live hub link the join result proves nothing; keep the
+        // session active and wait for the reconnect resync instead of closing
+        // a room that may still be running.
+        if (!this.hub.isConnected) {
+          return;
+        }
       } finally {
         this.verifyingRooms.delete(session.id);
       }
     }
     const current = this.store.getSession(session.id) ?? session;
-    if (current.status !== 'active') return;
+    if (current.status !== 'active' && current.status !== 'finished') return;
     const closed = closeRoomSession(current, new Date().toISOString());
     this.persistSession(closed);
     this.snapshots.delete(session.id);
@@ -1741,7 +1758,7 @@ export class ConnectionManager {
       }
       case 'room_joined':
       case 'room_updated': {
-        const session = this.findSessionByRoom(event.snapshot.roomId);
+        const session = this.findSessionByRoom(kind, event.snapshot.roomId);
         if (!session) return;
         const previous = this.snapshots.get(session.id) ?? null;
         const snapshot = sanitizeSnapshot(event.snapshot);
@@ -1768,13 +1785,13 @@ export class ConnectionManager {
         return;
       }
       case 'room_closed': {
-        const session = this.findSessionByRoom(event.roomId);
+        const session = this.findSessionByRoom(kind, event.roomId);
         if (!session) return;
         await this.confirmRoomClosed(session);
         return;
       }
       case 'match_started': {
-        let session = this.findSessionByRoom(event.roomId);
+        let session = this.findSessionByRoom(kind, event.roomId);
         if (!session) return;
         const startSnapshot = this.snapshots.get(session.id);
         if (startSnapshot) {
@@ -1799,7 +1816,7 @@ export class ConnectionManager {
         return;
       }
       case 'player_finished': {
-        const session = this.findSessionByRoom(event.roomId);
+        const session = this.findSessionByRoom(kind, event.roomId);
         if (!session) return;
         const scores = this.ircScores.get(session.id) ?? new Map();
         scores.set(normalizePlayerName(event.username), {
@@ -1816,7 +1833,7 @@ export class ConnectionManager {
         return;
       }
       case 'match_finished': {
-        const session = this.findSessionByRoom(event.roomId);
+        const session = this.findSessionByRoom(kind, event.roomId);
         if (!session) return;
         this.appendEvent(session, 'match_finished', 'match finished');
         this.emitLifecycleChat(session, 'match finished');
@@ -1824,7 +1841,7 @@ export class ConnectionManager {
         return;
       }
       case 'match_aborted': {
-        const session = this.findSessionByRoom(event.roomId);
+        const session = this.findSessionByRoom(kind, event.roomId);
         if (session) {
           this.appendEvent(session, 'match_aborted', 'match aborted');
           this.emitLifecycleChat(session, 'match aborted');
@@ -1832,7 +1849,7 @@ export class ConnectionManager {
         return;
       }
       case 'match_completed': {
-        const session = this.findSessionByRoom(event.roomId);
+        const session = this.findSessionByRoom(kind, event.roomId);
         if (session) {
           this.appendEvent(
             session,
@@ -1841,11 +1858,11 @@ export class ConnectionManager {
             { playlistItemId: event.playlistItemId },
           );
         }
-        void this.handleMatchCompleted(event.roomId, event.playlistItemId);
+        void this.handleMatchCompleted(kind, event.roomId, event.playlistItemId);
         return;
       }
       case 'countdown': {
-        const session = this.findSessionByRoom(event.roomId);
+        const session = this.findSessionByRoom(kind, event.roomId);
         if (!session) return;
         this.appendEvent(
           session,
@@ -2213,8 +2230,12 @@ export class ConnectionManager {
     }
   }
 
-  private async handleMatchCompleted(roomId: string, playlistItemId: string): Promise<void> {
-    const session = this.findSessionByRoom(roomId);
+  private async handleMatchCompleted(
+    kind: 'irc' | 'referee_hub',
+    roomId: string,
+    playlistItemId: string,
+  ): Promise<void> {
+    const session = this.findSessionByRoom(kind, roomId);
     if (!session) return;
     const tournament = this.tournamentForSession(session);
     if (!tournament) return;
@@ -2353,11 +2374,18 @@ export class ConnectionManager {
     return session;
   }
 
-  private findSessionByRoom(roomId: string): MatchSession | null {
+  private findSessionByRoom(
+    kind: 'irc' | 'referee_hub',
+    roomId: string,
+  ): MatchSession | null {
     const sessions = this.store
       .listSessions()
-      .filter((session) => session.roomId === roomId);
-    return sessions.find((session) => session.status === 'active') ?? sessions[0] ?? null;
+      .filter((session) => session.transport === kind && session.roomId === roomId);
+    return (
+      sessions.find((session) => session.status === 'active' || session.status === 'finished') ??
+      sessions.find((session) => session.status === 'closed' && session.matchKind === 'lobby') ??
+      null
+    );
   }
 
   private persistSession(session: MatchSession): void {
@@ -2437,8 +2465,20 @@ export class ConnectionManager {
     }
   }
 
-  private async joinWebChatChannel(channelId: string): Promise<boolean> {
+  private async joinWebChatChannel(channelId: string, joinViaApi = true): Promise<boolean> {
     if (!this.webChat) return false;
+    if (!joinViaApi) {
+      // Referee Hub channels are lazer MULTIPLAYER channels (#lazermp_*).
+      // osu!web's chat join endpoint rejects them by design
+      // (OsuAuthorize::checkChatChannelJoin returns null for multiplayer and
+      // team channels; membership is established by the room endpoint), and
+      // the lazer client has already joined the channel.
+      this.joinedChannels.add(channelId);
+      this.refreshChatStatus();
+      this.socket?.startChat();
+      this.diagnose('info', 'chat', `using room channel ${channelId} without chat join`);
+      return true;
+    }
     try {
       await this.webChat.join(channelId);
       this.joinedChannels.add(channelId);
@@ -2449,6 +2489,16 @@ export class ConnectionManager {
       return true;
     } catch (error) {
       const detail = errorMessage(error);
+      // The lazer client joins referee channels itself; osu!web rejects the
+      // web join endpoint for these tournament channels with 403. History and
+      // the notification socket still work, so this is not a connection error.
+      if (/\(403\)/.test(detail)) {
+        this.joinedChannels.add(channelId);
+        this.webChatError = null;
+        this.refreshChatStatus();
+        this.diagnose('info', 'chat', `join ${channelId} skipped: ${detail}`);
+        return true;
+      }
       this.joinedChannels.delete(channelId);
       if (detail !== this.webChatError) {
         this.webChatError = detail;
@@ -2463,9 +2513,7 @@ export class ConnectionManager {
     const detail = errorMessage(error);
     if (!/\(403\)|没有权限/.test(detail)) return false;
     this.joinedChannels.delete(channelId);
-    this.webChatError = detail;
-    this.refreshChatStatus();
-    return this.joinWebChatChannel(channelId);
+    return this.joinWebChatChannel(channelId, false);
   }
 
   private async ensureChatChannel(session: MatchSession, snapshot?: RoomSnapshot): Promise<void> {
@@ -2485,7 +2533,7 @@ export class ConnectionManager {
         this.socket?.startChat();
         return;
       }
-      await this.joinWebChatChannel(channelId);
+      await this.joinWebChatChannel(channelId, false);
       return;
     }
     if (!this.webChat || this.joinedChannels.has(channelId)) return;
@@ -2896,8 +2944,9 @@ export class ConnectionManager {
     trigger: AutomationTrigger,
     extra: Partial<TemplateContext> = {},
   ): void {
-    const templates = automationMessagesFor(tournament.automation, trigger);
-    if (templates.length === 0) return;
+    const actions = automationActionsFor(tournament.automation, trigger);
+    const webhooks = tournament.webhooks.filter((webhook) => webhook.triggers.includes(trigger));
+    if (actions.length === 0 && webhooks.length === 0) return;
 
     // Chain per session so messages from consecutive triggers are sent in the
     // order the triggers happened, not in parallel.
@@ -2905,15 +2954,25 @@ export class ConnectionManager {
     const next = previous.then(async () => {
       try {
         const context = this.automationContext(tournament, session, trigger, extra);
-        const messages = expandAutomationMessages(templates, context);
+        const messages: string[] = [];
+        for (const action of actions) {
+          switch (action.type) {
+            case 'chat': {
+              const [message] = expandAutomationMessages([action.template], context);
+              if (message) messages.push(message);
+              break;
+            }
+          }
+        }
         for (const message of messages) {
           const target = this.chatTargetFor(session);
           await target.transport.send(target.channelId, message);
-          // IRC servers do not echo the sender's own PRIVMSG back, so show the
-          // automatic line locally and record it in the room log.
+          // IRC servers do not echo the sender's own PRIVMSG back, so show
+          // the automatic line locally and record it in the room log.
           this.appendLocalChat(session, message, target.channelId, session.transport, true);
           this.log('info', 'automation', `sent ${trigger}: ${message}`);
         }
+        await this.sendAutomationWebhooks(webhooks, messages);
       } catch (error) {
         this.log('warn', 'automation', errorMessage(error));
       }
@@ -2931,6 +2990,27 @@ export class ConnectionManager {
         }
       },
     );
+  }
+
+  private async sendAutomationWebhooks(webhooks: Webhook[], messages: string[]): Promise<void> {
+    if (webhooks.length === 0) return;
+    const payload = buildDiscordWebhookPayload(messages);
+    if (payload.embeds.length === 0) return;
+    for (const webhook of webhooks) {
+      switch (webhook.kind) {
+        case 'discord': {
+          const result = await sendDiscordWebhook(webhook.url, payload);
+          if (!result.ok) {
+            this.log(
+              'warn',
+              'automation',
+              `discord webhook ${webhook.name} failed: ${result.status} ${result.error ?? ''}`.trim(),
+            );
+          }
+          break;
+        }
+      }
+    }
   }
 
   private automationContext(
@@ -3023,7 +3103,7 @@ export class ConnectionManager {
         .listSessions()
         .filter(
           (session) =>
-            session.status === 'active' &&
+            (session.status === 'active' || session.status === 'finished') &&
             session.transport === 'referee_hub' &&
             this.channels.has(session.id),
         );
@@ -3035,7 +3115,9 @@ export class ConnectionManager {
           messages = await this.webChat.history(channelId, 20);
         } catch (error) {
           // Re-join once; a stale channel association also breaks history reads.
-          const rejoined = await this.joinWebChatChannel(channelId);
+          // Referee Hub channels are lazer room channels and are joined by the
+          // room endpoint, so the chat join API must not be called here.
+          const rejoined = await this.joinWebChatChannel(channelId, false);
           if (!rejoined) throw error;
           messages = await this.webChat.history(channelId, 20);
         }
@@ -3052,10 +3134,6 @@ export class ConnectionManager {
       this.webChatPollError = null;
     } catch (error) {
       const detail = errorMessage(error);
-      if (/\(403\)|没有权限/.test(detail)) {
-        this.webChatError = detail;
-        this.refreshChatStatus();
-      }
       if (detail !== this.webChatPollError) {
         this.webChatPollError = detail;
         this.diagnose('warn', 'chat', `history polling failed: ${detail}`);

@@ -30,13 +30,11 @@ export interface Model {
   diagnostics: LogEntry[];
   messages: ChatMessage[];
   snapshots: Record<string, RoomSnapshot>;
-  lastMpResult: MpCommandResult | null;
   refreshAll: () => Promise<void>;
   refreshTournaments: () => Promise<void>;
   refreshSessions: () => Promise<void>;
   refreshLobbyLogs: () => Promise<void>;
   saveTournament: (tournament: Tournament) => Promise<Tournament>;
-  setActiveSession: (sessionId: string | null) => Promise<void>;
   sendChat: (sessionId: string, text: string) => Promise<MpCommandResult | null>;
 }
 
@@ -58,7 +56,6 @@ export function ModelProvider({ children }: { children: ReactNode }) {
   const [diagnostics, setDiagnostics] = useState<LogEntry[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [snapshots, setSnapshots] = useState<Record<string, RoomSnapshot>>({});
-  const [lastMpResult, setLastMpResult] = useState<MpCommandResult | null>(null);
   const bootstrapped = useRef(false);
 
   const refreshTournaments = useCallback(async () => {
@@ -133,9 +130,6 @@ export function ModelProvider({ children }: { children: ReactNode }) {
         case 'chat_message':
           setMessages((previous) => [...previous.slice(-499), event.message]);
           break;
-        case 'mp_result':
-          setLastMpResult(event.result);
-          break;
         case 'log':
           setLogs((previous) => [...previous.slice(-299), event.entry]);
           break;
@@ -181,14 +175,8 @@ export function ModelProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const setActiveSession = useCallback(async (sessionId: string | null) => {
-    setState((previous) => (previous ? { ...previous, activeSessionId: sessionId } : previous));
-  }, []);
-
   const sendChat = useCallback(async (sessionId: string, text: string) => {
-    const result = await window.osmaRef.chat.send(sessionId, text);
-    if (result) setLastMpResult(result);
-    return result;
+    return window.osmaRef.chat.send(sessionId, text);
   }, []);
 
   const value = useMemo<Model>(
@@ -202,13 +190,11 @@ export function ModelProvider({ children }: { children: ReactNode }) {
       diagnostics,
       messages,
       snapshots,
-      lastMpResult,
       refreshAll,
       refreshTournaments,
       refreshSessions,
       refreshLobbyLogs,
       saveTournament,
-      setActiveSession,
       sendChat,
     }),
     [
@@ -221,13 +207,11 @@ export function ModelProvider({ children }: { children: ReactNode }) {
       diagnostics,
       messages,
       snapshots,
-      lastMpResult,
       refreshAll,
       refreshTournaments,
       refreshSessions,
       refreshLobbyLogs,
       saveTournament,
-      setActiveSession,
       sendChat,
     ],
   );

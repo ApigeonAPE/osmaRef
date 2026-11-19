@@ -1,4 +1,5 @@
 import type {
+  AutomationAction,
   AutomationMessages,
   AutomationTrigger,
   MatchSession,
@@ -37,12 +38,12 @@ export function renderTemplate(template: string, context: Partial<TemplateContex
   });
 }
 
-/** Messages configured for one trigger timing, in send order. */
-export function automationMessagesFor(
+/** Actions configured for one trigger timing, in run order. */
+export function automationActionsFor(
   automation: AutomationMessages,
   trigger: AutomationTrigger,
-): string[] {
-  return automation[trigger] ?? [];
+): AutomationAction[] {
+  return automation[trigger];
 }
 
 export function buildTemplateContext(

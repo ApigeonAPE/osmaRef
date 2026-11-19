@@ -328,6 +328,7 @@
 
 .pool-row {
   position: relative;
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
@@ -425,4 +426,40 @@
 
 .playlist-row.played {
   opacity: 0.55;
+}
+
+.slot-index {
+  min-width: 18px;
+  margin-right: 6px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.random-pick-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.random-pick-head .field {
+  flex: 1;
+}
+
+.random-pick-head select {
+  min-width: 200px;
+}
+
+.random-pick-list {
+  flex: 0 0 auto;
+  max-height: 46vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.random-roll-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  gap: 10px;
 }

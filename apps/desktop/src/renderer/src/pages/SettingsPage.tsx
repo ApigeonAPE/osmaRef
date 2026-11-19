@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
   DEFAULT_SETTINGS,
-  normalizeIrcEndpoint,
   type LanguageSetting,
   type Settings,
   type WinByRule,
@@ -36,16 +35,6 @@ export function SettingsPage() {
 
   const patch = (key: keyof Settings, value: unknown) => {
     setSettings((previous) => (previous ? { ...previous, [key]: value } : previous));
-  };
-
-  /** Keeps Bancho's port/TLS pair consistent while the user edits either one. */
-  const patchIrcEndpoint = (change: { ircPort?: number; ircUseTls?: boolean }) => {
-    setSettings((previous) => {
-      if (!previous) return previous;
-      const next = { ...previous, ...change };
-      const endpoint = normalizeIrcEndpoint(next.ircHost, next.ircPort, next.ircUseTls);
-      return { ...next, ircPort: endpoint.port, ircUseTls: endpoint.useTls };
-    });
   };
 
   const save = async () => {
@@ -89,6 +78,7 @@ export function SettingsPage() {
     try {
       const next = await window.osmaRef.app.saveSettings({
         hubBaseUrl: DEFAULT_SETTINGS.hubBaseUrl,
+        chatWebsocketUrl: DEFAULT_SETTINGS.chatWebsocketUrl,
       });
       setSettings(next);
       setMessage(t('Referee Hub settings restored'));
@@ -225,14 +215,14 @@ export function SettingsPage() {
                 <input
                   type="number"
                   value={settings.ircPort}
-                  onChange={(event) => patchIrcEndpoint({ ircPort: Number(event.target.value) })}
+                  onChange={(event) => patch('ircPort', Number(event.target.value))}
                 />
               </Field>
               <Field label={t('Use TLS')}>
                 <input
                   type="checkbox"
                   checked={settings.ircUseTls}
-                  onChange={(event) => patchIrcEndpoint({ ircUseTls: event.target.checked })}
+                  onChange={(event) => patch('ircUseTls', event.target.checked)}
                 />
               </Field>
               <Field label={t('Connect on startup')}>
@@ -279,6 +269,12 @@ export function SettingsPage() {
               <input
                 value={settings.hubBaseUrl}
                 onChange={(event) => patch('hubBaseUrl', event.target.value)}
+              />
+            </Field>
+            <Field label={t('Chat WebSocket URL')} wide>
+              <input
+                value={settings.chatWebsocketUrl}
+                onChange={(event) => patch('chatWebsocketUrl', event.target.value)}
               />
             </Field>
           </div>

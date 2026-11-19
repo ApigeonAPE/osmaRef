@@ -12,6 +12,9 @@ import {
   type TransportKind,
 } from '@osmaref/contracts';
 
+/** Best-of used by a quick room that has no tournament configuration. */
+export const DEFAULT_QUICK_BEST_OF = 9;
+
 export interface QuickRoomOptions {
   name: string;
   /** Optional for Bancho IRC; the Referee Hub requires one. */
@@ -87,6 +90,7 @@ export function buildQuickTournament(options: QuickRoomOptions): Tournament {
             label: 'NM1',
             category: 'NM',
             beatmapId,
+            beatmap: null,
             rulesetId:
               options.rulesetId >= 0 && options.rulesetId <= 3 ? options.rulesetId : null,
             requiredMods: [],
@@ -113,6 +117,7 @@ export function buildQuickTournament(options: QuickRoomOptions): Tournament {
     ],
     stages: [stage],
     automation: emptyAutomationMessages(),
+    webhooks: [],
     revision: 1,
     createdAt: now,
     updatedAt: now,

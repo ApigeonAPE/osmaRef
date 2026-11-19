@@ -449,6 +449,7 @@ function buildSlots(
       label,
       category,
       beatmapId,
+      beatmap: null,
       rulesetId:
         typeof slotRuleset === 'number' && slotRuleset >= 0 && slotRuleset <= 3
           ? (slotRuleset as RulesetId)

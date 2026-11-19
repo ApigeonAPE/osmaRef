@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  automationMessagesFor,
+  automationActionsFor,
   buildTemplateContext,
   expandAutomationMessages,
   renderTemplate,
@@ -20,11 +20,15 @@ describe('automatic messages', () => {
     expect(messages).toEqual(['first Red', 'second 3']);
   });
 
-  it('returns the messages configured for one timing', () => {
+  it('returns the actions configured for one timing', () => {
     const automation = emptyAutomationMessages();
-    automation.beatmap_completed = ['A', 'B'];
-    expect(automationMessagesFor(automation, 'beatmap_completed')).toEqual(['A', 'B']);
-    expect(automationMessagesFor(automation, 'match_finished')).toEqual([]);
+    const actions = [
+      { type: 'chat' as const, template: 'A' },
+      { type: 'chat' as const, template: 'B' },
+    ];
+    automation.beatmap_completed = actions;
+    expect(automationActionsFor(automation, 'beatmap_completed')).toEqual(actions);
+    expect(automationActionsFor(automation, 'match_finished')).toEqual([]);
   });
 
   it('builds the documented template context', () => {
@@ -120,48 +124,57 @@ describe('automatic messages', () => {
     expect(renderTemplate('{{ unknown }}', context)).toBe('{{ unknown }}');
   });
 
-  it('migrates legacy automation rules into timing lists', () => {
-    const tournament = createEmptyTournament('Legacy messages');
-    const raw = JSON.parse(JSON.stringify(tournament)) as {
-      automation: unknown;
-    };
-    raw.automation = [
-      {
-        id: 'rule_1',
-        name: 'After map',
-        trigger: 'beatmap_completed',
-        slotLabel: null,
-        enabled: true,
-        actions: [
-          { type: 'chat', template: '{{ team_one }} {{ score_one }}' },
-          { type: 'notice', message: 'second' },
-        ],
-      },
-      {
-        id: 'rule_2',
-        name: 'Created',
-        trigger: 'match_created',
-        slotLabel: null,
-        enabled: true,
-        actions: [{ type: 'chat', template: 'created' }],
-      },
-      {
-        id: 'rule_3',
-        name: 'Disabled',
-        trigger: 'match_finished',
-        slotLabel: null,
-        enabled: false,
-        actions: [{ type: 'chat', template: 'disabled' }],
-      },
+  it('parses chat actions stored on a tournament', () => {
+    const tournament = createEmptyTournament('Actions');
+    tournament.automation.beatmap_completed = [
+      { type: 'chat', template: '{{team_red}} {{score_red}}' },
     ];
-    const parsed = parseTournament(raw);
+    const parsed = parseTournament(JSON.parse(JSON.stringify(tournament)));
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
     expect(parsed.data.automation.beatmap_completed).toEqual([
-      '{{team_red}} {{score_red}}',
-      'second',
+      { type: 'chat', template: '{{team_red}} {{score_red}}' },
     ]);
-    expect(parsed.data.automation.match_created).toEqual(['created']);
-    expect(parsed.data.automation.match_finished).toEqual([]);
+  });
+  it('defaults the tournament webhook list to empty', () => {
+    const tournament = createEmptyTournament('Hooks');
+    expect(tournament.webhooks).toEqual([]);
+  });
+
+  it('parses discord webhooks stored on the tournament', () => {
+    const tournament = createEmptyTournament('Hooks');
+    tournament.webhooks = [
+      {
+        kind: 'discord',
+        name: 'Results',
+        url: 'https://discord.com/api/webhooks/1/token',
+        triggers: ['beatmap_completed'],
+      },
+    ];
+    const parsed = parseTournament(JSON.parse(JSON.stringify(tournament)));
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.webhooks).toEqual([
+      {
+        kind: 'discord',
+        name: 'Results',
+        url: 'https://discord.com/api/webhooks/1/token',
+        triggers: ['beatmap_completed'],
+      },
+    ]);
+  });
+
+  it('rejects discord webhooks that are not https', () => {
+    const tournament = createEmptyTournament('Hooks');
+    tournament.webhooks = [
+      {
+        kind: 'discord',
+        name: 'Results',
+        url: 'http://discord.com/api/webhooks/1/token',
+        triggers: ['beatmap_completed'],
+      },
+    ];
+    const parsed = parseTournament(JSON.parse(JSON.stringify(tournament)));
+    expect(parsed.success).toBe(false);
   });
 });

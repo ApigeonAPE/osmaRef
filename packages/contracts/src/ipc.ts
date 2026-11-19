@@ -202,26 +202,6 @@ export const DEFAULT_SETTINGS: Settings = {
   logLevel: 'info',
 };
 
-/**
- * Bancho speaks plaintext IRC on port 6667 and TLS on port 6697.
- *
- * A stored `ircUseTls` flag that disagrees with the port makes the client send a
- * TLS handshake to the plaintext listener, which produces no reply and only
- * surfaces as a connect timeout. Official Bancho endpoints are corrected to the
- * matching pair; custom IRC servers keep the operator's choice.
- */
-export function normalizeIrcEndpoint(
-  host: string,
-  port: number,
-  useTls: boolean,
-): { port: number; useTls: boolean } {
-  const isBancho = /(^|\.)ppy\.sh$/i.test(host.trim());
-  if (!isBancho) return { port, useTls };
-  if (port === 6667) return { port, useTls: false };
-  if (port === 6697) return { port, useTls: true };
-  return { port, useTls };
-}
-
 export interface JoinRoomInput {
   transport: 'irc' | 'referee_hub';
   /** IRC channel such as `#mp_123`. */
