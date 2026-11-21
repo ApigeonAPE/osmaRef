@@ -199,7 +199,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
   ircAutoConnect: true,
-  serverBaseUrl: 'http://127.0.0.1:8787',
+  serverBaseUrl: 'https://osmaref-oauth.a-pigeon.de',
   ircHost: 'irc.ppy.sh',
   ircPort: 6667,
   ircUseTls: false,
