@@ -31,7 +31,11 @@ export class TournamentImporter {
       filters: [{ name: 'osmaRef tournament', extensions: ['json'] }],
     });
     if (result.canceled || !result.filePath) return null;
-    writeFileSync(result.filePath, JSON.stringify(tournament, null, 2), 'utf8');
+    writeFileSync(
+      result.filePath,
+      JSON.stringify(stripLocalCovers(tournament), null, 2),
+      'utf8',
+    );
     this.logger.runtime('info', 'tournament', `exported "${tournament.name}" to ${result.filePath}`);
     return result.filePath;
   }
@@ -170,7 +174,28 @@ function parseTournament(raw: unknown): Tournament {
       .join('\n');
     throw new Error(`tournament configuration is invalid:\n${details}`);
   }
-  return parsed.data;
+  return stripLocalCovers(parsed.data);
+}
+
+/**
+ * Cover thumbnails live in a per-tournament folder on this machine. A saved
+ * tournament may point at those files, but an exported or imported copy cannot:
+ * clear the path so the receiving machine looks the cover up again.
+ */
+function stripLocalCovers(tournament: Tournament): Tournament {
+  let changed = false;
+  const stages = tournament.stages.map((stage) => {
+    let stageChanged = false;
+    const slots = stage.slots.map((slot) => {
+      if (!slot.beatmap || !slot.beatmap.coverUrl.startsWith('osmaref-cover:')) return slot;
+      stageChanged = true;
+      return { ...slot, beatmap: { ...slot.beatmap, coverUrl: '' } };
+    });
+    if (!stageChanged) return stage;
+    changed = true;
+    return { ...stage, slots };
+  });
+  return changed ? { ...tournament, stages } : tournament;
 }
 
 function looksLikeBracket(value: unknown): boolean {

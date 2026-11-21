@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell, type BrowserWindow } from 'electron';
+import { app, ipcMain, dialog, shell, type BrowserWindow } from 'electron';
 import { readFileSync, writeFileSync } from 'node:fs';
 import {
   AdjustScoreInputSchema,
@@ -31,6 +31,7 @@ import type { ConnectionManager } from './connections';
 import type { TournamentImporter } from './importer';
 import type { AppLogger } from './logger';
 import type { WinByStore } from './winby-store';
+import type { CoverCache } from './covers';
 import { exportRuntimeLog, exportSessionLog } from './log-export';
 
 export interface IpcContext {
@@ -39,6 +40,7 @@ export interface IpcContext {
   server: ServerClient;
   connections: ConnectionManager;
   importer: TournamentImporter;
+  covers: CoverCache;
   winby: WinByStore;
   logger: AppLogger;
   getWindow: () => BrowserWindow | null;
@@ -88,6 +90,7 @@ export function registerIpc(ctx: IpcContext): void {
   };
 
   handle(IPC.appState, () => ctx.connections.getAppState());
+  handle(IPC.appVersion, () => app.getVersion());
   handle(IPC.appSettings, () => ctx.settings.get());
   handle(IPC.appSettingsSave, (patch) => {
     const parsed = parse(SettingsPatchSchema, patch, 'settings');
@@ -163,9 +166,10 @@ export function registerIpc(ctx: IpcContext): void {
     );
     return saved;
   });
-  handle(IPC.tournamentsRemove, (id) => {
+  handle(IPC.tournamentsRemove, async (id) => {
     const tournament = ctx.store.getTournament(String(id));
     ctx.store.deleteTournament(String(id));
+    await ctx.covers.remove(String(id));
     ctx.logger.runtime(
       'info',
       'tournament',
@@ -300,9 +304,28 @@ export function registerIpc(ctx: IpcContext): void {
   handle(IPC.osuLookupUser, (userId) =>
     ctx.server.lookupUser(parse(z.number().int().positive(), userId, 'user id')),
   );
-  handle(IPC.osuLookupBeatmaps, (ids) =>
-    ctx.connections.lookupBeatmaps(
-      parse(z.array(z.number().int().positive()).max(100), ids, 'beatmap ids'),
-    ),
-  );
+  handle(IPC.osuLookupBeatmaps, async (input) => {
+    const request = parse(
+      z.object({
+        ids: z.array(z.number().int().positive()).max(100),
+        tournamentId: z.string().max(100).optional(),
+      }),
+      input,
+      'beatmap lookup',
+    );
+    const result = await ctx.connections.lookupBeatmaps(request.ids);
+    if (!request.tournamentId) return result;
+    const local = await ctx.covers.ensure(
+      request.tournamentId,
+      result.beatmaps.map((beatmap) => ({ beatmapId: beatmap.id, coverUrl: beatmap.coverUrl })),
+    );
+    if (local.size === 0) return result;
+    return {
+      ...result,
+      beatmaps: result.beatmaps.map((beatmap) => {
+        const coverUrl = local.get(beatmap.id);
+        return coverUrl ? { ...beatmap, coverUrl } : beatmap;
+      }),
+    };
+  });
 }

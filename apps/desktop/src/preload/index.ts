@@ -24,6 +24,7 @@ const invoke = <T>(channel: string, ...args: unknown[]): Promise<T> =>
 const api: DesktopApi = {
   app: {
     getState: () => invoke(IPC.appState),
+    getVersion: () => invoke<string>(IPC.appVersion),
     getSettings: () => invoke<Settings>(IPC.appSettings),
     saveSettings: (patch) => invoke<Settings>(IPC.appSettingsSave, patch),
     setIrcPassword: (password) => invoke<void>(IPC.appIrcPassword, password),
@@ -105,7 +106,7 @@ const api: DesktopApi = {
   },
   osu: {
     lookupUser: (userId) => invoke(IPC.osuLookupUser, userId),
-    lookupBeatmaps: (ids) => invoke(IPC.osuLookupBeatmaps, ids),
+    lookupBeatmaps: (input) => invoke(IPC.osuLookupBeatmaps, input),
   },
 };
 

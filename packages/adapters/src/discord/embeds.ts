@@ -73,7 +73,15 @@ function beatmapLabel(info: BeatmapLabelFields): string {
   return `${info.artist} - ${info.title}${mapper}${difficulty}`;
 }
 
-function beatmapLink(beatmap: BeatmapInfo | null): string {
+type BeatmapLinkInfo = {
+  artist: string;
+  title: string;
+  mapper: string;
+  difficultyName: string;
+  beatmapUrl: string;
+};
+
+function beatmapLink(beatmap: BeatmapLinkInfo | null): string {
   if (!beatmap) return '';
   const label = beatmapLabel(beatmap);
   return beatmap.beatmapUrl ? `[${label}](${beatmap.beatmapUrl})` : escapeDiscord(label);
@@ -82,17 +90,18 @@ function beatmapLink(beatmap: BeatmapInfo | null): string {
 function mappoolLink(
   session: MatchSession,
   tournament: Tournament,
-  slotLabel: string,
+  slotLabel: string | null,
   beatmapId: number | null,
 ): string {
+  const label = slotLabel ?? '';
   for (const source of [session.configSnapshot, tournament]) {
     if (!source) continue;
     const stage = findStageForMatch(source, session.matchId);
-    const info = stage ? findSlotByLabel(stage, slotLabel)?.beatmap : undefined;
+    const info = stage ? findSlotByLabel(stage, label)?.beatmap : undefined;
     if (info && (info.title || info.artist)) return beatmapLink(info);
   }
-  if (beatmapId === null) return slotLabel;
-  return `[${slotLabel} (${beatmapId})](https://osu.ppy.sh/b/${beatmapId})`;
+  if (beatmapId === null) return label;
+  return `[${label || `beatmap ${beatmapId}`} (${beatmapId})](https://osu.ppy.sh/b/${beatmapId})`;
 }
 
 function field(name: string, value: string, inline = true): DiscordEmbedField | null {

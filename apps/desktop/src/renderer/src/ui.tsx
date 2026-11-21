@@ -24,7 +24,7 @@ export function Section({
   children,
   className,
 }: {
-  title: string;
+  title?: string;
   actions?: ReactNode;
   children?: ReactNode;
   className?: string;
@@ -32,9 +32,11 @@ export function Section({
   return (
     <section className={`card${className ? ` ${className}` : ''}`}>
       <header className="card-head">
-        <div>
-          <h2>{title}</h2>
-        </div>
+        {title ? (
+          <div>
+            <h2>{title}</h2>
+          </div>
+        ) : null}
         {actions ? <div className="card-actions">{actions}</div> : null}
       </header>
       {children}

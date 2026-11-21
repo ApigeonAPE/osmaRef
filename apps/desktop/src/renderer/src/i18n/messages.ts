@@ -147,6 +147,7 @@ export const zhCN: Record<string, string> = {
   Send: '发送',
   Results: '成绩',
   'No results recorded yet.': '暂无成绩记录。',
+  'No teams in this match.': '本场比赛没有队伍。',
 
   // --- about ---------------------------------------------------------------
   About: '关于',

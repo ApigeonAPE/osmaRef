@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, protocol, session, shell } from 'electron';
 import { join } from 'node:path';
 import { writeFileSync } from 'node:fs';
 import { createAppStore } from './store';
@@ -10,7 +10,7 @@ import { ConnectionManager } from './connections';
 import { TournamentImporter } from './importer';
 import { AppLogger } from './logger';
 import { registerIpc } from './ipc';
-import { APP_VERSION } from '@osmaref/contracts';
+import { CoverCache, COVER_SCHEME } from './covers';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -18,6 +18,12 @@ let mainWindow: BrowserWindow | null = null;
 // belong in a roaming profile, and the scoped package name is a poor Windows path.
 app.setName('osmaRef');
 app.setPath('userData', join(process.env.LOCALAPPDATA ?? app.getPath('appData'), 'osmaRef'));
+
+// The renderer loads saved covers through this scheme, so it has to be declared
+// before the app is ready.
+protocol.registerSchemesAsPrivileged([
+  { scheme: COVER_SCHEME, privileges: { standard: true, secure: true } },
+]);
 
 const gotLock = app.requestSingleInstanceLock();
 if (gotLock) {
@@ -81,6 +87,8 @@ async function bootstrap(): Promise<void> {
     emit: () => undefined,
   });
   const importer = new TournamentImporter(store, server, logger);
+  const covers = new CoverCache(join(userData, 'covers'));
+  covers.register();
 
   registerIpc({
     store,
@@ -88,6 +96,7 @@ async function bootstrap(): Promise<void> {
     server,
     connections,
     importer,
+    covers,
     winby,
     logger,
     getWindow: () => mainWindow,
@@ -97,7 +106,7 @@ async function bootstrap(): Promise<void> {
   logger.runtime(
     'info',
     'app',
-    `osmaRef ${APP_VERSION} started (${process.platform} ${process.arch})`,
+    `osmaRef ${app.getVersion()} started (${process.platform} ${process.arch})`,
   );
 
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => {

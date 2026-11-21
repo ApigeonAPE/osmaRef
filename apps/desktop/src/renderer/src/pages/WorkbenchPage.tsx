@@ -61,7 +61,7 @@ export function WorkbenchPage({
   const [activeId, setActiveId] = useState<string | null>(sessionId);
   const initialSession = model.sessions.find((entry) => entry.id === sessionId);
   const [channel, setChannel] = useState<'irc' | 'referee_hub'>(
-    initialSession?.transport ?? 'referee_hub',
+    initialSession?.transport ?? loadWorkbenchLayout().channel,
   );
 
   const [busy, setBusy] = useState<string | null>(null);
@@ -72,6 +72,7 @@ export function WorkbenchPage({
   const [playlistRulesetId, setPlaylistRulesetId] = useState(0);
   const [inviteUser, setInviteUser] = useState('');
   const [poolSearch, setPoolSearch] = useState('');
+  const [resultTab, setResultTab] = useState<'results' | 'teams'>('results');
   const [leftWidth, setLeftWidth] = useState(() => loadWorkbenchLayout().leftWidth);
   const [rightWidth, setRightWidth] = useState(() => loadWorkbenchLayout().rightWidth);
   const [chatPercent, setChatPercent] = useState(() => loadWorkbenchLayout().chatPercent);
@@ -206,9 +207,10 @@ export function WorkbenchPage({
   const isQuickRoom = Boolean(
     session && (session.tournamentId.startsWith('adhoc_') || tournament?.id.startsWith('adhoc_')),
   );
+  const coverTournamentId = tournament && !isQuickRoom ? tournament.id : undefined;
   const match = session && tournament ? findMatch(tournament, session.matchId) ?? null : null;
   const round = session && tournament && match ? findStageForMatch(tournament, match.id) ?? null : null;
-  const pool = round ? { slots: round.slots } : null;
+  const pool = useMemo(() => (round ? { slots: round.slots } : null), [round]);
   const platform: Platform =
     tournament?.platform ?? (session?.transport === 'referee_hub' ? 'lazer' : 'stable');
   const pending = session ? session.queue[session.cursor] ?? null : null;
@@ -218,6 +220,19 @@ export function WorkbenchPage({
   const [beatmapFailures, setBeatmapFailures] = useState<Record<number, BeatmapLookupFailure>>({});
   const [lookupAttempt, setLookupAttempt] = useState(0);
   const beatmapCache = useRef<Record<number, BeatmapInfo>>({});
+  // Mappool slots already carry metadata saved from the tournament config.
+  const savedBeatmaps = useMemo(() => {
+    const map: Record<number, BeatmapInfo> = {};
+    pool?.slots.forEach((slot) => {
+      if (!slot.beatmap) return;
+      map[slot.beatmapId] = { ...slot.beatmap, mode: 'osu' };
+    });
+    return map;
+  }, [pool]);
+  const resolvedBeatmaps = useMemo(
+    () => ({ ...savedBeatmaps, ...beatmaps }),
+    [savedBeatmaps, beatmaps],
+  );
   const playlist = room ? [...room.playlist].sort((a, b) => a.order - b.order) : [];
   const visiblePlaylist = playlist.filter((entry) => !entry.wasPlayed);
   const activePlaylistItem = room
@@ -229,12 +244,22 @@ export function WorkbenchPage({
 
   const beatmapIds = useMemo(() => {
     const ids = new Set<number>();
-    pool?.slots.forEach((slot) => ids.add(slot.beatmapId));
+    // The mappool is the authoritative list: a room may have no playlist yet,
+    // and the slot thumbnails must still resolve before the first pick.
+    round?.slots.forEach((slot) => ids.add(slot.beatmapId));
     playlist.forEach((entry) => ids.add(entry.beatmapId));
     if (room?.currentBeatmapId) ids.add(room.currentBeatmapId);
     if (session?.currentBeatmapId) ids.add(session.currentBeatmapId);
-    return [...ids].filter((id) => Number.isSafeInteger(id) && id > 0).sort((a, b) => a - b);
-  }, [pool, playlist, room?.currentBeatmapId, session?.currentBeatmapId]);
+    return [...ids]
+      .filter((id) => {
+        if (!Number.isSafeInteger(id) || id <= 0) return false;
+        const saved = savedBeatmaps[id];
+        // A saved slot is used as is unless it still points at the remote cover;
+        // that one lookup copies the image into the tournament's cover folder.
+        return !saved || saved.coverUrl === '' || /^https?:\/\//i.test(saved.coverUrl);
+      })
+      .sort((a, b) => a - b);
+  }, [round, playlist, room?.currentBeatmapId, session?.currentBeatmapId, savedBeatmaps]);
   const beatmapKey = beatmapIds.join(',');
   const failedCount = Object.values(beatmapFailures).filter(
     (failure) => !failure.notFound,
@@ -315,7 +340,7 @@ export function WorkbenchPage({
     if (missing.length === 0) return;
     let cancelled = false;
     void window.osmaRef.osu
-      .lookupBeatmaps(missing)
+      .lookupBeatmaps({ ids: missing, tournamentId: coverTournamentId })
       .then((result) => {
         for (const info of result.beatmaps) beatmapCache.current[info.id] = info;
         if (cancelled) return;
@@ -340,7 +365,7 @@ export function WorkbenchPage({
     return () => {
       cancelled = true;
     };
-  }, [beatmapKey, lookupAttempt]);
+  }, [beatmapKey, lookupAttempt, coverTournamentId]);
 
   const retryBeatmapLookup = () => {
     setBeatmapFailures((previous) => {
@@ -360,6 +385,30 @@ export function WorkbenchPage({
     tournament?.teams
       .flatMap((team) => team.members)
       .find((member) => member.userId === userId)?.username;
+
+  const teamForUser = (userId: number): 'red' | 'blue' | null => {
+    const player =
+      session?.matchPlayers.find((entry) => entry.userId === userId) ??
+      room?.players.find((entry) => entry.userId === userId);
+    if (player?.team) return player.team;
+    const redTeam = tournament?.teams.find((team) => String(team.id) === session?.teamOneId);
+    if (redTeam?.members.some((member) => member.userId === userId)) return 'red';
+    const blueTeam = tournament?.teams.find((team) => String(team.id) === session?.teamTwoId);
+    if (blueTeam?.members.some((member) => member.userId === userId)) return 'blue';
+    return null;
+  };
+
+  const matchTeams = [session?.teamOneId, session?.teamTwoId].flatMap((id, index) => {
+    const team = tournament?.teams.find((entry) => String(entry.id) === id);
+    return team ? [{ team, side: index === 0 ? ('red' as const) : ('blue' as const) }] : [];
+  });
+
+  const inviteMember = async (userId: number) => {
+    if (!session) return;
+    await run(`invite-${userId}`, () =>
+      window.osmaRef.sessions.invitePlayer({ sessionId: session.id, user: `#${userId}` }),
+    );
+  };
 
   const invitePlayer = async () => {
     if (!session) return;
@@ -636,7 +685,7 @@ export function WorkbenchPage({
           if (!slot) continue;
           await model.sendChat(
             target.id,
-            formatRandomPickMessage(index + 1, slot, beatmaps[slot.beatmapId]),
+            formatRandomPickMessage(index + 1, slot, resolvedBeatmaps[slot.beatmapId]),
           );
           if (cancelled()) return;
           await delay(RANDOM_PICK_SEND_INTERVAL_MS);
@@ -784,14 +833,16 @@ export function WorkbenchPage({
       chatPercent,
       roomsPercent,
       rightPercent,
+      channel,
     });
-  }, [leftWidth, rightWidth, chatPercent, roomsPercent, rightPercent]);
+  }, [leftWidth, rightWidth, chatPercent, roomsPercent, rightPercent, channel]);
 
-  const filteredSlots = useMemo(() => {    if (!pool) return [];
+  const filteredSlots = useMemo(() => {
+    if (!pool) return [];
     const query = poolSearch.trim().toLowerCase();
     if (!query) return pool.slots;
     return pool.slots.filter((slot) => {
-      const info = beatmaps[slot.beatmapId];
+      const info = resolvedBeatmaps[slot.beatmapId];
       const haystack = [
         slot.label,
         String(slot.beatmapId),
@@ -805,7 +856,7 @@ export function WorkbenchPage({
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [pool, poolSearch, beatmaps]);
+  }, [pool, poolSearch, resolvedBeatmaps]);
 
   const actionLabel = pending
     ? `${t(pending.kind)}`
@@ -1173,7 +1224,7 @@ export function WorkbenchPage({
                     </div>
                   ) : null}
                   {playlistViews.map((entry) => {
-                    const info = beatmaps[entry.beatmapId];
+                    const info = resolvedBeatmaps[entry.beatmapId];
                     const failure = beatmapFailures[entry.beatmapId];
                     const slotLabel =
                       pool?.slots.find((slot) => slot.beatmapId === entry.beatmapId)?.label ?? '';
@@ -1360,28 +1411,29 @@ export function WorkbenchPage({
             >
               <div className="wb-panel mappool-panel">
                 <Section
-                  title={t('Mappool')}
                   actions={
                     <div className="pool-head-actions">
-                      <button
-                        type="button"
-                        className="ghost small"
-                        onClick={openRandomPick}
-                        disabled={isQuickRoom || !pool || pool.slots.length === 0}
-                      >
-                        {t('Random')}
-                      </button>
+                      <div className="pool-head-left">
+                        <button
+                          type="button"
+                          className="ghost small"
+                          onClick={openRandomPick}
+                          disabled={isQuickRoom || !pool || pool.slots.length === 0}
+                        >
+                          {t('Random')}
+                        </button>
+                        {failedCount > 0 ? (
+                          <button type="button" className="ghost small" onClick={retryBeatmapLookup}>
+                            {t('Retry')}
+                          </button>
+                        ) : null}
+                      </div>
                       <input
                         className="pool-search"
                         value={poolSearch}
                         onChange={(event) => setPoolSearch(event.target.value)}
                         placeholder={t('Search mappool')}
                       />
-                      {failedCount > 0 ? (
-                        <button type="button" className="ghost small" onClick={retryBeatmapLookup}>
-                          {t('Retry')}
-                        </button>
-                      ) : null}
                     </div>
                   }
                 >
@@ -1421,7 +1473,7 @@ export function WorkbenchPage({
                         lastAction?.slotLabel !== undefined &&
                         normalizeSlotLabel(lastAction.slotLabel) ===
                           normalizeSlotLabel(slot.label);
-                      const info = beatmaps[slot.beatmapId];
+                      const info = resolvedBeatmaps[slot.beatmapId];
                       const failure = beatmapFailures[slot.beatmapId];
                       const action: { kind: string; teamId: string | null } | null = used
                         ? used
@@ -1467,62 +1519,155 @@ export function WorkbenchPage({
               />
 
               <div className="wb-panel results-panel">
-                <Section title={t('Results')}>
+                <Section
+                  actions={
+                    <div className="result-tabs">
+                      <button
+                        type="button"
+                        className={`tab small${resultTab === 'results' ? ' active' : ''}`}
+                        onClick={() => setResultTab('results')}
+                      >
+                        {t('Results')}
+                      </button>
+                      <button
+                        type="button"
+                        className={`tab small${resultTab === 'teams' ? ' active' : ''}`}
+                        onClick={() => setResultTab('teams')}
+                      >
+                        {t('Teams')}
+                      </button>
+                    </div>
+                  }
+                >
                   <div className="panel-scroll">
-              {session.results.length === 0 ? (
-                <p className="muted small">{t('No results recorded yet.')}</p>
-              ) : (
-                <div className="result-history">
-                  {[...session.results].reverse().map((result) => {
-                    const info = beatmaps[result.beatmapId];
-                    const winner =
-                      result.winner === 'team_one'
-                        ? teamName(session.teamOneId)
-                        : result.winner === 'team_two'
-                          ? teamName(session.teamTwoId)
-                          : null;
-                    return (
-                      <div className="result-history-item" key={result.id}>
-                        <div className="result-history-head">
-                          <span className="slot-tag">{result.slotLabel}</span>
-                          <span className="beatmap-title">
-                            {info
-                              ? `${info.title} - ${info.artist}`
-                              : `Beatmap #${result.beatmapId}`}
-                          </span>
-                          <span className="muted small">
-                            {winner ?? (result.needsReview ? t('Needs review') : '—')}
-                          </span>
-                        </div>
-                        <div className="result-history-scores">
-                          {[...result.scores]
-                            .sort((a, b) => b.score - a.score)
-                            .map((score) => (
-                              <div className="result-score-row" key={score.userId}>
-                                <span className="result-score-name">
-                                  {score.username ??
-                                    room?.players.find(
-                                      (player) => player.userId === score.userId,
-                                    )?.username ??
-                                    rosterName(score.userId) ??
-                                    `#${score.userId}`}
-                                </span>
-                                <span className="result-score-value">
-                                  {score.score.toLocaleString()}
-                                </span>
-                                <span className="result-score-meta">
-                                  {score.accuracy > 0
-                                    ? `${(score.accuracy * 100).toFixed(2)}%`
-                                    : '—'}
-                                </span>
+                    {resultTab === 'results' ? (
+                      session.results.length === 0 ? (
+                        <p className="muted small">{t('No results recorded yet.')}</p>
+                      ) : (
+                        <div className="result-history">
+                          {[...session.results].reverse().map((result) => {
+                            const info = resolvedBeatmaps[result.beatmapId];
+                            const winner =
+                              result.winner === 'team_one'
+                                ? teamName(session.teamOneId)
+                                : result.winner === 'team_two'
+                                  ? teamName(session.teamTwoId)
+                                  : null;
+                            const scores = [...result.scores].sort((a, b) => b.score - a.score);
+                            const grouped = {
+                              red: scores.filter((score) => teamForUser(score.userId) === 'red'),
+                              blue: scores.filter((score) => teamForUser(score.userId) === 'blue'),
+                              neutral: scores.filter((score) => teamForUser(score.userId) === null),
+                            };
+                            const totals = {
+                              red: grouped.red.reduce((sum, score) => sum + score.score, 0),
+                              blue: grouped.blue.reduce((sum, score) => sum + score.score, 0),
+                            };
+                            const { team_one, team_two } = result.teamValues;
+                            const diff =
+                              team_one !== null && team_two !== null
+                                ? Math.abs(team_one - team_two)
+                                : grouped.red.length > 0 && grouped.blue.length > 0
+                                  ? Math.abs(totals.red - totals.blue)
+                                  : null;
+                            return (
+                              <div className="result-history-item" key={result.id}>
+                                <div className="result-history-head">
+                                  <span className="slot-tag">{result.slotLabel}</span>
+                                  <span className="beatmap-title">
+                                    {info
+                                      ? `${info.title} - ${info.artist}`
+                                      : `Beatmap #${result.beatmapId}`}
+                                  </span>
+                                </div>
+                                <div className="result-diff">
+                                  <span className="result-diff-value">
+                                    {diff === null ? '—' : diff.toLocaleString()}
+                                  </span>
+                                  <span className="muted small">-</span>
+                                  <span
+                                    className={`result-diff-winner${
+                                      result.winner === 'team_one'
+                                        ? ' red'
+                                        : result.winner === 'team_two'
+                                          ? ' blue'
+                                          : ''
+                                    }`}
+                                  >
+                                    {winner ?? (result.needsReview ? t('Needs review') : '—')}
+                                  </span>
+                                </div>
+                                {(['red', 'blue', 'neutral'] as const).map((side) =>
+                                  grouped[side].length === 0 && side === 'neutral' ? null : (
+                                    <div className={`result-team-block ${side}`} key={side}>
+                                      {grouped[side].length === 0 ? (
+                                        <span className="muted small">—</span>
+                                      ) : (
+                                        grouped[side].map((score) => (
+                                          <div className="result-score-row" key={score.userId}>
+                                            <span className="result-score-name">
+                                              {score.username ??
+                                                room?.players.find(
+                                                  (player) => player.userId === score.userId,
+                                                )?.username ??
+                                                rosterName(score.userId) ??
+                                                `#${score.userId}`}
+                                            </span>
+                                            <span className="result-score-value">
+                                              {score.score.toLocaleString()}
+                                            </span>
+                                            <span className="result-score-meta">
+                                              {score.accuracy > 0
+                                                ? `${(score.accuracy * 100).toFixed(2)}%`
+                                                : '—'}
+                                            </span>
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
+                                  ),
+                                )}
                               </div>
-                            ))}
+                            );
+                          })}
                         </div>
+                      )
+                    ) : (
+                      <div className="team-list">
+                        {matchTeams.length === 0 ? (
+                          <p className="muted small">{t('No teams in this match.')}</p>
+                        ) : (
+                          matchTeams.map(({ team, side }) => (
+                            <div className={`team-card ${side}`} key={team.id}>
+                              <div className="team-card-head">
+                                <span className="team-card-name">{team.name}</span>
+                                <span className="muted small">{team.members.length}</span>
+                              </div>
+                              {team.members.length === 0 ? (
+                                <span className="muted small">—</span>
+                              ) : (
+                                team.members.map((member) => (
+                                  <button
+                                    type="button"
+                                    key={member.userId}
+                                    className={`team-member${
+                                      member.userId === team.captainUserId ? ' captain' : ''
+                                    }`}
+                                    disabled={busy !== null}
+                                    onClick={() => void inviteMember(member.userId)}
+                                  >
+                                    <span className="team-member-name">
+                                      {member.username || `#${member.userId}`}
+                                    </span>
+                                    <span className="team-member-id">#{member.userId}</span>
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                          ))
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                    )}
                   </div>
                 </Section>
               </div>
@@ -1563,7 +1708,7 @@ export function WorkbenchPage({
           slots={randomSlots}
           scope={randomScope}
           prompt={randomPrompt}
-          beatmaps={beatmaps}
+          beatmaps={resolvedBeatmaps}
           failures={beatmapFailures}
           confirming={randomConfirming}
           onScopeChange={changeRandomScope}
@@ -1577,7 +1722,7 @@ export function WorkbenchPage({
           key={`${rollResult.username}:${rollResult.score}:${rollResult.index}`}
           result={rollResult}
           slots={rollSlots}
-          beatmaps={beatmaps}
+          beatmaps={resolvedBeatmaps}
           failures={beatmapFailures}
           onConfirm={confirmRandomRoll}
           onClose={abortRandomFlow}
@@ -1604,6 +1749,7 @@ interface WorkbenchLayout {
   chatPercent: number;
   roomsPercent: number;
   rightPercent: number;
+  channel: 'irc' | 'referee_hub';
 }
 
 const WORKBENCH_LAYOUT_KEY = 'osmaRef.workbench.layout';
@@ -1615,6 +1761,7 @@ function loadWorkbenchLayout(): WorkbenchLayout {
     chatPercent: 55,
     roomsPercent: 45,
     rightPercent: 40,
+    channel: 'referee_hub' as const,
   };
   try {
     const raw = window.localStorage.getItem(WORKBENCH_LAYOUT_KEY);
@@ -1626,6 +1773,7 @@ function loadWorkbenchLayout(): WorkbenchLayout {
       chatPercent: clampLayout(parsed.chatPercent, 25, 75, fallback.chatPercent),
       roomsPercent: clampLayout(parsed.roomsPercent, 20, 80, fallback.roomsPercent),
       rightPercent: clampLayout(parsed.rightPercent, 20, 80, fallback.rightPercent),
+      channel: parsed.channel === 'irc' || parsed.channel === 'referee_hub' ? parsed.channel : fallback.channel,
     };
   } catch {
     return fallback;

@@ -69,6 +69,13 @@ export function MappoolSlotRow({
         `beatmap ${slot.beatmapId}${failure ? `, ${failure.message}` : ''}`
       }
     >
+      {info?.coverUrl ? (
+        <span
+          className="pool-cover"
+          aria-hidden="true"
+          style={{ backgroundImage: `url("${info.coverUrl}")` }}
+        />
+      ) : null}
       <span className="playlist-slot">
         {index !== undefined ? <span className="slot-index">{index}</span> : null}
         <span className="slot-tag">{slot.label}</span>

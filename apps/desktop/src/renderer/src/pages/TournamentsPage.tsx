@@ -65,11 +65,13 @@ function slotModLabel(slot: Stage['slots'][number]): string {
 function BeatmapIdField({
   beatmapId,
   cached,
+  tournamentId,
   onResolved,
   onChange,
 }: {
   beatmapId: number;
   cached: MappoolBeatmapInfo | null;
+  tournamentId: string;
   onResolved: (info: MappoolBeatmapInfo | null) => void;
   onChange: (value: string) => void;
 }) {
@@ -92,7 +94,7 @@ function BeatmapIdField({
     setLocalInvalid(false);
     const timer = window.setTimeout(() => {
       void window.osmaRef.osu
-        .lookupBeatmaps([beatmapId])
+        .lookupBeatmaps({ ids: [beatmapId], tournamentId })
         .then((result) => {
           if (cancelled) return;
           const info = result.beatmaps.find((beatmap) => beatmap.id === beatmapId) ?? null;
@@ -108,7 +110,7 @@ function BeatmapIdField({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [beatmapId, cachedId]);
+  }, [beatmapId, cachedId, tournamentId]);
 
   return (
     <IdInput
@@ -1323,6 +1325,7 @@ function PoolEditor({
               <BeatmapIdField
                 beatmapId={slot.beatmapId}
                 cached={slot.beatmap}
+                tournamentId={draft.id}
                 onResolved={(info) => {
                   const current = slot.beatmap;
                   const unchanged =

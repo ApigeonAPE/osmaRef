@@ -214,6 +214,112 @@
   font-variant-numeric: tabular-nums;
 }
 
+.result-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.result-diff {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-diff-value {
+  font-weight: 600;
+}
+
+.result-diff-winner.red {
+  color: var(--red-11);
+}
+
+.result-diff-winner.blue {
+  color: var(--blue-11);
+}
+
+.result-team-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: var(--radius-xs);
+}
+
+.result-team-block.red {
+  background: var(--red-soft);
+}
+
+.result-team-block.blue {
+  background: var(--blue-soft);
+}
+
+.team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.team-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+}
+
+.team-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.team-card-name {
+  font-weight: 600;
+}
+
+.team-card.red .team-card-name {
+  color: var(--red-11);
+}
+
+.team-card.blue .team-card-name {
+  color: var(--blue-11);
+}
+
+.team-member {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+}
+
+.team-member:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+
+.team-member.captain {
+  color: var(--amber-11);
+}
+
+.team-member-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-member-id {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .result-table {
   display: flex;
   flex-direction: column;

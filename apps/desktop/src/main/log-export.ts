@@ -1,6 +1,5 @@
 import { writeFileSync } from 'node:fs';
-import { dialog } from 'electron';
-import { APP_VERSION } from '@osmaref/contracts';
+import { app, dialog } from 'electron';
 import { formatLobbyLog, formatRuntimeLog } from '@osmaref/domain';
 import type { AppStore } from './store';
 
@@ -19,7 +18,7 @@ export async function exportRuntimeLog(store: AppStore): Promise<string | null> 
   if (result.canceled || !result.filePath) return null;
   const text = formatRuntimeLog(entries, {
     exportedAt: new Date().toISOString(),
-    appVersion: APP_VERSION,
+    appVersion: app.getVersion(),
     platform: process.platform,
     arch: process.arch,
   });

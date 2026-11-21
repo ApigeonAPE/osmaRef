@@ -416,6 +416,7 @@ export const ImportPreviewSchema = z.object({
 export interface DesktopApi {
   app: {
     getState(): Promise<AppState>;
+    getVersion(): Promise<string>;
     getSettings(): Promise<Settings>;
     saveSettings(patch: Partial<Settings>): Promise<Settings>;
     setIrcPassword(password: string): Promise<void>;
@@ -533,12 +534,17 @@ export interface DesktopApi {
     /** Resolves a username from an osu! user id through the companion server. */
     lookupUser(userId: number): Promise<OsuUserSummary>;
     /** Fetches title/artist/difficulty/mapper metadata for beatmap ids. */
-    lookupBeatmaps(ids: number[]): Promise<BeatmapLookupResult>;
+    lookupBeatmaps(input: {
+      ids: number[];
+      /** Saves cover thumbnails under this tournament and returns local URLs. */
+      tournamentId?: string;
+    }): Promise<BeatmapLookupResult>;
   };
 }
 
 export const IPC = {
   appState: 'app:state',
+  appVersion: 'app:version',
   appSettings: 'app:settings',
   appSettingsSave: 'app:settings-save',
   appIrcPassword: 'app:irc-password',

@@ -6,6 +6,7 @@ import {
   type WinByRule,
 } from '@osmaref/contracts';
 import harmonyLicense from '@assets/HarmonyOS_Sans/LICENSE.txt?raw';
+import osmaRefLicense from '@assets/LICENSE?raw';
 import { ModSelector } from '../components/ModSelector';
 import { useToast } from '../toast';
 import { useModel } from '../useOsmaRef';
@@ -17,16 +18,18 @@ export function SettingsPage() {
   const { t, setting, setLanguage } = useI18n();
   const toast = useToast();
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [version, setVersion] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [freemodOpen, setFreemodOpen] = useState(false);
   const [licenseOpen, setLicenseOpen] = useState(false);
-  const [licenseTab, setLicenseTab] = useState<'harmony' | 'mit'>('harmony');
+  const [licenseTab, setLicenseTab] = useState<'harmony' | 'osmaref'>('osmaref');
   const [logsOpen, setLogsOpen] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
 
   useEffect(() => {
     void (async () => {
       setSettings(await window.osmaRef.app.getSettings());
+      setVersion(await window.osmaRef.app.getVersion());
       await model.refreshAll();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -391,6 +394,14 @@ export function SettingsPage() {
       </Section>
 
       <Section title={t('About')}>
+        {version ? (
+          <p className="about-version">
+            {`osmaRef v${version}`} by{' '}
+            <a href="https://osu.ppy.sh/users/32541500" target="_blank" rel="noopener noreferrer">
+              A-pigeon
+            </a>
+          </p>
+        ) : null}
         <div className="row-actions">
           <button type="button" className="ghost small" onClick={() => setLicenseOpen(true)}>
             {t('View licenses')}
@@ -423,21 +434,21 @@ export function SettingsPage() {
           <div className="license-tabs">
             <button
               type="button"
+              className={`ghost small${licenseTab === 'osmaref' ? ' active' : ''}`}
+              onClick={() => setLicenseTab('osmaref')}
+            >
+              osmaRef
+            </button>
+            <button
+              type="button"
               className={`ghost small${licenseTab === 'harmony' ? ' active' : ''}`}
               onClick={() => setLicenseTab('harmony')}
             >
               HarmonyOS Sans
             </button>
-            <button
-              type="button"
-              className={`ghost small${licenseTab === 'mit' ? ' active' : ''}`}
-              onClick={() => setLicenseTab('mit')}
-            >
-              MIT
-            </button>
           </div>
           <pre className="license-text">
-            {licenseTab === 'harmony' ? harmonyLicense : MIT_LICENSE}
+            {licenseTab === 'harmony' ? harmonyLicense : osmaRefLicense}
           </pre>
         </Modal>
       ) : null}

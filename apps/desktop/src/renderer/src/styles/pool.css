@@ -343,6 +343,22 @@
 .pool-row.actionable {
   cursor: pointer;
 }
+.pool-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+.pool-row > .playlist-slot,
+.pool-row > .playlist-main,
+.pool-row > .playlist-mods {
+  position: relative;
+  z-index: 1;
+}
 
 .pool-row.actionable:hover {
   background: var(--pink-soft);
@@ -369,6 +385,7 @@
 .pool-overlay {
   position: absolute;
   inset: 0;
+  z-index: 2;
   display: grid;
   place-items: center;
   pointer-events: none;

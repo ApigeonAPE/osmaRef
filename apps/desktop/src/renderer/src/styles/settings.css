@@ -2,6 +2,11 @@
  * settings.css — Login and settings surfaces.
  */
 
+.about-version {
+  margin: 0;
+  font-weight: 500;
+}
+
 .settings-mod-row {
   display: flex;
   align-items: center;
