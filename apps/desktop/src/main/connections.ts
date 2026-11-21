@@ -75,8 +75,11 @@ import {
   hasCompleteTeamScores,
   mergeScores,
   mplinkGames,
-  buildDiscordWebhookPayload,
+  buildAutomationEmbeds,
+  payloadFromEmbeds,
   sendDiscordWebhook,
+  type DiscordEmbed,
+  type DiscordWebhookStyle,
   scoresDiffer,
   selectLatestGame,
   type ChatEnvelope,
@@ -262,6 +265,9 @@ export class ConnectionManager {
               difficultyName: info.difficultyName,
               mapper: info.mapper,
               mode: info.mode,
+              beatmapsetId: info.beatmapsetId,
+              beatmapUrl: info.beatmapUrl,
+              coverUrl: info.coverUrl,
             });
           } catch (error) {
             const message = errorMessage(error);
@@ -952,17 +958,6 @@ export class ConnectionManager {
       `score ${input.side} ${input.delta > 0 ? '+' : ''}${input.delta}`,
       { wins: next.wins },
     );
-    if (
-      next.wins.team_one !== session.wins.team_one ||
-      next.wins.team_two !== session.wins.team_two
-    ) {
-      const tournament = this.tournamentForSession(next);
-      if (tournament) {
-        this.runAutomation(tournament, next, 'score_updated', {
-          winner: input.side === 'team_one' ? 'team_one' : 'team_two',
-        });
-      }
-    }
     this.emit({ type: 'session_updated', session: next });
     return next;
   }
@@ -1418,16 +1413,6 @@ export class ConnectionManager {
       slot: input.slotLabel,
       beatmap_id: String(beatmapId),
     });
-    if (
-      next.wins.team_one !== session.wins.team_one ||
-      next.wins.team_two !== session.wins.team_two
-    ) {
-      this.runAutomation(tournament, next, 'score_updated', {
-        winner: result.winner ?? '',
-        slot: input.slotLabel,
-        beatmap_id: String(beatmapId),
-      });
-    }
     if (next.status === 'finished') {
       this.runAutomation(tournament, next, 'match_finished');
       this.syncMatchResult(tournament, next);
@@ -1475,14 +1460,6 @@ export class ConnectionManager {
     this.persistSession(next);
     this.appendEvent(next, 'manual_adjustment', 'undo of the last action');
     if (tournament) {
-      if (
-        next.wins.team_one !== session.wins.team_one ||
-        next.wins.team_two !== session.wins.team_two
-      ) {
-        this.runAutomation(tournament, next, 'score_updated', {
-          winner: next.wins.team_one !== session.wins.team_one ? 'team_one' : 'team_two',
-        });
-      }
       this.syncMatchResult(tournament, next);
     }
     this.emit({ type: 'session_updated', session: next });
@@ -2120,6 +2097,29 @@ export class ConnectionManager {
     return latest;
   }
 
+  /** Formats a before/after score summary for the correction toast. */
+  private scoreCorrectionMessage(before: BeatmapResult, after: BeatmapResult): string {
+    const names = new Map<number, string>();
+    for (const score of [...before.scores, ...after.scores]) {
+      if (score.username) names.set(score.userId, score.username);
+    }
+    const oldById = new Map(before.scores.map((score) => [score.userId, score]));
+    const newById = new Map(after.scores.map((score) => [score.userId, score]));
+    const ids = [...new Set([...oldById.keys(), ...newById.keys()])];
+    const lines: string[] = [];
+    for (const id of ids) {
+      const oldScore = oldById.get(id)?.score ?? 0;
+      const newScore = newById.get(id)?.score ?? 0;
+      const oldPassed = oldById.get(id)?.passed ?? false;
+      const newPassed = newById.get(id)?.passed ?? false;
+      if (oldScore === newScore && oldPassed === newPassed) continue;
+      lines.push(
+        `${names.get(id) ?? `#${id}`} - ${oldScore.toLocaleString('en-US')} --> ${newScore.toLocaleString('en-US')}`,
+      );
+    }
+    return `${after.slotLabel} score has been corrected from MP link:\n${lines.join('\n')}`;
+  }
+
   /** Replaces an IRC result with the merged IRC+mplink scores once mplink catches up. */
   private async correctIrcResultWithMplink(sessionId: string, resultId: string): Promise<void> {
     if (this.mplinkCorrections.has(resultId)) return;
@@ -2207,21 +2207,16 @@ export class ConnectionManager {
         `${result.slotLabel}: corrected from mplink`,
         corrected,
       );
+      this.emit({
+        type: 'toast',
+        kind: 'success',
+        message: this.scoreCorrectionMessage(result, corrected),
+      });
       if (evaluation.needsReview) {
         this.emiteSystemChat(
           next,
           `Result for ${result.slotLabel} needs review: ${evaluation.reviewReason ?? 'unknown reason'}`,
         );
-      }
-      if (
-        next.wins.team_one !== session.wins.team_one ||
-        next.wins.team_two !== session.wins.team_two
-      ) {
-        this.runAutomation(tournament, next, 'score_updated', {
-          winner: corrected.winner ?? '',
-          slot: result.slotLabel,
-          beatmap_id: String(result.beatmapId),
-        });
       }
       if (next.status === 'finished') this.syncMatchResult(tournament, next);
       this.emit({ type: 'session_updated', session: next });
@@ -2945,7 +2940,10 @@ export class ConnectionManager {
     extra: Partial<TemplateContext> = {},
   ): void {
     const actions = automationActionsFor(tournament.automation, trigger);
-    const webhooks = tournament.webhooks.filter((webhook) => webhook.triggers.includes(trigger));
+    const webhooks =
+      session.chatOnly && trigger === 'match_created'
+        ? []
+        : tournament.webhooks.filter((webhook) => webhook.triggers.includes(trigger));
     if (actions.length === 0 && webhooks.length === 0) return;
 
     // Chain per session so messages from consecutive triggers are sent in the
@@ -2972,7 +2970,15 @@ export class ConnectionManager {
           this.appendLocalChat(session, message, target.channelId, session.transport, true);
           this.log('info', 'automation', `sent ${trigger}: ${message}`);
         }
-        await this.sendAutomationWebhooks(webhooks, messages);
+        const embeds = buildAutomationEmbeds({
+          trigger,
+          tournament,
+          session,
+          context,
+          beatmap: this.beatmapForContext(tournament, session, context),
+          refereeName: this.serverUser?.username ?? null,
+        });
+        await this.sendAutomationWebhooks(webhooks, embeds);
       } catch (error) {
         this.log('warn', 'automation', errorMessage(error));
       }
@@ -2992,10 +2998,12 @@ export class ConnectionManager {
     );
   }
 
-  private async sendAutomationWebhooks(webhooks: Webhook[], messages: string[]): Promise<void> {
-    if (webhooks.length === 0) return;
-    const payload = buildDiscordWebhookPayload(messages);
-    if (payload.embeds.length === 0) return;
+  private async sendAutomationWebhooks(
+    webhooks: Webhook[],
+    embeds: DiscordEmbed[],
+  ): Promise<void> {
+    if (webhooks.length === 0 || embeds.length === 0) return;
+    const payload = payloadFromEmbeds(embeds, this.discordWebhookStyle());
     for (const webhook of webhooks) {
       switch (webhook.kind) {
         case 'discord': {
@@ -3013,6 +3021,32 @@ export class ConnectionManager {
     }
   }
 
+  /** Presentation settings shared by every outgoing webhook. */
+  private discordWebhookStyle(): DiscordWebhookStyle {
+    const settings = this.settings.get();
+    return {
+      authorImage: settings.discordAuthorImage,
+      authorName: settings.discordAuthorName,
+      bottomImage: settings.discordBottomImage,
+      footerIconUrl: settings.discordFooterIconUrl,
+      footerText: settings.discordFooterText,
+    };
+  }
+
+  /** Cached beatmap metadata for the map referenced by an automation context. */
+  private beatmapForContext(
+    tournament: Tournament,
+    session: MatchSession,
+    context: TemplateContext,
+  ): BeatmapInfo | null {
+    const id = Number(context.beatmap_id);
+    const cached = Number.isInteger(id) && id > 0 ? this.beatmapCache.get(id) : undefined;
+    if (cached) return cached;
+    const stage = findStageForMatch(tournament, session.matchId);
+    const slot = stage && context.slot ? findSlotByLabel(stage, context.slot) : undefined;
+    return slot?.beatmap ? { ...slot.beatmap, mode: 'osu' } : null;
+  }
+
   private automationContext(
     tournament: Tournament,
     session: MatchSession,
@@ -3022,7 +3056,6 @@ export class ConnectionManager {
     const lastResult = session.results.at(-1);
     const usesCurrentMap =
       trigger === 'beatmap_completed' ||
-      trigger === 'score_updated' ||
       trigger === 'match_finished';
     const extraBeatmapId = Number(extra.beatmap_id);
     const beatmapId =

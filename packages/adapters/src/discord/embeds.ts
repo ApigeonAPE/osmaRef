@@ -1,4 +1,6 @@
 import {
+  findSlotByLabel,
+  findStageForMatch,
   findTeam,
   type AutomationTrigger,
   type BeatmapInfo,
@@ -32,10 +34,6 @@ function escapeDiscord(value: string): string {
   return value.replace(/([\\*_~`|>])/g, '\\$1');
 }
 
-function linkLabel(value: string): string {
-  return escapeDiscord(value).replace(/[[\]]/g, '\\$&');
-}
-
 function teamName(tournament: Tournament, teamId: string | null): string {
   return teamId ? (findTeam(tournament, teamId)?.name ?? teamId) : '';
 }
@@ -62,12 +60,39 @@ function matchUrl(session: MatchSession): string {
   return session.roomId ? `https://osu.ppy.sh/community/matches/${session.roomId}` : '';
 }
 
+interface BeatmapLabelFields {
+  artist: string;
+  title: string;
+  mapper: string;
+  difficultyName: string;
+}
+
+function beatmapLabel(info: BeatmapLabelFields): string {
+  const mapper = info.mapper ? ` (${info.mapper})` : '';
+  const difficulty = info.difficultyName ? ` [${info.difficultyName}]` : '';
+  return `${info.artist} - ${info.title}${mapper}${difficulty}`;
+}
+
 function beatmapLink(beatmap: BeatmapInfo | null): string {
   if (!beatmap) return '';
-  const label = linkLabel(
-    `${beatmap.artist} - ${beatmap.title} [${beatmap.difficultyName}]`.trim(),
-  );
-  return beatmap.beatmapUrl ? `[${label}](${beatmap.beatmapUrl})` : label;
+  const label = beatmapLabel(beatmap);
+  return beatmap.beatmapUrl ? `[${label}](${beatmap.beatmapUrl})` : escapeDiscord(label);
+}
+
+function mappoolLink(
+  session: MatchSession,
+  tournament: Tournament,
+  slotLabel: string,
+  beatmapId: number | null,
+): string {
+  for (const source of [session.configSnapshot, tournament]) {
+    if (!source) continue;
+    const stage = findStageForMatch(source, session.matchId);
+    const info = stage ? findSlotByLabel(stage, slotLabel)?.beatmap : undefined;
+    if (info && (info.title || info.artist)) return beatmapLink(info);
+  }
+  if (beatmapId === null) return slotLabel;
+  return `[${slotLabel} (${beatmapId})](https://osu.ppy.sh/b/${beatmapId})`;
 }
 
 function field(name: string, value: string, inline = true): DiscordEmbedField | null {
@@ -82,11 +107,12 @@ function compact(values: (DiscordEmbedField | null)[]): DiscordEmbedField[] {
 function baseEmbed(
   input: AutomationEmbedInput,
   footerText: string | undefined,
+  thumbnail = true,
 ): DiscordEmbed {
   return {
     url: matchUrl(input.session) || undefined,
     footer: footerText ? { text: footerText.slice(0, FIELD_LIMIT) } : undefined,
-    thumbnail: input.beatmap?.coverUrl ? { url: input.beatmap.coverUrl } : undefined,
+    thumbnail: thumbnail && input.beatmap?.coverUrl ? { url: input.beatmap.coverUrl } : undefined,
     timestamp: (input.now ?? new Date()).toISOString(),
   };
 }
@@ -161,27 +187,6 @@ export function buildAutomationEmbeds(input: AutomationEmbedInput): DiscordEmbed
         },
       ];
     }
-    case 'score_updated': {
-      const winner = sideName(tournament, session, context.winner);
-      return [
-        {
-          ...baseEmbed(input, footerText),
-          title: `📊 Score update - ${session.matchName}`,
-          description: [
-            `__${escapeDiscord(teamName(tournament, session.teamOneId))}__ | ${session.wins.team_one} - ${session.wins.team_two} | ${escapeDiscord(teamName(tournament, session.teamTwoId))}`,
-            winner ? `Winner: ${escapeDiscord(winner)}` : '',
-          ]
-            .filter(Boolean)
-            .join('\n')
-            .slice(0, DESCRIPTION_LIMIT),
-          color: DISCORD_EMBED_COLOR,
-          fields: compact([
-            field('Slot', context.slot),
-            field('Winner', winner),
-          ]),
-        },
-      ];
-    }
     case 'match_finished': {
       const { winner } = matchOutcome(tournament, session);
       const left = teamName(tournament, session.teamOneId);
@@ -192,23 +197,33 @@ export function buildAutomationEmbeds(input: AutomationEmbedInput): DiscordEmbed
       const rightDisplay = session.wins.team_two > session.wins.team_one
         ? `__${escapeDiscord(right)}__`
         : escapeDiscord(right);
+      const firstPickSide = session.queue.find((step) => step.kind === 'pick')?.side ?? '';
+      const firstPick = sideName(tournament, session, firstPickSide);
+      const bans = session.actions.filter((action) => action.kind === 'ban');
+      const banLines: string[] = [];
+      for (const [teamId, label] of [
+        [session.teamOneId, left],
+        [session.teamTwoId, right],
+      ] as const) {
+        const entries = bans
+          .filter((action) => action.teamId === teamId)
+          .map((action) => mappoolLink(session, tournament, action.slotLabel, action.beatmapId));
+        if (entries.length === 0) continue;
+        banLines.push(`**${escapeDiscord(label)} bans:**`, ...entries);
+      }
+      let description = `**Score:** ${leftDisplay} | ${session.wins.team_one} - ${session.wins.team_two} | ${rightDisplay}`;
+      if (firstPick) description += `\n\n**First pick:** ${escapeDiscord(firstPick)}`;
+      if (matchUrl(session)) description += `\n\n${matchUrl(session)}`;
+      if (banLines.length > 0) description += `\n${banLines.join('\n')}`;
       return [
         {
-          ...baseEmbed(input, footerText),
-          title: session.matchName.slice(0, TITLE_LIMIT),
-          description: [
-            leftDisplay,
-            `${session.wins.team_one} - ${session.wins.team_two}`,
-            rightDisplay,
-          ]
-            .filter(Boolean)
-            .join(' | ')
-            .slice(0, DESCRIPTION_LIMIT),
+          ...baseEmbed(input, footerText, false),
+          title: (context.stage ? `${context.stage}: ${session.matchName}` : session.matchName).slice(
+            0,
+            TITLE_LIMIT,
+          ),
+          description: description.slice(0, DESCRIPTION_LIMIT),
           color: winner ? WIN_COLOR : DISCORD_EMBED_COLOR,
-          fields: compact([
-            field('Best of', String(session.bestOf)),
-            field('Room', matchUrl(session)),
-          ]),
         },
       ];
     }
@@ -218,7 +233,10 @@ export function buildAutomationEmbeds(input: AutomationEmbedInput): DiscordEmbed
         ban: { title: `🔨 Ban - ${session.matchName}`, verb: 'banned' },
         protect: { title: `🛡 Protect - ${session.matchName}`, verb: 'protected' },
       };
-      const style = styles[context.action] ?? { title: `${context.action} - ${session.matchName}`, verb: 'applied' };
+      const style = styles[context.action] ?? {
+        title: `Manual action - ${session.matchName}`,
+        verb: 'applied',
+      };
       const team = context.action_team;
       const description =
         team && context.slot

@@ -3,6 +3,7 @@ import {
   DISCORD_EMBED_COLOR,
   DISCORD_MAX_EMBEDS,
   buildDiscordWebhookPayload,
+  payloadFromEmbeds,
   sendDiscordWebhook,
 } from '@osmaref/adapters';
 
@@ -21,6 +22,48 @@ describe('discord webhook payload', () => {
   it('caps embeds at the discord limit', () => {
     const messages = Array.from({ length: DISCORD_MAX_EMBEDS + 5 }, (_, i) => `m${i}`);
     expect(buildDiscordWebhookPayload(messages).embeds).toHaveLength(DISCORD_MAX_EMBEDS);
+  });
+});
+
+describe('discord webhook style', () => {
+  it('applies the shared presentation settings', () => {
+    const payload = buildDiscordWebhookPayload(['hi'], {
+      authorName: 'osu! referee',
+      authorImage: 'https://example.com/a.png',
+      bottomImage: 'https://example.com/b.png',
+      footerIconUrl: 'https://example.com/i.png',
+      footerText: 'Cup 2026',
+    });
+
+    expect(payload).toEqual({
+      username: 'osu! referee',
+      avatar_url: 'https://example.com/a.png',
+      embeds: [
+        {
+          description: 'hi',
+          color: DISCORD_EMBED_COLOR,
+          image: { url: 'https://example.com/b.png' },
+          footer: { text: 'Cup 2026', icon_url: 'https://example.com/i.png' },
+        },
+      ],
+    });
+  });
+
+  it('keeps an embed footer when only the icon is configured', () => {
+    const payload = payloadFromEmbeds([{ description: 'hi', footer: { text: 'Cup' } }], {
+      footerIconUrl: 'https://example.com/i.png',
+    });
+
+    expect(payload.embeds[0]?.footer).toEqual({
+      text: 'Cup',
+      icon_url: 'https://example.com/i.png',
+    });
+  });
+
+  it('omits blank settings', () => {
+    expect(
+      payloadFromEmbeds([{ description: 'hi' }], { authorName: ' ', footerText: '' }),
+    ).toEqual({ embeds: [{ description: 'hi' }] });
   });
 });
 

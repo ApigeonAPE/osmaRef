@@ -6,19 +6,92 @@ export const DISCORD_MAX_EMBEDS = 10;
 
 export const DISCORD_WEBHOOK_TIMEOUT_MS = 5000;
 
-export interface DiscordWebhookPayload {
-  embeds: { description: string; color: number }[];
+export interface DiscordEmbedFooter {
+  text: string;
+  icon_url?: string;
 }
 
-/** One embed per rendered automation message, empty messages dropped. */
-export function buildDiscordWebhookPayload(messages: string[]): DiscordWebhookPayload {
-  return {
-    embeds: messages
-      .map((message) => message.trim())
-      .filter((message) => message.length > 0)
-      .slice(0, DISCORD_MAX_EMBEDS)
-      .map((description) => ({ description, color: DISCORD_EMBED_COLOR })),
+export interface DiscordEmbedImage {
+  url: string;
+}
+
+export interface DiscordEmbedField {
+  name: string;
+  value: string;
+  inline?: boolean;
+}
+
+export interface DiscordEmbed {
+  title?: string;
+  url?: string;
+  description?: string;
+  color?: number;
+  footer?: DiscordEmbedFooter;
+  thumbnail?: DiscordEmbedImage;
+  image?: DiscordEmbedImage;
+  fields?: DiscordEmbedField[];
+  timestamp?: string;
+}
+
+/** Presentation settings shared by every outgoing webhook. */
+export interface DiscordWebhookStyle {
+  authorImage?: string;
+  authorName?: string;
+  bottomImage?: string;
+  footerIconUrl?: string;
+  footerText?: string;
+}
+
+export interface DiscordWebhookPayload {
+  username?: string;
+  avatar_url?: string;
+  embeds: DiscordEmbed[];
+}
+
+/** One plain-text embed per rendered message, empty messages dropped. */
+export function buildDiscordWebhookPayload(
+  messages: string[],
+  style: DiscordWebhookStyle = {},
+): DiscordWebhookPayload {
+  const embeds: DiscordEmbed[] = messages
+    .map((message) => message.trim())
+    .filter((message) => message.length > 0)
+    .slice(0, DISCORD_MAX_EMBEDS)
+    .map((description) => ({ description, color: DISCORD_EMBED_COLOR }));
+  return payloadFromEmbeds(embeds, style);
+}
+
+/**
+ * Applies the shared presentation settings to prepared embeds. Blank settings
+ * leave the corresponding field out, so an unconfigured webhook stays plain.
+ */
+export function payloadFromEmbeds(
+  embeds: DiscordEmbed[],
+  style: DiscordWebhookStyle = {},
+): DiscordWebhookPayload {
+  const authorName = style.authorName?.trim();
+  const authorImage = style.authorImage?.trim();
+  const bottomImage = style.bottomImage?.trim();
+  const footerIconUrl = style.footerIconUrl?.trim();
+  const footerText = style.footerText?.trim();
+
+  const payload: DiscordWebhookPayload = {
+    embeds: embeds.slice(0, DISCORD_MAX_EMBEDS).map((embed) => {
+      const next: DiscordEmbed = { ...embed };
+      if (bottomImage) next.image = { url: bottomImage };
+      const text = footerText || next.footer?.text;
+      if (text) {
+        const icon = footerIconUrl || next.footer?.icon_url;
+        next.footer = icon ? { text, icon_url: icon } : { text };
+      } else {
+        delete next.footer;
+      }
+      return next;
+    }),
   };
+  if (authorName) payload.username = authorName;
+  if (authorImage) payload.avatar_url = authorImage;
+  return payload;
 }
 
 export interface DiscordWebhookResult {

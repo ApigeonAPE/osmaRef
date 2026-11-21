@@ -49,6 +49,9 @@ export interface BeatmapDetails {
   difficultyName: string;
   mapper: string;
   mode: string;
+  beatmapsetId: number | null;
+  beatmapUrl: string;
+  coverUrl: string;
 }
 
 /**
@@ -102,6 +105,11 @@ export class OsuApiClient {
     const set = typeof payload.beatmapset === 'object' && payload.beatmapset !== null
       ? (payload.beatmapset as Record<string, unknown>)
       : {};
+    const covers =
+      typeof set.covers === 'object' && set.covers !== null
+        ? (set.covers as Record<string, unknown>)
+        : {};
+    const setId = Number(set.id);
     return {
       id: Number(payload.id ?? beatmapId),
       title: String(set.title ?? payload.title ?? ''),
@@ -109,6 +117,9 @@ export class OsuApiClient {
       difficultyName: String(payload.version ?? ''),
       mapper: String(set.creator ?? ''),
       mode: String(payload.mode ?? ''),
+      beatmapsetId: Number.isSafeInteger(setId) && setId > 0 ? setId : null,
+      beatmapUrl: typeof payload.url === 'string' ? payload.url : '',
+      coverUrl: typeof covers.cover === 'string' ? covers.cover : '',
     };
   }
 

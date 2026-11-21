@@ -18,3 +18,4 @@ export * from './results/provider';
 export * from './results/mplink';
 export * from './osu/api';
 export * from './discord/webhook';
+export * from './discord/embeds';

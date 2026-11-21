@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ModelProvider, useModel } from './useOsmaRef';
 import { I18nProvider, useI18n } from './i18n';
+import { ToastProvider } from './toast';
 import { TournamentsPage } from './pages/TournamentsPage';
 import { WorkbenchPage } from './pages/WorkbenchPage';
 import { CreateRoomPage } from './pages/CreateRoomPage';
@@ -22,9 +23,11 @@ const NAV: { id: Page; label: string }[] = [
 export function App() {
   return (
     <I18nProvider>
-      <ModelProvider>
-        <Shell />
-      </ModelProvider>
+      <ToastProvider>
+        <ModelProvider>
+          <Shell />
+        </ModelProvider>
+      </ToastProvider>
     </I18nProvider>
   );
 }

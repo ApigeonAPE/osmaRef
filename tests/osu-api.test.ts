@@ -12,10 +12,15 @@ describe('osu! API client beatmap metadata', () => {
             version: '[4K] Stage 3: Phantasm',
             mode: 'mania',
             beatmapset: {
+              id: 123456,
               title: 'Illusional Flashback',
               artist: 'Yunosuke',
               creator: 'SomeMapper',
+              covers: {
+                cover: 'https://assets.ppy.sh/beatmaps/123456/covers/cover.jpg',
+              },
             },
+            url: 'https://osu.ppy.sh/beatmaps/3958820',
           }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         )) as typeof fetch,
@@ -28,6 +33,9 @@ describe('osu! API client beatmap metadata', () => {
       difficultyName: '[4K] Stage 3: Phantasm',
       mapper: 'SomeMapper',
       mode: 'mania',
+      beatmapsetId: 123456,
+      beatmapUrl: 'https://osu.ppy.sh/beatmaps/3958820',
+      coverUrl: 'https://assets.ppy.sh/beatmaps/123456/covers/cover.jpg',
     });
   });
 });

@@ -7,7 +7,7 @@ import {
 } from '@osmaref/contracts';
 import harmonyLicense from '@assets/HarmonyOS_Sans/LICENSE.txt?raw';
 import { ModSelector } from '../components/ModSelector';
-import { Toast } from '../components/Toast';
+import { useToast } from '../toast';
 import { useModel } from '../useOsmaRef';
 import { useI18n } from '../i18n';
 import { Field, Modal, Section, formatDateTime } from '../ui';
@@ -15,11 +15,10 @@ import { Field, Modal, Section, formatDateTime } from '../ui';
 export function SettingsPage() {
   const model = useModel();
   const { t, setting, setLanguage } = useI18n();
+  const toast = useToast();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [freemodOpen, setFreemodOpen] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [licenseOpen, setLicenseOpen] = useState(false);
   const [licenseTab, setLicenseTab] = useState<'harmony' | 'mit'>('harmony');
   const [logsOpen, setLogsOpen] = useState(false);
@@ -39,21 +38,17 @@ export function SettingsPage() {
 
   const save = async () => {
     if (!settings) return;
-    setError(null);
-    setMessage(null);
     try {
       const next = await window.osmaRef.app.saveSettings(settings);
       setSettings(next);
-      setMessage(t('settings saved'));
+      toast.success(t('settings saved'));
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     }
   };
 
   /** Puts the hidden IRC endpoint section back on Bancho's official defaults. */
   const restoreIrcDefaults = async () => {
-    setError(null);
-    setMessage(null);
     try {
       const next = await window.osmaRef.app.saveSettings({
         ircHost: DEFAULT_SETTINGS.ircHost,
@@ -61,9 +56,9 @@ export function SettingsPage() {
         ircUseTls: DEFAULT_SETTINGS.ircUseTls,
       });
       setSettings(next);
-      setMessage(t('IRC settings restored'));
+      toast.success(t('IRC settings restored'));
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     }
   };
 
@@ -73,29 +68,25 @@ export function SettingsPage() {
   };
 
   const restoreHubDefaults = async () => {
-    setError(null);
-    setMessage(null);
     try {
       const next = await window.osmaRef.app.saveSettings({
         hubBaseUrl: DEFAULT_SETTINGS.hubBaseUrl,
         chatWebsocketUrl: DEFAULT_SETTINGS.chatWebsocketUrl,
       });
       setSettings(next);
-      setMessage(t('Referee Hub settings restored'));
+      toast.success(t('Referee Hub settings restored'));
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     }
   };
 
   const exportRuntime = async () => {
     setBusy('export-runtime');
-    setError(null);
-    setMessage(null);
     try {
       const path = await window.osmaRef.app.exportRuntimeLog();
-      if (path) setMessage(t('exported logs to {path}', { path }));
+      if (path) toast.success(t('exported logs to {path}', { path }));
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     } finally {
       setBusy(null);
     }
@@ -114,11 +105,7 @@ export function SettingsPage() {
         </button>
       </header>
 
-      {message ? (
-        <Toast kind="success" message={message} onClose={() => setMessage(null)} />
-      ) : null}
-      {error ? <Toast message={error} onClose={() => setError(null)} /> : null}
-
+            
       <div className="card">
         <div className="form-grid">
           <Field label={t('Language')}>
@@ -288,6 +275,41 @@ export function SettingsPage() {
             </button>
           </div>
         </details>
+      </Section>
+
+      <Section title={t('Discord webhook')}>
+        <div className="form-grid">
+          <Field label={t('Author image')} wide>
+            <input
+              value={settings.discordAuthorImage}
+              onChange={(event) => patch('discordAuthorImage', event.target.value)}
+            />
+          </Field>
+          <Field label={t('Author name')}>
+            <input
+              value={settings.discordAuthorName}
+              onChange={(event) => patch('discordAuthorName', event.target.value)}
+            />
+          </Field>
+          <Field label={t('Bottom image')} wide>
+            <input
+              value={settings.discordBottomImage}
+              onChange={(event) => patch('discordBottomImage', event.target.value)}
+            />
+          </Field>
+          <Field label={t('Footer icon')} wide>
+            <input
+              value={settings.discordFooterIconUrl}
+              onChange={(event) => patch('discordFooterIconUrl', event.target.value)}
+            />
+          </Field>
+          <Field label={t('Footer text')} wide>
+            <input
+              value={settings.discordFooterText}
+              onChange={(event) => patch('discordFooterText', event.target.value)}
+            />
+          </Field>
+        </div>
       </Section>
 
       <Section

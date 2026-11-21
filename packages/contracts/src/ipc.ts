@@ -107,6 +107,11 @@ export const DesktopEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('log'), entry: LogEntrySchema }),
   z.object({ type: z.literal('connection_log'), entry: LogEntrySchema }),
   z.object({ type: z.literal('session_event'), event: SessionEventSchema }),
+  z.object({
+    type: z.literal('toast'),
+    kind: z.enum(['info', 'success', 'error']).default('info'),
+    message: z.string().min(1),
+  }),
 ]);
 export type DesktopEvent = z.infer<typeof DesktopEventSchema>;
 
@@ -149,6 +154,9 @@ export interface BeatmapInfo {
   difficultyName: string;
   mapper: string;
   mode: string;
+  beatmapsetId: number | null;
+  beatmapUrl: string;
+  coverUrl: string;
 }
 
 export interface BeatmapLookupFailure {
@@ -181,6 +189,11 @@ export interface Settings {
   chatLineHeight: number;
   storeIrcPassword: boolean;
   logLevel: LogLevel;
+  discordAuthorImage: string;
+  discordAuthorName: string;
+  discordBottomImage: string;
+  discordFooterIconUrl: string;
+  discordFooterText: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -200,6 +213,11 @@ export const DEFAULT_SETTINGS: Settings = {
   chatLineHeight: 1.35,
   storeIrcPassword: true,
   logLevel: 'info',
+  discordAuthorImage: '',
+  discordAuthorName: '',
+  discordBottomImage: '',
+  discordFooterIconUrl: '',
+  discordFooterText: '',
 };
 
 export interface JoinRoomInput {
@@ -232,6 +250,14 @@ const WebSocketUrlSchema = z
   .string()
   .url()
   .refine((value) => /^wss?:\/\//i.test(value), 'must be a ws(s) URL');
+const OptionalHttpsUrlSchema = z
+  .string()
+  .trim()
+  .max(500)
+  .refine(
+    (value) => value.length === 0 || /^https:\/\//i.test(value),
+    'must be an https URL or empty',
+  );
 
 export const SettingsPatchSchema = z.object({
   language: LanguageSettingSchema.optional(),
@@ -250,6 +276,11 @@ export const SettingsPatchSchema = z.object({
   chatLineHeight: z.number().min(1).max(2.4).optional(),
   storeIrcPassword: z.boolean().optional(),
   logLevel: LogLevelSchema.optional(),
+  discordAuthorImage: OptionalHttpsUrlSchema.optional(),
+  discordAuthorName: z.string().max(80).optional(),
+  discordBottomImage: OptionalHttpsUrlSchema.optional(),
+  discordFooterIconUrl: OptionalHttpsUrlSchema.optional(),
+  discordFooterText: z.string().max(2048).optional(),
 });
 
 export const ConnectIrcInputSchema = z.object({

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Settings } from '@osmaref/contracts';
-import { Toast } from '../components/Toast';
+import { useToast } from '../toast';
 import { useModel } from '../useOsmaRef';
 import { useI18n } from '../i18n';
 import { Section, Field } from '../ui';
@@ -13,6 +13,7 @@ import { Section, Field } from '../ui';
 export function LoginPage() {
   const model = useModel();
   const { t } = useI18n();
+  const toast = useToast();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -20,8 +21,6 @@ export function LoginPage() {
   const [busy, setBusy] = useState<
     'authorize' | 'logout' | 'irc' | 'irc-logout' | 'hub' | 'chat' | null
   >(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [avatarFailed, setAvatarFailed] = useState(false);
 
   const user = model.state?.user ?? null;
@@ -47,14 +46,12 @@ export function LoginPage() {
 
   const authorize = async () => {
     setBusy('authorize');
-    setError(null);
-    setMessage(null);
     try {
       await window.osmaRef.auth.login();
       await model.refreshAll();
-      setMessage(t('login done'));
+      toast.success(t('login done'));
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     } finally {
       setBusy(null);
     }
@@ -62,14 +59,12 @@ export function LoginPage() {
 
   const logout = async () => {
     setBusy('logout');
-    setError(null);
-    setMessage(null);
     try {
       await window.osmaRef.auth.logout();
       await model.refreshAll();
-      setMessage(t('logged out'));
+      toast.success(t('logged out'));
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     } finally {
       setBusy(null);
     }
@@ -79,8 +74,6 @@ export function LoginPage() {
     const name = username.trim();
     if (!name || (!password && !hasPassword)) return;
     setBusy('irc');
-    setError(null);
-    setMessage(null);
     try {
       const saved = await window.osmaRef.app.saveSettings({ ircUsername: name });
       setSettings(saved);
@@ -91,9 +84,9 @@ export function LoginPage() {
       setPassword('');
       setHasPassword(await window.osmaRef.app.hasIrcPassword());
       await model.refreshAll();
-      setMessage(t('IRC connected'));
+      toast.success(t('IRC connected'));
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     } finally {
       setBusy(null);
     }
@@ -101,17 +94,15 @@ export function LoginPage() {
 
   const logoutIrc = async () => {
     setBusy('irc-logout');
-    setError(null);
-    setMessage(null);
     try {
       await window.osmaRef.connection.disconnect('irc');
       await window.osmaRef.app.clearIrcPassword();
       setPassword('');
       setHasPassword(false);
       await model.refreshAll();
-      setMessage(t('IRC logged out'));
+      toast.success(t('IRC logged out'));
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     } finally {
       setBusy(null);
     }
@@ -119,15 +110,13 @@ export function LoginPage() {
 
   const reconnectHub = async () => {
     setBusy('hub');
-    setError(null);
-    setMessage(null);
     try {
       await window.osmaRef.connection.disconnect('referee_hub');
       await window.osmaRef.connection.connectHub();
       await model.refreshAll();
-      setMessage(t('Referee Hub reconnected'));
+      toast.success(t('Referee Hub reconnected'));
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     } finally {
       setBusy(null);
     }
@@ -135,8 +124,6 @@ export function LoginPage() {
 
   const reconnectChat = async () => {
     setBusy('chat');
-    setError(null);
-    setMessage(null);
     try {
       await window.osmaRef.connection.disconnect('chat');
       const state = await window.osmaRef.connection.connectHub();
@@ -145,9 +132,9 @@ export function LoginPage() {
       if (chat?.status !== 'connected') {
         throw new Error(chat?.detail ?? t('Chat did not reconnect'));
       }
-      setMessage(t('Chat reconnected'));
+      toast.success(t('Chat reconnected'));
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     } finally {
       setBusy(null);
     }
@@ -163,11 +150,7 @@ export function LoginPage() {
         </div>
       </header>
 
-      {message ? (
-        <Toast kind="success" message={message} onClose={() => setMessage(null)} />
-      ) : null}
-      {error ? <Toast message={error} onClose={() => setError(null)} /> : null}
-
+            
       <Section title={t('OAuth')}>
         <div className="login-row login-oauth">
           <div className="login-identity">

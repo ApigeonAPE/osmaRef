@@ -7,7 +7,7 @@ import {
 import { useModel } from '../useOsmaRef';
 import { useI18n } from '../i18n';
 import { Empty, formatDateTime } from '../ui';
-import { Toast } from '../components/Toast';
+import { useToast } from '../toast';
 
 type CategoryFilter = 'all' | SessionEventCategory;
 
@@ -16,13 +16,12 @@ const CATEGORY_FILTERS: CategoryFilter[] = ['all', 'operation', 'chat', 'game'];
 export function LogsPage() {
   const model = useModel();
   const { t } = useI18n();
+  const toast = useToast();
   const [selectedId, setSelectedId] = useState<string | null>(
     model.lobbyLogs[0]?.sessionId ?? null,
   );
   const [events, setEvents] = useState<SessionEvent[]>([]);
   const [category, setCategory] = useState<CategoryFilter>('all');
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -42,7 +41,7 @@ export function LogsPage() {
         const next = await window.osmaRef.sessions.getEvents(selectedId);
         if (!cancelled) setEvents(next);
       } catch (cause) {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
+        if (!cancelled) toast.error(cause instanceof Error ? cause.message : String(cause));
       }
     })();
     return () => {
@@ -88,13 +87,11 @@ export function LogsPage() {
   const exportLog = async () => {
     if (!selectedId) return;
     setBusy(true);
-    setError(null);
-    setNotice(null);
     try {
       const path = await window.osmaRef.sessions.exportLog(selectedId);
-      if (path) setNotice(t('exported logs to {path}', { path }));
+      if (path) toast.success(t('exported logs to {path}', { path }));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      toast.error(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(false);
     }
@@ -114,16 +111,14 @@ export function LogsPage() {
       return;
     }
     setBusy(true);
-    setError(null);
-    setNotice(null);
     try {
       await window.osmaRef.sessions.deleteLog(selectedId);
       setEvents([]);
       setSelectedId(null);
       await model.refreshLobbyLogs();
-      setNotice(t('Room log deleted.'));
+      toast.success(t('Room log deleted.'));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      toast.error(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(false);
     }
@@ -166,9 +161,7 @@ export function LogsPage() {
         </div>
       </header>
 
-      {error ? <Toast message={error} onClose={() => setError(null)} /> : null}
-      {notice ? <Toast kind="success" message={notice} onClose={() => setNotice(null)} /> : null}
-
+            
       <div className="audit-layout">
         <aside className="session-list">
           {model.lobbyLogs.map((entry) => (

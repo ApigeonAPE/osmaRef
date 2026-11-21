@@ -170,6 +170,9 @@ export const MappoolBeatmapInfoSchema = z.object({
   artist: z.string().default(''),
   mapper: z.string().default(''),
   difficultyName: z.string().default(''),
+  beatmapsetId: z.number().int().positive().nullable().default(null),
+  beatmapUrl: z.string().max(500).default(''),
+  coverUrl: z.string().max(500).default(''),
 });
 export type MappoolBeatmapInfo = z.infer<typeof MappoolBeatmapInfoSchema>;
 
@@ -317,7 +320,6 @@ export const AUTOMATION_TRIGGERS = [
   'match_created',
   'beatmap_started',
   'beatmap_completed',
-  'score_updated',
   'match_finished',
   'action_applied',
 ] as const;
@@ -343,7 +345,6 @@ export const AutomationMessagesSchema = z.object({
   match_created: z.array(AutomationActionSchema).default([]),
   beatmap_started: z.array(AutomationActionSchema).default([]),
   beatmap_completed: z.array(AutomationActionSchema).default([]),
-  score_updated: z.array(AutomationActionSchema).default([]),
   match_finished: z.array(AutomationActionSchema).default([]),
   action_applied: z.array(AutomationActionSchema).default([]),
 });
@@ -354,7 +355,6 @@ export function emptyAutomationMessages(): AutomationMessages {
     match_created: [],
     beatmap_started: [],
     beatmap_completed: [],
-    score_updated: [],
     match_finished: [],
     action_applied: [],
   };

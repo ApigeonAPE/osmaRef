@@ -5,11 +5,12 @@ import { useI18n } from '../i18n';
 import { Field } from '../ui';
 import { IdInput } from '../components/IdInput';
 import { MatchInfo } from '../components/MatchInfo';
-import { Toast } from '../components/Toast';
+import { useToast } from '../toast';
 
 export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) => void }) {
   const model = useModel();
   const { t } = useI18n();
+  const toast = useToast();
   const [mode, setMode] = useState<'configured' | 'quick'>('configured');
   const [tournamentId, setTournamentId] = useState('');
   const [matchId, setMatchId] = useState('');
@@ -22,7 +23,6 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
   const [quickMax, setQuickMax] = useState(4);
 
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const selectedTournament = model.tournaments.find((entry) => entry.id === tournamentId) ?? null;
   const selectedMatches = selectedTournament
@@ -48,11 +48,10 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
 
   const run = async (label: string, action: () => Promise<unknown>) => {
     setBusy(label);
-    setError(null);
     try {
       await action();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      toast.error(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(null);
     }
@@ -71,7 +70,7 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
     const beatmapId = Number(quickBeatmap);
     const hasBeatmap = Number.isInteger(beatmapId) && beatmapId > 0;
     if (!hasBeatmap && quickTransport === 'referee_hub') {
-      setError(t('lazer needs a beatmap id.'));
+      toast.error(t('lazer needs a beatmap id.'));
       return;
     }
     await run('quick', async () => {
@@ -97,8 +96,7 @@ export function CreateRoomPage({ onCreated }: { onCreated: (sessionId: string) =
         </div>
       </header>
 
-      {error ? <Toast message={error} onClose={() => setError(null)} /> : null}
-
+      
       <div className="card">
         <div className="segmented">
           <button

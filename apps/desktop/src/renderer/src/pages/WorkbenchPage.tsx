@@ -24,7 +24,7 @@ import { ChatPanel } from '../components/ChatPanel';
 import { FirstTeamsDialog } from '../components/FirstTeamsDialog';
 import { PlaylistModsDialog } from '../components/PlaylistModsDialog';
 import { JoinRoomDialog } from '../components/JoinRoomDialog';
-import { Toast } from '../components/Toast';
+import { useToast } from '../toast';
 import { IdInput } from '../components/IdInput';
 import { ResultDialog, type ResultRow } from '../components/ResultDialog';
 import { MappoolSlotRow } from '../components/MappoolSlotRow';
@@ -57,6 +57,7 @@ export function WorkbenchPage({
 }) {
   const model = useModel();
   const { t } = useI18n();
+  const toast = useToast();
   const [activeId, setActiveId] = useState<string | null>(sessionId);
   const initialSession = model.sessions.find((entry) => entry.id === sessionId);
   const [channel, setChannel] = useState<'irc' | 'referee_hub'>(
@@ -65,7 +66,6 @@ export function WorkbenchPage({
 
   const [busy, setBusy] = useState<string | null>(null);
   const busyRef = useRef<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [resultOpen, setResultOpen] = useState(false);
   const [firstTeamsOpen, setFirstTeamsOpen] = useState(false);
   const [playlistBeatmapId, setPlaylistBeatmapId] = useState('');
@@ -384,11 +384,10 @@ export function WorkbenchPage({
   const run = async (label: string, action: () => Promise<unknown>) => {
     busyRef.current = label;
     setBusy(label);
-    setError(null);
     try {
       await action();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      toast.error(cause instanceof Error ? cause.message : String(cause));
     } finally {
       busyRef.current = null;
       setBusy(null);
@@ -522,11 +521,11 @@ export function WorkbenchPage({
       return;
     }
     if (session.phase === 'playing') {
-      setError(t('Record the result before picking the next beatmap.'));
+      toast.error(t('Record the result before picking the next beatmap.'));
       return;
     }
     if (!pending) {
-      setError(t('The flow is complete.'));
+      toast.error(t('The flow is complete.'));
       return;
     }
     const teamId = pending.side === 'team_one' ? session.teamOneId : session.teamTwoId;
@@ -656,7 +655,7 @@ export function WorkbenchPage({
       } catch (cause) {
         if (cancelled()) return;
         abortRandomFlow();
-        setError(cause instanceof Error ? cause.message : String(cause));
+        toast.error(cause instanceof Error ? cause.message : String(cause));
       }
     })();
   };
@@ -817,8 +816,7 @@ export function WorkbenchPage({
 
   return (
     <div className="page workbench-page">
-      {error ? <Toast message={error} onClose={() => setError(null)} /> : null}
-      {model.state?.connections.some((entry) => entry.status === 'error') ? (
+            {model.state?.connections.some((entry) => entry.status === 'error') ? (
         <div className="banner warn">
           {t(
             'A connection reported an error. Check Settings → Diagnostics; room control needs an active platform.',

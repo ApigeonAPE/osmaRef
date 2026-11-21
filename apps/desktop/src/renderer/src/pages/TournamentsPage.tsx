@@ -31,7 +31,7 @@ import { useI18n } from '../i18n';
 import { Field, Modal, Section, formatDateTime } from '../ui';
 import { IdInput } from '../components/IdInput';
 import { ModSelector } from '../components/ModSelector';
-import { Toast } from '../components/Toast';
+import { useToast } from '../toast';
 
 const RULESET_LABELS = ['osu!', 'osu!taiko', 'osu!catch', 'osu!mania'];
 
@@ -124,6 +124,7 @@ function BeatmapIdField({
 export function TournamentsPage() {
   const model = useModel();
   const { t } = useI18n();
+  const toast = useToast();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Tournament | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -133,10 +134,7 @@ export function TournamentsPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [remoteList, setRemoteList] = useState<RemoteTournamentSummary[] | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<number>>(new Set());
-  const [lookupError, setLookupError] = useState<string | null>(null);
   const [memberInput, setMemberInput] = useState<Record<number, string>>({});
   const [mappoolRequest, setMappoolRequest] = useState(0);
 
@@ -176,12 +174,11 @@ export function TournamentsPage() {
   const resolveName = async (id: number, apply: (username: string) => void) => {
     if (!Number.isInteger(id) || id <= 0) return;
     setPendingIds((previous) => new Set(previous).add(id));
-    setLookupError(null);
     try {
       const user = await window.osmaRef.osu.lookupUser(id);
       apply(user.username);
     } catch (cause) {
-      setLookupError(
+      toast.error(
         t('user lookup failed for #{id}: {message}', {
           id,
           message: errorText(cause),
@@ -217,7 +214,7 @@ export function TournamentsPage() {
     if (!draft) return;
     const unnamedStage = draft.stages.find((stage) => !stage.name.trim());
     if (unnamedStage) {
-      setError(t('Stage name is required'));
+      toast.error(t('Stage name is required'));
       setActiveStageId(unnamedStage.id);
       setWorkspaceView('stages');
       return;
@@ -234,15 +231,13 @@ export function TournamentsPage() {
       return;
     }
     setBusy(true);
-    setError(null);
-    setNotice(null);
     try {
       const saved = await model.saveTournament(structuredClone(draft));
       setDraft(structuredClone(saved));
       setDirty(false);
-      setNotice(t('saved as revision {revision}', { revision: saved.revision }));
+      toast.success(t('saved as revision {revision}', { revision: saved.revision }));
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     } finally {
       setBusy(false);
     }
@@ -250,7 +245,6 @@ export function TournamentsPage() {
 
   const createTournament = async () => {
     setBusy(true);
-    setError(null);
     try {
       const created = await window.osmaRef.tournaments.create('New tournament');
       await model.refreshTournaments();
@@ -260,7 +254,7 @@ export function TournamentsPage() {
       setActiveStageId(null);
       setWorkspaceView('basics');
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     } finally {
       setBusy(false);
     }
@@ -277,48 +271,44 @@ export function TournamentsPage() {
       setSelectedId(null);
       setDraft(null);
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     } finally {
       setBusy(false);
     }
   };
 
   const importFromFile = async () => {
-    setError(null);
     try {
       const preview = await window.osmaRef.tournaments.importFile();
       if (preview) setImportPreview(preview);
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     }
   };
 
   const importFromBracket = async () => {
-    setError(null);
     try {
       const preview = await window.osmaRef.tournaments.importBracket();
       if (preview) setImportPreview(preview);
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     }
   };
 
   const importFromServer = async () => {
-    setError(null);
     try {
       setRemoteList(await window.osmaRef.tournaments.listRemote());
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     }
   };
 
   const previewRemote = async (id: string) => {
-    setError(null);
     try {
       setImportPreview(await window.osmaRef.tournaments.previewRemote(id));
       setRemoteList(null);
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     }
   };
 
@@ -335,7 +325,7 @@ export function TournamentsPage() {
       setActiveStageId(null);
       setWorkspaceView('basics');
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     } finally {
       setBusy(false);
     }
@@ -343,13 +333,11 @@ export function TournamentsPage() {
 
   const exportTournament = async () => {
     if (!draft) return;
-    setError(null);
-    setNotice(null);
     try {
       const path = await window.osmaRef.tournaments.exportFile(draft.id);
-      if (path) setNotice(t('exported to {path}', { path }));
+      if (path) toast.success(t('exported to {path}', { path }));
     } catch (cause) {
-      setError(errorText(cause));
+      toast.error(errorText(cause));
     }
   };
 
@@ -358,10 +346,7 @@ export function TournamentsPage() {
 
   return (
     <div className="page">
-      {error ? <Toast message={error} onClose={() => setError(null)} /> : null}
-      {lookupError ? <Toast message={lookupError} onClose={() => setLookupError(null)} /> : null}
-      {notice ? <Toast kind="success" message={notice} onClose={() => setNotice(null)} /> : null}
-
+                  
       {selectedId !== null && draft ? (
         <>
           <header className="page-head">
@@ -1348,7 +1333,9 @@ function PoolEditor({
                       current.title === info.title &&
                       current.artist === info.artist &&
                       current.mapper === info.mapper &&
-                      current.difficultyName === info.difficultyName);
+                      current.difficultyName === info.difficultyName &&
+                      current.coverUrl === info.coverUrl &&
+                      current.beatmapUrl === info.beatmapUrl);
                   if (unchanged) return;
                   patchSlot(index, (target) => {
                     target.beatmap = info;
@@ -2253,8 +2240,6 @@ function automationTriggerLabel(trigger: (typeof AUTOMATION_TRIGGERS)[number]): 
       return 'beatmap started';
     case 'beatmap_completed':
       return 'beatmap completed';
-    case 'score_updated':
-      return 'score updated';
     case 'match_finished':
       return 'match finished';
     case 'action_applied':
