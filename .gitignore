@@ -12,6 +12,9 @@ Thumbs.db
 coverage/
 *.tsbuildinfo
 .vitest-cache/
+apps/server/
+README.md
+docs/
 smoke-package/
 smoke-data/
 *.tmp

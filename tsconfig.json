@@ -5,5 +5,5 @@
     "types": ["node"]
   },
   "include": ["packages/**/*.ts", "apps/**/*.ts", "tests/**/*.ts"],
-  "exclude": ["node_modules", "**/node_modules", "apps/desktop/src/renderer", "apps/desktop/out", "apps/server/dist"]
+  "exclude": ["node_modules", "**/node_modules", "apps/desktop/src/renderer", "apps/desktop/out"]
 }
