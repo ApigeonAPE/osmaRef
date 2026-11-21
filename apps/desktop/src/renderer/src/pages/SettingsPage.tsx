@@ -22,8 +22,8 @@ export function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [licenseOpen, setLicenseOpen] = useState(false);
   const [licenseTab, setLicenseTab] = useState<'harmony' | 'mit'>('harmony');
-  const [logsOpen, setLogsOpen] = useState(true);
-  const [diagnosticsOpen, setDiagnosticsOpen] = useState(true);
+  const [logsOpen, setLogsOpen] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
 
   useEffect(() => {
     void (async () => {

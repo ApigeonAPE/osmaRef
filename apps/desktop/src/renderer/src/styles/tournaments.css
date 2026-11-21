@@ -107,6 +107,11 @@
   border-top: 1px solid var(--line-soft);
 }
 
+.flow-triggers > .row > input[type='number'] {
+  flex: 0 0 68px;
+  width: 68px;
+}
+
 .match-grid {
   display: flex;
   flex-wrap: wrap;

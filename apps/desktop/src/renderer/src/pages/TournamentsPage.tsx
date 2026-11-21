@@ -1121,7 +1121,7 @@ function StagesEditor({
               className={`tab${resolvedStageView === 'flow' ? ' active' : ''}`}
               onClick={() => setStageView('flow')}
             >
-              {t('Pick/Ban flow')}
+              {t('Match flow')}
             </button>
             <button
               type="button"
@@ -1506,6 +1506,7 @@ function FlowEditor({
                 {t('Stage count')}
               </label>
               {!phase.useStageCount ? (
+                <>
                 <input
                   type="number"
                   min={1}
@@ -1520,6 +1521,8 @@ function FlowEditor({
                     })
                   }
                 />
+                <label className="inline-field">{t('times')}</label>
+                </>
               ) : null}
             </>
           )}
@@ -1553,7 +1556,7 @@ function FlowEditor({
 
       <div className="flow-triggers">
         <div className="row">
-          <span className="muted small">{t('Score triggers')}</span>
+          <span className="muted small">{t('Triggers')}</span>
           <button
             type="button"
             className="ghost small"
@@ -1576,6 +1579,7 @@ function FlowEditor({
         </div>
         {stage.flow.triggers.map((trigger, index) => (
           <div className="row" key={trigger.id}>
+            <label className="inline-field">{t('When')}</label>
             <select
               value={trigger.subject}
               onChange={(event) =>
@@ -1589,6 +1593,7 @@ function FlowEditor({
               <option value="team_one">{t('red team')}</option>
               <option value="team_two">{t('blue team')}</option>
             </select>
+            <label className="inline-field">{t('reaches')}</label>
             <input
               type="number"
               min={1}
@@ -1603,6 +1608,7 @@ function FlowEditor({
                 })
               }
             />
+            <label className="inline-field">{t('points')}</label>
             <select
               value={trigger.grantTo}
               onChange={(event) =>
@@ -1645,11 +1651,11 @@ function FlowEditor({
                 })
               }
             />
+            <label className="inline-field">{t('repeat')}</label>
             <input
               type="number"
               min={1}
               max={31}
-              placeholder={t('repeat')}
               value={trigger.repeatEvery ?? ''}
               onChange={(event) =>
                 edit((next) => {
@@ -1659,6 +1665,7 @@ function FlowEditor({
                 })
               }
             />
+            <label className="inline-field">{t('times')}</label>
             <button
               type="button"
               className="ghost small danger"
