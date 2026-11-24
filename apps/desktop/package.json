@@ -12,8 +12,8 @@
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "package": "npm run build && electron-builder --win zip --config electron-builder.yml --publish never",
     "package:installer": "npm run build && electron-builder --win nsis --config electron-builder.yml --publish never",
-    "package:release": "npm run build && electron-builder --win nsis --config electron-builder.yml --publish always",
-    "package:preview": "npm run build && electron-builder --win nsis --config electron-builder.yml --publish always -c.publish.channel=preview -c.publish.releaseType=prerelease"
+    "package:release": "npm run build && node scripts/gh-release.mjs ensure && electron-builder --win nsis --config electron-builder.yml --publish always && node scripts/gh-release.mjs publish",
+    "package:preview": "npm run build && node scripts/gh-release.mjs ensure && electron-builder --win nsis --config electron-builder.yml --publish always -c.publish.channel=preview -c.publish.releaseType=prerelease && node scripts/gh-release.mjs publish"
   },
   "dependencies": {},
   "devDependencies": {
