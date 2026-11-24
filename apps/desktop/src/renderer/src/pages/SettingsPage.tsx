@@ -396,12 +396,16 @@ export function SettingsPage() {
       <Section title={t('About')}>
         {version ? (
           <p className="about-version">
-            {`osmaRef v${version}`} by{' '}
-            <a href="https://osu.ppy.sh/users/32541500" target="_blank" rel="noopener noreferrer">
-              A-pigeon
-            </a>
+            <a href="https://github.com/ApigeonAPE/osmaRef" target="_blank" rel="noopener noreferrer">
+              osmaRef
+            </a> {`${version}`}
           </p>
         ) : null}
+        <p className="about-version">
+          by <a href="https://osu.ppy.sh/users/32541500" target="_blank" rel="noopener noreferrer">
+            A-pigeon
+          </a>
+        </p>
         <div className="row-actions">
           <button type="button" className="ghost small" onClick={() => setLicenseOpen(true)}>
             {t('View licenses')}
