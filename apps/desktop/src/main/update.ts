@@ -15,6 +15,16 @@ import type { SettingsStore } from './settings';
 export const updatesSupported =
   app.isPackaged && existsSync(join(process.resourcesPath, 'app-update.yml'));
 
+const NO_RELEASE_ERROR_CODES = new Set([
+  'ERR_UPDATER_NO_PUBLISHED_VERSIONS',
+  'ERR_UPDATER_LATEST_VERSION_NOT_FOUND',
+]);
+
+function isNoReleaseError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'string' && NO_RELEASE_ERROR_CODES.has(code);
+}
+
 function releaseNotes(info: UpdateInfo): string | null {
   const notes = info.releaseNotes;
   if (typeof notes === 'string') {
@@ -72,6 +82,10 @@ export class UpdateManager {
       this.emit({ type: 'update_downloaded' });
     });
     autoUpdater.on('error', (error) => {
+      if (isNoReleaseError(error)) {
+        this.logger.runtime('info', 'update', 'no release to compare against');
+        return;
+      }
       const message = error instanceof Error ? error.message : String(error);
       this.logger.runtime('error', 'update', message);
       this.emit({ type: 'update_error', message });
@@ -107,6 +121,11 @@ export class UpdateManager {
         size: info.files?.[0]?.size ?? 0,
         notes: releaseNotes(info),
       };
+    } catch (error) {
+      if (isNoReleaseError(error)) {
+        return { status: 'none', version: app.getVersion() };
+      }
+      throw error;
     } finally {
       this.busy = false;
     }

@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { safeStorage } from 'electron';
+import { safeStorage, app } from 'electron';
 import { DEFAULT_SETTINGS, type Settings } from '@osmaref/contracts';
 
 /**
@@ -81,16 +81,25 @@ export class SettingsStore {
   }
 
   private loadSettings(): Settings {
+    const defaults = this.defaultSettings();
     if (!existsSync(this.settingsFile)) {
-      return { ...DEFAULT_SETTINGS };
+      this.settings = defaults;
+      this.persist();
+      return defaults;
     }
     try {
       const parsed = JSON.parse(readFileSync(this.settingsFile, 'utf8')) as Partial<Settings>;
-      const settings = { ...DEFAULT_SETTINGS, ...parsed };
-      return settings;
+      return { ...defaults, ...parsed };
     } catch {
-      return { ...DEFAULT_SETTINGS };
+      return defaults;
     }
+  }
+
+  private defaultSettings(): Settings {
+    const previewBuild = app.getVersion().includes('-');
+    return previewBuild
+      ? { ...DEFAULT_SETTINGS, updateChannel: 'preview' }
+      : { ...DEFAULT_SETTINGS };
   }
 
   private async loadPassword(): Promise<void> {
