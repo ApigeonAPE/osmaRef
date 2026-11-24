@@ -2,7 +2,6 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { app } from 'electron';
 import { autoUpdater, type UpdateInfo } from 'electron-updater';
-import { isNewerVersion } from '@osmaref/domain';
 import type { DesktopEvent, UpdateCheckResult } from '@osmaref/contracts';
 import type { AppLogger } from './logger';
 import type { SettingsStore } from './settings';
@@ -112,7 +111,7 @@ export class UpdateManager {
     try {
       const result = await autoUpdater.checkForUpdates();
       const info = result?.updateInfo;
-      if (!info || !isNewerVersion(info.version, app.getVersion())) {
+      if (!result?.isUpdateAvailable || !info) {
         return { status: 'none', version: app.getVersion() };
       }
       return {
