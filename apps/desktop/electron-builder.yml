@@ -8,7 +8,7 @@ files:
   - package.json
 asar: true
 extraResources:
-  - from: ../../assets/HarmonyOS_Sans/LICENSE.txt
+  - from: ../../assets/HarmonyOS_Sans_SC/LICENSE.txt
     to: licenses/HarmonyOS_Sans_LICENSE.txt
   - from: ../../LICENSE
     to: licenses/osmaRef_LICENSE.txt
