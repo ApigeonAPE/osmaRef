@@ -42,7 +42,7 @@
 
 .chat-author {
   color: var(--text);
-  font-weight: 600;
+  font-weight: 700;
   flex: none;
 }
 
@@ -75,6 +75,7 @@
   align-items: end;
   gap: 8px;
   padding: 0 2px;
+  margin-bottom: 6px;
 }
 
 .chat-input input {

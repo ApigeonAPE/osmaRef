@@ -1,8 +1,8 @@
 {
   "name": "osmaref",
-  "version": "0.1.6",
+  "version": "0.1.7-preview",
   "private": true,
-  "description": "osu! referee client for Bancho IRC and Referee Hub",
+  "description": "osu! referee client",
   "license": "MIT",
   "author": "A-pigeon",
   "type": "commonjs",
@@ -23,6 +23,7 @@
   "dependencies": {
     "@microsoft/signalr": "^10.0.11",
     "@radix-ui/colors": "^3.0.0",
+    "electron-updater": "^6.8.11",
     "ws": "^8.18.3",
     "zod": "^3.25.76"
   },

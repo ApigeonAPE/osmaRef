@@ -15,6 +15,26 @@
   width: 100%;
 }
 
+.win-by-rules {
+  display: flex;
+  flex-direction: column;
+}
+
+.win-by-rules .settings-mod-row {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.win-by-rules .settings-mod-row:first-child {
+  padding-top: 0;
+}
+
+.win-by-rules .settings-mod-row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+
 .mod-chips {
   display: flex;
   flex-wrap: wrap;
@@ -44,7 +64,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 15px;
 }
 
@@ -151,4 +171,44 @@
 .login-api-actions {
   display: flex;
   gap: 8px;
+}
+
+.update-channel {
+  width: auto;
+}
+
+.update-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+
+.update-status .about-version {
+  margin: 0;
+}
+
+.update-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 140px;
+}
+
+.update-progress-track {
+  flex: 1 1 auto;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--panel-3);
+  overflow: hidden;
+}
+
+.update-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--pink);
+  transition: width 0.2s ease;
 }

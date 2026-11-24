@@ -24,3 +24,4 @@ TODO.md
 AGENTS.md
 PATH.txt
 .tmp-db/
+.tmp-build/

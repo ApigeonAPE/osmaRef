@@ -15,8 +15,13 @@ extraResources:
 win:
   icon: build/icon.ico
   target:
-    - zip
+    - nsis
   artifactName: ${productName}-${version}-${arch}.${ext}
+publish:
+  - provider: github
+    owner: ApigeonAPE
+    repo: osmaRef
+    releaseType: release
 nsis:
   oneClick: false
   perMachine: false

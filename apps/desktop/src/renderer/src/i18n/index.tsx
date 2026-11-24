@@ -4,11 +4,11 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
   type ReactNode,
 } from 'react';
 import type { LanguageSetting } from '@osmaref/contracts';
 import { zhCN } from './messages';
+import { useSettings } from '../settings';
 
 export type ResolvedLanguage = 'en' | 'zh-CN';
 
@@ -30,22 +30,8 @@ export function useI18n(): I18n {
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [setting, setSetting] = useState<LanguageSetting>('auto');
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const settings = await window.osmaRef.app.getSettings();
-        if (!cancelled) setSetting(settings.language ?? 'auto');
-      } catch {
-        // Fall back to automatic detection when the bridge is unavailable.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { settings, save } = useSettings();
+  const setting = settings.language;
 
   const language = useMemo<ResolvedLanguage>(() => resolveLanguage(setting), [setting]);
 
@@ -54,14 +40,16 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     document.documentElement.dataset.language = language;
   }, [language]);
 
-  const setLanguage = useCallback(async (next: LanguageSetting) => {
-    setSetting(next);
-    try {
-      await window.osmaRef.app.saveSettings({ language: next });
-    } catch {
-      // Keep the in-memory choice even if the write fails.
-    }
-  }, []);
+  const setLanguage = useCallback(
+    async (next: LanguageSetting) => {
+      try {
+        await save({ language: next });
+      } catch {
+        // Keep the in-memory choice even if the write fails.
+      }
+    },
+    [save],
+  );
 
   const t = useCallback(
     (source: string, params?: Params) => {

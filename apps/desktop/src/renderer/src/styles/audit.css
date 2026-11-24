@@ -202,7 +202,7 @@
   border: 1px solid var(--line-soft);
   border-radius: 999px;
   background: var(--panel-2);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .match-info-team.red {

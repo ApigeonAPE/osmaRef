@@ -202,7 +202,7 @@
   color: var(--text);
   border-radius: var(--radius-sm);
   padding: 7px 0;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.8rem;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
@@ -317,7 +317,7 @@
   background: var(--pink-soft);
   color: var(--pink-text);
   font-size: 0.74rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .pool-list {

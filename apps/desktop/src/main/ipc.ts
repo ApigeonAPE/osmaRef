@@ -32,6 +32,7 @@ import type { TournamentImporter } from './importer';
 import type { AppLogger } from './logger';
 import type { WinByStore } from './winby-store';
 import type { CoverCache } from './covers';
+import type { UpdateManager } from './update';
 import { exportRuntimeLog, exportSessionLog } from './log-export';
 
 export interface IpcContext {
@@ -41,6 +42,7 @@ export interface IpcContext {
   connections: ConnectionManager;
   importer: TournamentImporter;
   covers: CoverCache;
+  updates: UpdateManager;
   winby: WinByStore;
   logger: AppLogger;
   getWindow: () => BrowserWindow | null;
@@ -117,6 +119,10 @@ export function registerIpc(ctx: IpcContext): void {
     ctx.logger.getDiagnostics(typeof limit === 'number' ? limit : 200),
   );
   handle(IPC.appExportRuntimeLog, () => exportRuntimeLog(ctx.store));
+  handle(IPC.appUpdateSupported, () => ctx.updates.isSupported());
+  handle(IPC.appUpdateCheck, () => ctx.updates.check());
+  handle(IPC.appUpdateDownload, () => ctx.updates.download());
+  handle(IPC.appUpdateInstall, () => ctx.updates.install());
 
   handle(IPC.winbyList, () => ctx.winby.list());
   handle(IPC.winbyImportFile, async () => {

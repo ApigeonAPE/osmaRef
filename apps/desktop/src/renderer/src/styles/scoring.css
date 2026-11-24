@@ -70,13 +70,13 @@
 
 .flat-score {
   font-size: 1.6rem;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1;
   flex: none;
 }
 
 .flat-dash {
-  font-weight: 800;
+  font-weight: 700;
   font-size: 1.6rem;
   color: var(--muted);
 }
@@ -227,7 +227,7 @@
 }
 
 .result-diff-value {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .result-diff-winner.red {
@@ -277,7 +277,7 @@
 }
 
 .team-card-name {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .team-card.red .team-card-name {

@@ -1429,7 +1429,7 @@ export function WorkbenchPage({
                         ) : null}
                       </div>
                       <input
-                        className="pool-search"
+                        className="compact-input pool-search"
                         value={poolSearch}
                         onChange={(event) => setPoolSearch(event.target.value)}
                         placeholder={t('Search mappool')}

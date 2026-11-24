@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import type { Settings } from '@osmaref/contracts';
 import { useToast } from '../toast';
 import { useModel } from '../useOsmaRef';
+import { useSettings } from '../settings';
 import { useI18n } from '../i18n';
 import { Section, Field } from '../ui';
 
@@ -14,8 +14,8 @@ export function LoginPage() {
   const model = useModel();
   const { t } = useI18n();
   const toast = useToast();
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [username, setUsername] = useState('');
+  const { settings, save } = useSettings();
+  const [username, setUsername] = useState(settings.ircUsername);
   const [password, setPassword] = useState('');
   const [hasPassword, setHasPassword] = useState(false);
   const [busy, setBusy] = useState<
@@ -31,9 +31,6 @@ export function LoginPage() {
 
   useEffect(() => {
     void (async () => {
-      const loaded = await window.osmaRef.app.getSettings();
-      setSettings(loaded);
-      setUsername(loaded.ircUsername);
       setHasPassword(await window.osmaRef.app.hasIrcPassword());
       await model.refreshAll();
     })();
@@ -75,8 +72,7 @@ export function LoginPage() {
     if (!name || (!password && !hasPassword)) return;
     setBusy('irc');
     try {
-      const saved = await window.osmaRef.app.saveSettings({ ircUsername: name });
-      setSettings(saved);
+      await save({ ircUsername: name });
       await window.osmaRef.connection.connectIrc({
         username: name,
         password: password || undefined,

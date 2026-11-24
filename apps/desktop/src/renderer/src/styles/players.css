@@ -79,7 +79,7 @@
 
 .player-name {
   color: var(--text);
-  font-weight: 600;
+  font-weight: 700;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

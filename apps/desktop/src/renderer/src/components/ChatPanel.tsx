@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage } from '@osmaref/contracts';
 import { useModel } from '../useOsmaRef';
 import { useI18n } from '../i18n';
+import { useSettings } from '../settings';
 import { formatTime } from '../ui';
 
 export function ChatPanel({ sessionId, transport }: { sessionId: string; transport: 'irc' | 'referee_hub' }) {
@@ -14,11 +15,7 @@ export function ChatPanel({ sessionId, transport }: { sessionId: string; transpo
   const [inputHistory, setInputHistory] = useState<string[]>([]);
   const inputHistoryIndex = useRef(-1);
   const inputDraft = useRef('');
-  const [appearance, setAppearance] = useState({
-    fontFamily: 'Cascadia Mono, Consolas, monospace',
-    fontSize: 13,
-    lineHeight: 1.35,
-  });
+  const { settings } = useSettings();
   const listRef = useRef<HTMLDivElement | null>(null);
   const stickToBottom = useRef(true);
   // IRC sessions chat over Bancho; hub sessions chat over the osu!web API.
@@ -26,16 +23,6 @@ export function ChatPanel({ sessionId, transport }: { sessionId: string; transpo
     model.state?.connections.find(
       (entry) => entry.kind === (transport === 'irc' ? 'irc' : 'chat'),
     )?.status === 'connected';
-
-  useEffect(() => {
-    void window.osmaRef.app.getSettings().then((settings) => {
-      setAppearance({
-        fontFamily: settings.chatFontFamily,
-        fontSize: settings.chatFontSize,
-        lineHeight: settings.chatLineHeight,
-      });
-    });
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -171,9 +158,9 @@ export function ChatPanel({ sessionId, transport }: { sessionId: string; transpo
               message.username === 'BanchoBot' ? ' bot' : ''
             }${message.self ? ' self' : ''}`}
             style={{
-              fontFamily: appearance.fontFamily,
-              fontSize: `${appearance.fontSize}px`,
-              lineHeight: appearance.lineHeight,
+              fontFamily: settings.chatFontFamily,
+              fontSize: `${settings.chatFontSize}px`,
+              lineHeight: settings.chatLineHeight,
             }}
           >
             <span style={{ minWidth: 0 }}>

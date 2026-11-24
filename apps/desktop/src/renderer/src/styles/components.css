@@ -236,7 +236,7 @@
 }
 
 .row-actions > input,
-.row-actions > button {
+.row-actions > button:not(.small) {
   height: 34px;
   padding-top: 0;
   padding-bottom: 0;

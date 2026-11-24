@@ -3,13 +3,15 @@ import {
   DEFAULT_SETTINGS,
   type LanguageSetting,
   type Settings,
+  type UpdateChannel,
   type WinByRule,
 } from '@osmaref/contracts';
-import harmonyLicense from '@assets/HarmonyOS_Sans/LICENSE.txt?raw';
+import harmonyLicense from '@assets/HarmonyOS_Sans_SC/LICENSE.txt?raw';
 import osmaRefLicense from '@assets/LICENSE?raw';
 import { ModSelector } from '../components/ModSelector';
 import { useToast } from '../toast';
 import { useModel } from '../useOsmaRef';
+import { useSettings } from '../settings';
 import { useI18n } from '../i18n';
 import { Field, Modal, Section, formatDateTime } from '../ui';
 
@@ -17,7 +19,8 @@ export function SettingsPage() {
   const model = useModel();
   const { t, setting, setLanguage } = useI18n();
   const toast = useToast();
-  const [settings, setSettings] = useState<Settings | null>(null);
+  const { settings: savedSettings, save: saveSettings } = useSettings();
+  const [settings, setSettings] = useState<Settings>(savedSettings);
   const [version, setVersion] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [freemodOpen, setFreemodOpen] = useState(false);
@@ -25,24 +28,55 @@ export function SettingsPage() {
   const [licenseTab, setLicenseTab] = useState<'harmony' | 'osmaref'>('osmaref');
   const [logsOpen, setLogsOpen] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [updateSupported, setUpdateSupported] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [update, setUpdate] = useState<{
+    version: string;
+    size: number;
+    notes: string | null;
+  } | null>(null);
 
   useEffect(() => {
     void (async () => {
-      setSettings(await window.osmaRef.app.getSettings());
       setVersion(await window.osmaRef.app.getVersion());
+      setUpdateSupported(await window.osmaRef.app.isUpdateSupported());
       await model.refreshAll();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(
+    () =>
+      window.osmaRef.app.onEvent((event) => {
+        if (event.type === 'update_available') {
+          setUpdate({ version: event.version, size: event.size, notes: event.notes });
+          setDownloaded(false);
+          setProgress(null);
+        } else if (event.type === 'update_progress') {
+          setDownloading(true);
+          setProgress(event.percent);
+        } else if (event.type === 'update_downloaded') {
+          setDownloading(false);
+          setDownloaded(true);
+          setProgress(100);
+        } else if (event.type === 'update_error') {
+          setDownloading(false);
+          toast.error(event.message);
+        }
+      }),
+    [toast],
+  );
+
   const patch = (key: keyof Settings, value: unknown) => {
-    setSettings((previous) => (previous ? { ...previous, [key]: value } : previous));
+    setSettings((previous) => ({ ...previous, [key]: value }));
   };
 
   const save = async () => {
-    if (!settings) return;
     try {
-      const next = await window.osmaRef.app.saveSettings(settings);
+      const next = await saveSettings(settings);
       setSettings(next);
       toast.success(t('settings saved'));
     } catch (cause) {
@@ -53,7 +87,7 @@ export function SettingsPage() {
   /** Puts the hidden IRC endpoint section back on Bancho's official defaults. */
   const restoreIrcDefaults = async () => {
     try {
-      const next = await window.osmaRef.app.saveSettings({
+      const next = await saveSettings({
         ircHost: DEFAULT_SETTINGS.ircHost,
         ircPort: DEFAULT_SETTINGS.ircPort,
         ircUseTls: DEFAULT_SETTINGS.ircUseTls,
@@ -72,13 +106,53 @@ export function SettingsPage() {
 
   const restoreHubDefaults = async () => {
     try {
-      const next = await window.osmaRef.app.saveSettings({
+      const next = await saveSettings({
         hubBaseUrl: DEFAULT_SETTINGS.hubBaseUrl,
         chatWebsocketUrl: DEFAULT_SETTINGS.chatWebsocketUrl,
       });
       setSettings(next);
       toast.success(t('Referee Hub settings restored'));
     } catch (cause) {
+      toast.error(errorText(cause));
+    }
+  };
+
+  const changeUpdateChannel = async (channel: UpdateChannel) => {
+    patch('updateChannel', channel);
+    try {
+      setSettings(await saveSettings({ updateChannel: channel }));
+    } catch (cause) {
+      toast.error(errorText(cause));
+    }
+  };
+
+  const checkUpdate = async () => {
+    setChecking(true);
+    try {
+      const result = await window.osmaRef.app.checkUpdate();
+      if (result.status === 'none') {
+        toast.info(t('osmaRef is up to date'));
+      } else if (result.status === 'available') {
+        setUpdate(result);
+        setDownloaded(false);
+        setProgress(null);
+      } else {
+        toast.info(t('This build does not support updates'));
+      }
+    } catch (cause) {
+      toast.error(errorText(cause));
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const downloadUpdate = async () => {
+    setDownloading(true);
+    setProgress(0);
+    try {
+      await window.osmaRef.app.downloadUpdate();
+    } catch (cause) {
+      setDownloading(false);
       toast.error(errorText(cause));
     }
   };
@@ -94,8 +168,6 @@ export function SettingsPage() {
       setBusy(null);
     }
   };
-
-  if (!settings) return <div className="page">{t('loading settings…')}</div>;
 
   return (
     <div className="page">
@@ -406,7 +478,58 @@ export function SettingsPage() {
             A-pigeon
           </a>
         </p>
+        {update ? (
+          <div className="update-status">
+            <p className="about-version">
+              {`v${update.version}`}
+              {update.size ? ` · ${formatBytes(update.size)}` : ''}
+            </p>
+            {downloading ? (
+              <div className="update-progress">
+                <span>{`${Math.round(progress ?? 0)}%`}</span>
+                <div className="update-progress-track">
+                  <div
+                    className="update-progress-fill"
+                    style={{ width: `${progress ?? 0}%` }}
+                  />
+                </div>
+              </div>
+            ) : downloaded ? (
+              <button
+                type="button"
+                className="primary small"
+                onClick={() => void window.osmaRef.app.installUpdate()}
+              >
+                {t('Restart to install')}
+              </button>
+            ) : (
+              <button type="button" className="primary small" onClick={() => void downloadUpdate()}>
+                {t('Download')}
+              </button>
+            )}
+          </div>
+        ) : null}
         <div className="row-actions">
+          {updateSupported ? (
+            <select
+              className="update-channel"
+              value={settings.updateChannel}
+              onChange={(event) => void changeUpdateChannel(event.target.value as UpdateChannel)}
+            >
+              <option value="release">{t('Release')}</option>
+              <option value="preview">{t('Preview')}</option>
+            </select>
+          ) : null}
+          {updateSupported ? (
+            <button
+              type="button"
+              className="ghost small"
+              disabled={checking}
+              onClick={() => void checkUpdate()}
+            >
+              {checking ? t('Checking…') : t('Check for updates')}
+            </button>
+          ) : null}
           <button type="button" className="ghost small" onClick={() => setLicenseOpen(true)}>
             {t('View licenses')}
           </button>
@@ -448,7 +571,7 @@ export function SettingsPage() {
               className={`ghost small${licenseTab === 'harmony' ? ' active' : ''}`}
               onClick={() => setLicenseTab('harmony')}
             >
-              HarmonyOS Sans
+              HarmonyOS Sans SC
             </button>
           </div>
           <pre className="license-text">
@@ -566,4 +689,16 @@ function WinBySection() {
 
 function errorText(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let index = 0;
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024;
+    index += 1;
+  }
+  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 }

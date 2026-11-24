@@ -15,6 +15,7 @@ import {
   type SessionEvent,
   type Settings,
   type Tournament,
+  type UpdateCheckResult,
   type WinByRule,
 } from '@osmaref/contracts';
 
@@ -35,6 +36,10 @@ const api: DesktopApi = {
     getConnectionDiagnostics: (limit) =>
       invoke<LogEntry[]>(IPC.appConnectionDiagnostics, limit),
     exportRuntimeLog: () => invoke<string | null>(IPC.appExportRuntimeLog),
+    isUpdateSupported: () => invoke<boolean>(IPC.appUpdateSupported),
+    checkUpdate: () => invoke<UpdateCheckResult>(IPC.appUpdateCheck),
+    downloadUpdate: () => invoke<void>(IPC.appUpdateDownload),
+    installUpdate: () => invoke<void>(IPC.appUpdateInstall),
     onEvent: (listener) => {
       const handler = (_event: unknown, payload: DesktopEvent) => listener(payload);
       ipcRenderer.on(IPC.event, handler);

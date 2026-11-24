@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, protocol, session, shell } from 'electron';
 import { join } from 'node:path';
 import { writeFileSync } from 'node:fs';
+import { IPC } from '@osmaref/contracts';
 import { createAppStore } from './store';
 import { SettingsStore } from './settings';
 import { WinByStore } from './winby-store';
@@ -11,6 +12,7 @@ import { TournamentImporter } from './importer';
 import { AppLogger } from './logger';
 import { registerIpc } from './ipc';
 import { CoverCache, COVER_SCHEME } from './covers';
+import { UpdateManager, updatesSupported } from './update';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -90,6 +92,12 @@ async function bootstrap(): Promise<void> {
   const covers = new CoverCache(join(userData, 'covers'));
   covers.register();
 
+  const updates = new UpdateManager(logger, settings, (event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC.event, event);
+    }
+  });
+
   registerIpc({
     store,
     settings,
@@ -97,12 +105,25 @@ async function bootstrap(): Promise<void> {
     connections,
     importer,
     covers,
+    updates,
     winby,
     logger,
     getWindow: () => mainWindow,
   });
 
   createWindow();
+
+  if (updatesSupported) {
+    setTimeout(() => {
+      void updates.check().catch((error: unknown) => {
+        logger.runtime(
+          'warn',
+          'update',
+          `startup check failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
+    }, 5_000);
+  }
   logger.runtime(
     'info',
     'app',

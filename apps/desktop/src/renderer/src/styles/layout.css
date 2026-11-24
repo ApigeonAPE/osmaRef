@@ -45,7 +45,7 @@
   background: var(--pink-soft);
   border-color: var(--pink-border);
   color: var(--pink-text);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .sidebar-status {
@@ -147,7 +147,7 @@
 
 .sidebar-login {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text);
 }
 

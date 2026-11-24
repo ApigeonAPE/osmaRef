@@ -112,6 +112,21 @@ export const DesktopEventSchema = z.discriminatedUnion('type', [
     kind: z.enum(['info', 'success', 'error']).default('info'),
     message: z.string().min(1),
   }),
+  z.object({
+    type: z.literal('update_available'),
+    version: z.string().min(1),
+    size: z.number().nonnegative().default(0),
+    notes: z.string().nullable().default(null),
+  }),
+  z.object({
+    type: z.literal('update_progress'),
+    percent: z.number().min(0).max(100),
+    transferred: z.number().nonnegative(),
+    total: z.number().nonnegative(),
+    bytesPerSecond: z.number().nonnegative(),
+  }),
+  z.object({ type: z.literal('update_downloaded') }),
+  z.object({ type: z.literal('update_error'), message: z.string().min(1) }),
 ]);
 export type DesktopEvent = z.infer<typeof DesktopEventSchema>;
 
@@ -171,8 +186,17 @@ export interface BeatmapLookupResult {
   failed: BeatmapLookupFailure[];
 }
 
+export const UpdateChannelSchema = z.enum(['release', 'preview']);
+export type UpdateChannel = z.infer<typeof UpdateChannelSchema>;
+
+export type UpdateCheckResult =
+  | { status: 'unsupported' }
+  | { status: 'none'; version: string }
+  | { status: 'available'; version: string; size: number; notes: string | null };
+
 export interface Settings {
   language: LanguageSetting;
+  updateChannel: UpdateChannel;
   serverBaseUrl: string;
   ircAutoConnect: boolean;
   ircHost: string;
@@ -198,6 +222,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
+  updateChannel: 'release',
   ircAutoConnect: true,
   serverBaseUrl: 'https://osmaref-oauth.a-pigeon.de',
   ircHost: 'irc.ppy.sh',
@@ -261,6 +286,7 @@ const OptionalHttpsUrlSchema = z
 
 export const SettingsPatchSchema = z.object({
   language: LanguageSettingSchema.optional(),
+  updateChannel: UpdateChannelSchema.optional(),
   serverBaseUrl: HttpUrlSchema.optional(),
   ircAutoConnect: z.boolean().optional(),
   ircHost: z.string().min(1).max(255).optional(),
@@ -427,6 +453,11 @@ export interface DesktopApi {
     /** Connection problems for the current run; cleared on restart. */
     getConnectionDiagnostics(limit?: number): Promise<LogEntry[]>;
     exportRuntimeLog(): Promise<string | null>;
+    /** Returns `unsupported` for the portable zip build, which has no updater feed. */
+    isUpdateSupported(): Promise<boolean>;
+    checkUpdate(): Promise<UpdateCheckResult>;
+    downloadUpdate(): Promise<void>;
+    installUpdate(): Promise<void>;
     onEvent(listener: (event: DesktopEvent) => void): () => void;
   };
   tournaments: {
@@ -554,6 +585,10 @@ export const IPC = {
   appLogs: 'app:logs',
   appConnectionDiagnostics: 'app:connection-diagnostics',
   appExportRuntimeLog: 'app:export-runtime-log',
+  appUpdateCheck: 'app:update-check',
+  appUpdateSupported: 'app:update-supported',
+  appUpdateDownload: 'app:update-download',
+  appUpdateInstall: 'app:update-install',
 
   tournamentsList: 'tournaments:list',
   tournamentsGet: 'tournaments:get',

@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import type { MatchSession } from '@osmaref/contracts';
 import { useI18n } from '../i18n';
-import { Field, Modal } from '../ui';
+import { Modal } from '../ui';
 
 export function JoinRoomDialog({
   onClose,
@@ -23,7 +23,7 @@ export function JoinRoomDialog({
     transport === 'irc' ? channel.trim().length > 0 : /^\d+$/.test(roomId.trim());
 
   const submit = async () => {
-    if (!canJoin) return;
+    if (!canJoin || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -40,6 +40,18 @@ export function JoinRoomDialog({
       setBusy(false);
     }
   };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    void submit();
+  };
+
+  const joinButton = (
+    <button type="button" className="primary" disabled={busy || !canJoin} onClick={() => void submit()}>
+      {busy ? t('joining…') : t('Join')}
+    </button>
+  );
 
   return (
     <Modal title={t('Join room')} onClose={onClose}>
@@ -62,34 +74,37 @@ export function JoinRoomDialog({
         </div>
 
         {transport === 'irc' ? (
-          <Field label={t('Channel')} wide>
-            <input
-              value={channel}
-              onChange={(event) => setChannel(event.target.value)}
-              placeholder="#mp_xxx / #osu / username"
-              autoFocus
-            />
-          </Field>
+          <div className="field field-wide">
+            <span className="field-label">{t('Channel')}</span>
+            <div className="join-row">
+              <input
+                value={channel}
+                onChange={(event) => setChannel(event.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder="#mp_xxx / #osu / username"
+                autoFocus
+              />
+              {joinButton}
+            </div>
+          </div>
         ) : (
-          <>
-            <Field label={t('Room ID')} wide>
+          <div className="field field-wide">
+            <span className="field-label">{t('Room ID')}</span>
+            <div className="join-row">
               <input
                 value={roomId}
                 onChange={(event) => setRoomId(event.target.value.replace(/[^\d]/g, ''))}
+                onKeyDown={onKeyDown}
                 inputMode="numeric"
                 placeholder="123456"
                 autoFocus
               />
-            </Field>
-          </>
+              {joinButton}
+            </div>
+          </div>
         )}
       </div>
       {error ? <div className="banner error">{error}</div> : null}
-      <div className="row-actions join-actions">
-        <button type="button" className="primary" disabled={busy || !canJoin} onClick={() => void submit()}>
-          {busy ? t('joining…') : t('Join')}
-        </button>
-      </div>
     </Modal>
   );
 }

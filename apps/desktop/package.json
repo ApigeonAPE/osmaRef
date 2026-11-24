@@ -1,6 +1,6 @@
 {
   "name": "@osmaref/desktop",
-  "version": "0.1.6",
+  "version": "0.1.7-preview",
   "private": true,
   "description": "osu! referee client",
   "author": "A-pigeon",
@@ -10,8 +10,10 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build && node scripts/bundle-electron.mjs",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
-    "package": "npm run build && electron-builder --win zip --config electron-builder.yml",
-    "package:installer": "npm run build && electron-builder --win nsis --config electron-builder.yml"
+    "package": "npm run build && electron-builder --win zip --config electron-builder.yml --publish never",
+    "package:installer": "npm run build && electron-builder --win nsis --config electron-builder.yml --publish never",
+    "package:release": "npm run build && electron-builder --win nsis --config electron-builder.yml --publish always",
+    "package:preview": "npm run build && electron-builder --win nsis --config electron-builder.yml --publish always -c.publish.channel=preview -c.publish.releaseType=prerelease"
   },
   "dependencies": {},
   "devDependencies": {
