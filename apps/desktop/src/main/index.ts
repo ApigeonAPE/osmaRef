@@ -4,6 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { IPC } from '@osmaref/contracts';
 import { createAppStore } from './store';
 import { SettingsStore } from './settings';
+import { WindowStateStore } from './window-state';
 import { WinByStore } from './winby-store';
 import { TokenVault } from './token-vault';
 import { ServerClient } from './server-client';
@@ -15,6 +16,7 @@ import { CoverCache, COVER_SCHEME } from './covers';
 import { UpdateManager, updatesSupported } from './update';
 
 let mainWindow: BrowserWindow | null = null;
+let windowState: WindowStateStore | null = null;
 
 // Keep all writable state under a stable, plain directory. Chromium caches do not
 // belong in a roaming profile, and the scoped package name is a poor Windows path.
@@ -66,6 +68,8 @@ async function bootstrap(): Promise<void> {
   const userData = app.getPath('userData');
   const store = await createAppStore(join(userData, 'data'));
   const settings = new SettingsStore(join(userData, 'config'));
+  const windowStateStore = new WindowStateStore(join(userData, 'config'));
+  windowState = windowStateStore;
   const winby = new WinByStore(join(userData, 'config'));
   const vault = new TokenVault(join(userData, 'credentials'));
   await settings.init();
@@ -150,11 +154,11 @@ async function bootstrap(): Promise<void> {
 }
 
 function createWindow(): void {
+  const restored = windowState;
   const window = new BrowserWindow({
-    width: 1440,
-    height: 900,
-    minWidth: 1080,
-    minHeight: 680,
+    ...(restored ? restored.options() : { width: 1440, height: 900 }),
+    minWidth: 1280,
+    minHeight: 720,
     show: false,
     backgroundColor: '#141013',
     title: 'osmaRef',
@@ -173,7 +177,11 @@ function createWindow(): void {
 
   mainWindow = window;
 
-  window.once('ready-to-show', () => window.show());
+  window.once('ready-to-show', () => {
+    if (restored?.isMaximized()) window.maximize();
+    window.show();
+  });
+  restored?.track(window);
   window.on('closed', () => {
     if (mainWindow === window) mainWindow = null;
   });
