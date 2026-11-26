@@ -445,11 +445,27 @@
   background: var(--pink-soft);
 }
 
+.slot-editor-list {
+  display: grid;
+  grid-template-columns: max-content 96px 130px 130px minmax(0, 1fr) 34px;
+  gap: 10px 8px;
+}
+
 .slot-editor {
   display: grid;
-  grid-template-columns: 96px 80px 130px 130px minmax(0, 1fr) 34px;
-  gap: 8px;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
+}
+
+.slot-editor > .slot-tag {
+  justify-self: center;
+  min-width: 0;
+  margin-right: 0;
+}
+
+.slot-editor > .slot-tag:empty {
+  visibility: hidden;
 }
 
 .slot-editor > input,

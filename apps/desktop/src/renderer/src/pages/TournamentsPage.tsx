@@ -5,9 +5,8 @@ import {
   PLATFORM_TEAM_MODES,
   PLATFORM_WIN_CONDITIONS,
   TOURNAMENT_MODES,
-  composeSlotLabel,
+  assignSlotLabels,
   normalizeRoomMode,
-  slotLabelSequence,
   type Platform,
   type RoomWinCondition,
   matchTeamIds,
@@ -37,6 +36,12 @@ const RULESET_LABELS = ['osu!', 'osu!taiko', 'osu!catch', 'osu!mania'];
 
 type WorkspaceView = 'basics' | 'teams' | 'stages' | 'webhooks' | 'automation';
 type StageView = 'groups' | 'mappool' | 'flow' | 'winby' | 'matches';
+
+const SLOT_CATEGORY_PATTERN = /^[A-Z0-9]{1,8}$/;
+
+function cleanSlotCategory(raw: string): string {
+  return raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+}
 
 const WORKSPACE_VIEWS: { id: WorkspaceView; label: string }[] = [
   { id: 'basics', label: 'Basics' },
@@ -221,9 +226,14 @@ export function TournamentsPage() {
       setWorkspaceView('stages');
       return;
     }
-    const incompleteStage = draft.stages.find((stage) =>
+    const payload = structuredClone(draft);
+    for (const stage of payload.stages) {
+      for (const slot of stage.slots) slot.category = cleanSlotCategory(slot.category);
+      assignSlotLabels(stage.slots);
+    }
+    const incompleteStage = payload.stages.find((stage) =>
       stage.slots.some(
-        (slot) => !slot.category.trim() || !slotLabelSequence(slot.label) || slot.beatmapId <= 0,
+        (slot) => !SLOT_CATEGORY_PATTERN.test(slot.category) || slot.beatmapId <= 0,
       ),
     );
     if (incompleteStage) {
@@ -234,7 +244,7 @@ export function TournamentsPage() {
     }
     setBusy(true);
     try {
-      const saved = await model.saveTournament(structuredClone(draft));
+      const saved = await model.saveTournament(payload);
       setDraft(structuredClone(saved));
       setDirty(false);
       toast.success(t('saved as revision {revision}', { revision: saved.revision }));
@@ -1273,17 +1283,19 @@ function PoolEditor({
   };
 
   const setSlotCategory = (index: number, raw: string) => {
-    const category = raw.toUpperCase();
-    patchSlot(index, (target) => {
-      target.category = category;
-      target.label = composeSlotLabel(category, slotLabelSequence(target.label));
+    const category = cleanSlotCategory(raw);
+    edit((next) => {
+      const slots = next.stages[stageIndex]!.slots;
+      slots[index]!.category = category;
+      assignSlotLabels(slots);
     });
   };
 
-  const setSlotSequence = (index: number, raw: string) => {
-    const sequence = raw.replace(/\D/g, '');
-    patchSlot(index, (target) => {
-      target.label = composeSlotLabel(target.category, sequence);
+  const removeSlot = (index: number) => {
+    edit((next) => {
+      const slots = next.stages[stageIndex]!.slots;
+      slots.splice(index, 1);
+      assignSlotLabels(slots);
     });
   };
 
@@ -1307,20 +1319,13 @@ function PoolEditor({
         <div className="slot-editor-list">
           {stage.slots.map((slot, index) => (
             <div className="slot-editor" key={slot.id}>
+              <span className="slot-tag">{slot.label}</span>
               <input
                 value={slot.category}
                 maxLength={8}
                 placeholder={t('Type')}
-                aria-invalid={!slot.category.trim()}
+                aria-invalid={!SLOT_CATEGORY_PATTERN.test(slot.category)}
                 onChange={(event) => setSlotCategory(index, event.target.value)}
-              />
-              <input
-                value={slotLabelSequence(slot.label)}
-                inputMode="numeric"
-                maxLength={4}
-                placeholder={t('Number')}
-                aria-invalid={!slotLabelSequence(slot.label)}
-                onChange={(event) => setSlotSequence(index, event.target.value)}
               />
               <BeatmapIdField
                 beatmapId={slot.beatmapId}
@@ -1380,11 +1385,7 @@ function PoolEditor({
               <button
                 type="button"
                 className="ghost small danger"
-                onClick={() =>
-                  edit((next) => {
-                    next.stages[stageIndex]!.slots.splice(index, 1);
-                  })
-                }
+                onClick={() => removeSlot(index)}
               >
                 ×
               </button>

@@ -81,11 +81,11 @@ describe('osu! tournament bracket import', () => {
       'RC1',
       'RC2',
       'RC3',
-      'SV1',
+      'SV',
     ]);
 
     const semifinal = tournament.stages[1]!;
-    const tiebreaker = semifinal.slots.find((slot) => slot.label === 'TB1');
+    const tiebreaker = semifinal.slots.find((slot) => slot.label === 'TB');
     expect(tiebreaker?.category).toBe('TB');
     expect(tiebreaker?.requiredMods).toEqual([]);
   });
@@ -225,7 +225,7 @@ describe('bracket conversion edge cases', () => {
     const slots = tournament.stages[0]!.slots;
     expect(slots[0]?.requiredMods).toEqual(['HD']);
     expect(slots[1]?.freestyle).toBe(true);
-    expect(slots[2]?.label).toBe('TB1');
+    expect(slots[2]?.label).toBe('TB');
     expect(parseTournament(tournament).success).toBe(true);
   });
 
@@ -248,7 +248,7 @@ describe('bracket conversion edge cases', () => {
       { ID: 2, Mods: '2' },
     ];
     const { tournament, notes } = convertBracketToTournament(document);
-    expect(tournament.stages[0]?.slots.map((slot) => slot.label)).toEqual(['4K1', 'NM1']);
+    expect(tournament.stages[0]?.slots.map((slot) => slot.label)).toEqual(['4K', 'NM']);
     expect(notes.join('\n')).toMatch(/normalised/);
     expect(parseTournament(tournament).success).toBe(true);
   });
@@ -263,7 +263,7 @@ describe('bracket conversion edge cases', () => {
     ];
     const { tournament, notes } = convertBracketToTournament(document);
     const slots = tournament.stages[0]!.slots;
-    expect(slots.map((slot) => slot.label)).toEqual(['4K1', '4K2', '7K1', 'TB1']);
+    expect(slots.map((slot) => slot.label)).toEqual(['4K1', '4K2', '7K', 'TB']);
     expect(slots.map((slot) => slot.category)).toEqual(['4K', '4K', '7K', 'TB']);
     expect(notes.join('\n')).not.toMatch(/normalised/);
     expect(parseTournament(tournament).success).toBe(true);
@@ -341,7 +341,7 @@ describe('bracket files produced by the osu! client', () => {
     expect(matches[0].teamBlueId).toBe(1);
     expect(matches[0].scheduledAt).toBe('2026-10-25T07:00:00.000Z');
     expect(matches[0].result).toEqual({ scoreRed: 5, scoreBlue: 0 });
-    expect(tournament.stages[0]?.slots.map((slot) => slot.label)).toEqual(['NM1', 'TB1']);
+    expect(tournament.stages[0]?.slots.map((slot) => slot.label)).toEqual(['NM', 'TB']);
     expect(notes.join('\n')).toMatch(/1 bracket match\(es\) have undecided teams/);
   });
 

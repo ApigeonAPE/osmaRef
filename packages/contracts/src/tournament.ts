@@ -650,6 +650,30 @@ export function composeSlotLabel(category: string, sequence: string): string {
   return `${category}${sequence}`;
 }
 
+/**
+ * Rebuilds every label from its category in list order: `1..n` per category,
+ * except a category that holds a single beatmap, which drops the number so
+ * `TB` stays `TB` instead of becoming `TB1`. Referees only type the category.
+ */
+export function assignSlotLabels(slots: MappoolSlot[]): void {
+  const totals = new Map<string, number>();
+  for (const slot of slots) {
+    const category = slot.category.trim().toUpperCase();
+    totals.set(category, (totals.get(category) ?? 0) + 1);
+  }
+  const seen = new Map<string, number>();
+  for (const slot of slots) {
+    const category = slot.category.trim().toUpperCase();
+    const index = (seen.get(category) ?? 0) + 1;
+    seen.set(category, index);
+    if (!category) {
+      slot.label = '';
+      continue;
+    }
+    slot.label = totals.get(category) === 1 ? category : `${category}${index}`;
+  }
+}
+
 
 export const KNOWN_MODS = [
   'NM',

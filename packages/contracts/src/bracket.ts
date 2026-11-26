@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { BUILTIN_WIN_BY_RULE_ID } from './winby';
 import {
   TournamentSchema,
+  assignSlotLabels,
   createEmptyTournament,
   createTournamentId,
   emptyAutomationMessages,
@@ -399,9 +400,7 @@ function buildSlots(
   notes: string[],
 ): MappoolSlot[] {
   const slots: MappoolSlot[] = [];
-  const usedLabels = new Set<string>();
   const usedBeatmaps = new Set<number>();
-  const labelCounts = new Map<string, number>();
 
   for (const raw of beatmaps) {
     const beatmapId = raw.BeatmapInfo?.OnlineID ?? raw.ID;
@@ -415,38 +414,18 @@ function buildSlots(
     }
 
     const rawCode = (raw.Mods ?? '').trim().toUpperCase();
-    const code = sanitizeCategory(rawCode);
-    if (rawCode && code !== rawCode) {
+    const category = sanitizeCategory(rawCode);
+    if (rawCode && category !== rawCode) {
       notes.push(
-        `Stage "${stageName}" uses mod code "${rawCode}"; it was normalised to "${code}".`,
+        `Stage "${stageName}" uses mod code "${rawCode}"; it was normalised to "${category}".`,
       );
     }
-    const next = (labelCounts.get(code) ?? 0) + 1;
-    const limit = 99;
-    if (next > limit) {
-      notes.push(
-        `Stage "${stageName}" has more than ${limit} "${code}" beatmaps; the extras were skipped.`,
-      );
-      continue;
-    }
-    labelCounts.set(code, next);
-    const label = `${code}${next}`;
-    const category = code;
-
-    const normalizedLabel = label.toUpperCase();
-    if (usedLabels.has(normalizedLabel)) {
-      notes.push(
-        `Stage "${stageName}" would have produced the duplicate slot label "${label}"; the beatmap was skipped.`,
-      );
-      continue;
-    }
-    usedLabels.add(normalizedLabel);
     usedBeatmaps.add(beatmapId);
 
     const slotRuleset = raw.BeatmapInfo?.Ruleset?.OnlineID;
     slots.push({
-      id: `${stageId}_${label.toLowerCase()}`,
-      label,
+      id: '',
+      label: '',
       category,
       beatmapId,
       beatmap: null,
@@ -458,6 +437,14 @@ function buildSlots(
             : MODE_RULESET[mode],
       ...modsForCategory(category),
     });
+  }
+
+  // Labels come from categories: 1..n per category, a lone beatmap keeps the
+  // bare category (`TB`, not `TB1`). Ids follow the final label.
+  assignSlotLabels(slots);
+  const usedIds = new Set<string>();
+  for (const slot of slots) {
+    slot.id = uniqueId(`${stageId}_${slot.label.toLowerCase()}`, usedIds);
   }
   return slots;
 }

@@ -252,7 +252,6 @@ export const zhCN: Record<string, string> = {
   '+ Slot': '+ 槽位',
   Native: '原始模式',
   Type: '类型',
-  Number: '序号',
   protect: '保护',
   ban: '禁用',
   pick: '选图',
