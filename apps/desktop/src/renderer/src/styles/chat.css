@@ -88,6 +88,27 @@
   cursor: pointer;
 }
 
+.chat-slot {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  border: 1px solid var(--pink-border);
+  border-radius: var(--radius-xs);
+  background: var(--pink-soft);
+  color: var(--pink-text);
+  font: inherit;
+  font-weight: 700;
+  line-height: inherit;
+  text-transform: uppercase;
+  white-space: nowrap;
+  vertical-align: baseline;
+  cursor: pointer;
+}
+
+.chat-slot:hover {
+  background: var(--pink-a4);
+}
+
 .chat-send {
   width: 34px;
   height: 34px;

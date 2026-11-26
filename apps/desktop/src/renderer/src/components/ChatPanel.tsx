@@ -1,11 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ChatMessage } from '@osmaref/contracts';
+import type { ChatMessage, MappoolSlot } from '@osmaref/contracts';
+import { buildSlotMatcher } from '../chat-slots';
 import { useModel } from '../useOsmaRef';
 import { useI18n } from '../i18n';
 import { useSettings } from '../settings';
 import { formatTime } from '../ui';
 
-export function ChatPanel({ sessionId, transport }: { sessionId: string; transport: 'irc' | 'referee_hub' }) {
+export function ChatPanel({
+  sessionId,
+  transport,
+  slots,
+  onSelectSlot,
+  slotHint,
+}: {
+  sessionId: string;
+  transport: 'irc' | 'referee_hub';
+  slots?: MappoolSlot[];
+  onSelectSlot?: (slot: MappoolSlot) => void;
+  slotHint?: (slot: MappoolSlot) => string;
+}) {
   const model = useModel();
   const { t } = useI18n();
   const [text, setText] = useState('');
@@ -18,6 +31,7 @@ export function ChatPanel({ sessionId, transport }: { sessionId: string; transpo
   const { settings } = useSettings();
   const listRef = useRef<HTMLDivElement | null>(null);
   const stickToBottom = useRef(true);
+  const splitText = useMemo(() => buildSlotMatcher(slots ?? []), [slots]);
   // IRC sessions chat over Bancho; hub sessions chat over the osu!web API.
   const chatConnected =
     model.state?.connections.find(
@@ -169,7 +183,27 @@ export function ChatPanel({ sessionId, transport }: { sessionId: string; transpo
                 &lt;{message.system ? 'osmaRef' : message.username}&gt;:
               </span>{' '}
               <span className="chat-text">
-                {message.action ? <ActionText text={message.text} /> : message.text}
+                {message.action ? (
+                  <ActionText text={message.text} />
+                ) : message.system || !onSelectSlot ? (
+                  message.text
+                ) : (
+                  splitText(message.text).map((part, index) =>
+                    part.type === 'slot' ? (
+                      <button
+                        key={index}
+                        type="button"
+                        className="chat-slot"
+                        title={slotHint?.(part.slot)}
+                        onClick={() => onSelectSlot(part.slot)}
+                      >
+                        {part.text}
+                      </button>
+                    ) : (
+                      <span key={index}>{part.text}</span>
+                    ),
+                  )
+                )}
               </span>
             </span>
           </div>

@@ -589,6 +589,20 @@ export function WorkbenchPage({
     );
   };
 
+  /** Chat chip tooltip: slot label, beatmap, and the action a click would take. */
+  const slotHint = (slot: MappoolSlot): string => {
+    const lines = [slot.label];
+    const beatmap = slot.beatmap;
+    if (beatmap?.title) {
+      lines.push(beatmap.difficultyName ? `${beatmap.title} [${beatmap.difficultyName}]` : beatmap.title);
+    }
+    if (pending) {
+      const team = teamName(pending.side === 'team_one' ? session?.teamOneId : session?.teamTwoId);
+      lines.push(`${t(pending.kind)} ${team}`);
+    }
+    return lines.join('\n');
+  };
+
   const submitResult = async (rows: ResultRow[]) => {
     if (!session || !session.currentSlotLabel) return;
     await window.osmaRef.sessions.recordResult({
@@ -1149,7 +1163,13 @@ export function WorkbenchPage({
               }}
             >
               <div className="wb-chat">
-                <ChatPanel sessionId={session.id} transport={session.transport} />
+                <ChatPanel
+                  sessionId={session.id}
+                  transport={session.transport}
+                  slots={pool?.slots}
+                  onSelectSlot={applySlot}
+                  slotHint={slotHint}
+                />
               </div>
 
               <div
