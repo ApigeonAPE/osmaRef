@@ -134,6 +134,7 @@ describe('automatic messages in an IRC room', () => {
           requiredMods: [],
           allowedMods: [],
           freestyle: false,
+          freemod: false,
         },
       ];
       stage.matches.push({

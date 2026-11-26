@@ -135,6 +135,7 @@
 }
 
 .license-tabs button.active {
+  --button-bg-hover: var(--pink-soft);
   border-color: var(--pink-border);
   background: var(--pink-soft);
 }

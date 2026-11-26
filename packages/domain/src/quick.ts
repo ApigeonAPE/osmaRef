@@ -96,6 +96,7 @@ export function buildQuickTournament(options: QuickRoomOptions): Tournament {
             requiredMods: [],
             allowedMods: [],
             freestyle: false,
+            freemod: false,
           },
         ]
       : [],

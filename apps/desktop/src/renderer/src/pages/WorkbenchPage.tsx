@@ -1506,7 +1506,7 @@ export function WorkbenchPage({
                           slot={slot}
                           info={info}
                           failure={failure}
-                          action={action}
+                                          action={action}
                           current={Boolean(current)}
                           actionable={actionable}
                           teamOneId={session.teamOneId}
@@ -1708,7 +1708,6 @@ export function WorkbenchPage({
       {modsOpen && modsEntry ? (
         <PlaylistModsDialog
           entry={modsEntry}
-          platform={tournament?.platform ?? (session?.transport === 'referee_hub' ? 'lazer' : 'stable')}
           onClose={() => {
             setModsOpen(false);
             setModsEntry(null);

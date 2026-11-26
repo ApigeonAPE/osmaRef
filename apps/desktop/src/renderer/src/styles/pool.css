@@ -94,8 +94,9 @@
 }
 
 .freestyle-toggle {
+  --button-bg: var(--panel-2);
+  --button-bg-hover: var(--panel-3);
   border: 1px solid var(--line);
-  background: var(--panel-2);
   color: var(--text);
   border-radius: var(--radius-sm);
   padding: 12px 10px;
@@ -105,6 +106,8 @@
 }
 
 .freestyle-toggle.active {
+  --button-bg: var(--amber);
+  --button-bg-hover: var(--amber-hover);
   background: var(--amber);
   border-color: transparent;
   color: var(--on-accent);
@@ -121,8 +124,9 @@
 }
 
 .mod-selector-button {
+  --button-bg: var(--panel-2);
+  --button-bg-hover: var(--pink-soft);
   border: 1px solid var(--line);
-  background: var(--panel-2);
   color: var(--text);
   border-radius: var(--radius-sm);
   padding: 8px 0;
@@ -134,27 +138,20 @@
 
 .mod-selector-button:hover:not(:disabled) {
   border-color: var(--pink-border);
-  background: var(--pink-soft);
   color: var(--text);
 }
 
-.mod-selector-button.forced:hover:not(:disabled) {
-  border-color: transparent;
-  background: var(--red-hover);
-}
-
-.mod-selector-button.allowed:hover:not(:disabled) {
-  border-color: transparent;
-  background: var(--green-hover);
-}
-
 .mod-selector-button.forced {
+  --button-bg: var(--red);
+  --button-bg-hover: var(--red-hover);
   background: var(--red);
   border-color: transparent;
   color: var(--on-solid);
 }
 
 .mod-selector-button.allowed {
+  --button-bg: var(--green);
+  --button-bg-hover: var(--green-hover);
   background: var(--green);
   border-color: transparent;
   color: var(--on-accent);
@@ -188,39 +185,6 @@
 .mod-picker-actions {
   display: flex;
   gap: 6px;
-}
-
-.mod-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
-  gap: 6px;
-}
-
-.mod-pill {
-  border: 1px solid var(--line);
-  background: var(--panel-2);
-  color: var(--text);
-  border-radius: var(--radius-sm);
-  padding: 7px 0;
-  font-weight: 700;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
-}
-
-.mod-pill:hover:not(:disabled) {
-  border-color: var(--pink-border);
-  background: var(--pink-soft);
-}
-
-.mod-pill.selected {
-  background: var(--pink);
-  border-color: transparent;
-  color: var(--on-accent);
-}
-
-.mod-pill:disabled {
-  cursor: not-allowed;
 }
 
 .playlist-row {
@@ -438,6 +402,7 @@
 }
 
 .playlist-row.active {
+  --button-bg-hover: var(--pink-soft);
   background: var(--pink-soft);
 }
 

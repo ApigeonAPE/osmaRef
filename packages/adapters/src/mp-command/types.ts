@@ -1,5 +1,7 @@
 import type { HubTeam, RoomSnapshot, UserRef } from '../types';
 
+import type { FreemodPool } from '@osmaref/contracts';
+
 /** Commands recognised by the local compatibility layer. */
 export type MpVerb =
   | 'help'
@@ -134,8 +136,8 @@ export interface MpContext {
   defaultBeatmapId: number | null;
   defaultMatchType: 'head_to_head' | 'team_versus';
   defaultMaxParticipants: number;
-  /** Allowed mods injected by `Freemod`. */
-  freemodPool?: string[];
+  /** Forced and allowed mods injected by `!mp mods Freemod`. */
+  freemodPool?: FreemodPool;
   maxParticipantsLimit?: number;
 }
 

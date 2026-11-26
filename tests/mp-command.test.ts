@@ -136,10 +136,11 @@ describe('referee hub !mp mapping', () => {
     if (!result.ok) return;
     const patch = (result.plan.actions[0] as { patch: Record<string, unknown> }).patch;
     expect(patch.freestyle).toBe(false);
-    expect(patch.requiredMods).toEqual([]);
+    expect(patch.requiredMods).toEqual(['NF']);
     expect(patch.allowedMods).toContain('SO');
     expect(patch.allowedMods).toContain('HD');
     expect(patch.allowedMods).not.toContain('NM');
+    expect(patch.allowedMods).not.toContain('NF');
   });
 
   it('uses the configured freemod range when provided', () => {
@@ -147,7 +148,7 @@ describe('referee hub !mp mapping', () => {
       { verb: 'mods', mods: ['Freemod'] },
       context({
         room: room({ currentPlaylistItemId: '9' }),
-        freemodPool: ['HD', 'DT'],
+        freemodPool: { required: [], allowed: ['HD', 'DT'] },
       }),
     );
     expect(result.ok).toBe(true);

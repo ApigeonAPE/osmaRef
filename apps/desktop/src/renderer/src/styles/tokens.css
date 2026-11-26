@@ -67,6 +67,7 @@
   --amber-text: var(--amber-11);
   --amber-soft: var(--amber-a3);
   --amber-border: var(--amber-a6);
+  --amber-hover: var(--amber-10);
 
   --cyan-text: var(--cyan-11);
   --cyan-soft: var(--cyan-a3);

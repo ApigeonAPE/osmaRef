@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { safeStorage, app } from 'electron';
-import { DEFAULT_SETTINGS, type Settings } from '@osmaref/contracts';
+import { DEFAULT_SETTINGS, type FreemodPool, type Settings } from '@osmaref/contracts';
 
 /**
  * Settings and credentials.
@@ -10,6 +10,25 @@ import { DEFAULT_SETTINGS, type Settings } from '@osmaref/contracts';
  * OS facility is not available it stays in memory for this session only; it is
  * never written to disk in plain text.
  */
+/** v0.1.7 stored a flat mod list where NF was the forced mod. */
+function normalizeFreemodMods(value: unknown): FreemodPool {
+  if (Array.isArray(value)) {
+    const mods = value.filter((mod): mod is string => typeof mod === 'string');
+    return {
+      required: mods.filter((mod) => mod === 'NF'),
+      allowed: mods.filter((mod) => mod !== 'NF'),
+    };
+  }
+  if (value && typeof value === 'object') {
+    const pool = value as Partial<FreemodPool>;
+    return {
+      required: Array.isArray(pool.required) ? pool.required.filter((mod) => typeof mod === 'string') : [],
+      allowed: Array.isArray(pool.allowed) ? pool.allowed.filter((mod) => typeof mod === 'string') : [],
+    };
+  }
+  return { ...DEFAULT_SETTINGS.freemodMods };
+}
+
 export class SettingsStore {
   private readonly settingsFile: string;
   private readonly credentialsFile: string;
@@ -89,7 +108,9 @@ export class SettingsStore {
     }
     try {
       const parsed = JSON.parse(readFileSync(this.settingsFile, 'utf8')) as Partial<Settings>;
-      return { ...defaults, ...parsed };
+      const merged = { ...defaults, ...parsed };
+      merged.freemodMods = normalizeFreemodMods(merged.freemodMods);
+      return merged;
     } catch {
       return defaults;
     }

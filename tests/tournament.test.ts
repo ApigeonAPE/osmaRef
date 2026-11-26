@@ -20,6 +20,7 @@ function slot(overrides: Partial<MappoolSlot> & Pick<MappoolSlot, 'id' | 'label'
     requiredMods: [],
     allowedMods: [],
     freestyle: false,
+    freemod: false,
     ...overrides,
   };
 }

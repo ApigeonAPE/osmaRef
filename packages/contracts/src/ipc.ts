@@ -194,6 +194,13 @@ export type UpdateCheckResult =
   | { status: 'none'; version: string }
   | { status: 'available'; version: string; size: number; notes: string | null };
 
+export interface FreemodPool {
+  /** Mods forced onto every pick while Freemod is active. */
+  required: string[];
+  /** Mods players may opt into while Freemod is active. */
+  allowed: string[];
+}
+
 export interface Settings {
   language: LanguageSetting;
   updateChannel: UpdateChannel;
@@ -206,8 +213,8 @@ export interface Settings {
   ircDefaultChannels: string[];
   hubBaseUrl: string;
   chatWebsocketUrl: string;
-  /** Mods allowed by `!mp mods freemod` in Referee Hub rooms. */
-  freemodMods: string[];
+  /** Mods injected by `!mp mods freemod` in Referee Hub rooms. */
+  freemodMods: FreemodPool;
   chatFontFamily: string;
   chatFontSize: number;
   chatLineHeight: number;
@@ -232,7 +239,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ircDefaultChannels: ['#osu'],
   hubBaseUrl: 'https://spectator.osu.ppy.sh',
   chatWebsocketUrl: 'wss://notify.ppy.sh',
-  freemodMods: ['HD', 'HR', 'EZ', 'DT', 'FL', 'HT', 'NF'],
+  freemodMods: { required: ['NF'], allowed: ['HD', 'HR', 'EZ', 'DT', 'FL', 'HT'] },
   chatFontFamily: 'Cascadia Mono, Consolas, monospace',
   chatFontSize: 13,
   chatLineHeight: 1.35,
@@ -296,7 +303,12 @@ export const SettingsPatchSchema = z.object({
   ircDefaultChannels: z.array(ChannelSchema).max(20).optional(),
   hubBaseUrl: HttpUrlSchema.optional(),
   chatWebsocketUrl: WebSocketUrlSchema.optional(),
-  freemodMods: z.array(z.string().min(1).max(16)).max(40).optional(),
+  freemodMods: z
+    .object({
+      required: z.array(z.string().min(1).max(16)).max(40),
+      allowed: z.array(z.string().min(1).max(16)).max(40),
+    })
+    .optional(),
   chatFontFamily: z.string().min(1).max(120).optional(),
   chatFontSize: z.number().min(9).max(28).optional(),
   chatLineHeight: z.number().min(1).max(2.4).optional(),

@@ -237,14 +237,21 @@ export function SettingsPage() {
       >
         <div className="settings-mod-row">
           <div className="mod-chips">
-            {settings.freemodMods.length === 0 ? (
+            {settings.freemodMods.required.length === 0 && settings.freemodMods.allowed.length === 0 ? (
               <span className="mod-chip">NM</span>
             ) : (
-              settings.freemodMods.map((mod) => (
-                <span className="mod-chip allowed" key={mod}>
-                  {mod}
-                </span>
-              ))
+              <>
+                {settings.freemodMods.required.map((mod) => (
+                  <span className="mod-chip" key={`required-${mod}`}>
+                    {mod}
+                  </span>
+                ))}
+                {settings.freemodMods.allowed.map((mod) => (
+                  <span className="mod-chip allowed" key={`allowed-${mod}`}>
+                    {mod}
+                  </span>
+                ))}
+              </>
             )}
           </div>
           <button
@@ -547,11 +554,14 @@ export function SettingsPage() {
           }
         >
           <ModSelector
-            required={[]}
-            allowed={settings.freemodMods}
+            required={settings.freemodMods.required}
+            allowed={settings.freemodMods.allowed}
+            freemod={false}
             freestyle={false}
-            allowedOnly
-            onChange={(next) => patch('freemodMods', next.allowed)}
+            showFreeToggle={false}
+            onChange={(next) =>
+              patch('freemodMods', { required: next.required, allowed: next.allowed })
+            }
           />
         </Modal>
       ) : null}

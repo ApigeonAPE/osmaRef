@@ -106,8 +106,12 @@ export function MappoolSlotRow({
             {mod}
           </span>
         ))}
+        {slot.freemod ? <span className="mod-chip allowed">Freemod</span> : null}
         {slot.freestyle ? <span className="mod-chip allowed">Freestyle</span> : null}
-        {slot.requiredMods.length === 0 && slot.allowedMods.length === 0 && !slot.freestyle ? (
+        {slot.requiredMods.length === 0 &&
+        slot.allowedMods.length === 0 &&
+        !slot.freemod &&
+        !slot.freestyle ? (
           <span className="mod-chip">NM</span>
         ) : null}
       </div>

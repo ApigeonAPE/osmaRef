@@ -27,6 +27,7 @@
 }
 
 .session-item.active {
+  --button-bg-hover: var(--pink-soft);
   background: var(--pink-soft);
   border-color: var(--pink-border);
 }

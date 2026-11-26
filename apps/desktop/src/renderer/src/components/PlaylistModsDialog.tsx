@@ -1,17 +1,15 @@
 import { useState } from 'react';
-import type { Platform, PlaylistEntry } from '@osmaref/contracts';
+import type { PlaylistEntry } from '@osmaref/contracts';
 import { useI18n } from '../i18n';
 import { Modal } from '../ui';
 import { ModSelector } from './ModSelector';
 
 export function PlaylistModsDialog({
   entry,
-  platform,
   onClose,
   onSave,
 }: {
   entry: PlaylistEntry;
-  platform: Platform;
   onClose: () => void;
   onSave: (input: {
     requiredMods: string[];
@@ -20,15 +18,12 @@ export function PlaylistModsDialog({
   }) => Promise<void>;
 }) {
   const { t } = useI18n();
-  const stable = platform === 'stable';
   const [mods, setMods] = useState({
-    required: stable
-      ? [...new Set([...entry.requiredMods, ...entry.allowedMods])]
-      : entry.requiredMods,
-    allowed: stable ? [] : entry.allowedMods,
-    freestyle: stable ? false : entry.freestyle,
+    required: entry.requiredMods,
+    allowed: entry.allowedMods,
+    freemod: false,
+    freestyle: entry.freestyle,
   });
-  const freestyle = platform === 'stable' ? false : mods.freestyle;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,8 +49,8 @@ export function PlaylistModsDialog({
       <ModSelector
         required={mods.required}
         allowed={mods.allowed}
-        freestyle={freestyle}
-        platform={platform}
+        freemod={mods.freemod}
+        freestyle={mods.freestyle}
         onChange={setMods}
       />
       {error ? <div className="banner error">{error}</div> : null}

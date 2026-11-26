@@ -1032,6 +1032,7 @@ export class ConnectionManager {
         requiredMods: slot.requiredMods,
         allowedMods: slot.allowedMods,
         freestyle: slot.freestyle,
+        freemod: slot.freemod,
       });
     }
 
@@ -1292,6 +1293,7 @@ export class ConnectionManager {
           requiredMods: slot.requiredMods,
           allowedMods: slot.allowedMods,
           freestyle: slot.freestyle,
+          freemod: slot.freemod,
         });
       } catch (error) {
         this.emitNotice('warn', `room did not accept the beatmap: ${errorMessage(error)}`);
@@ -2709,7 +2711,7 @@ export class ConnectionManager {
             : 'head_to_head'
           : 'team_versus',
       defaultMaxParticipants: snapshot?.maxParticipants ?? 0,
-      freemodPool: [...this.settings.get().freemodMods],
+      freemodPool: this.settings.get().freemodMods,
     };
   }
 

@@ -61,10 +61,11 @@ function isPoolPlaceholderIssue(issue: ValidationIssue): boolean {
 }
 
 function slotModLabel(slot: Stage['slots'][number]): string {
-  if (slot.freestyle) return 'Freestyle';
   const required = slot.requiredMods.join(' ');
+  const freemod = slot.freemod ? 'Freemod' : '';
+  const freestyle = slot.freestyle ? 'Freestyle' : '';
   const allowed = slot.allowedMods.length > 0 ? `(${slot.allowedMods.join(' ')})` : '';
-  return [required, allowed].filter(Boolean).join(' ');
+  return [required, freemod, freestyle, allowed].filter(Boolean).join(' ');
 }
 
 function BeatmapIdField({
@@ -1274,6 +1275,7 @@ function PoolEditor({
         requiredMods: [],
         allowedMods: [],
         freestyle: false,
+        freemod: false,
       });
     });
   };
@@ -1299,6 +1301,21 @@ function PoolEditor({
     });
   };
 
+  const forceNoFail = () => {
+    if (stage.slots.length === 0) return;
+    if (!window.confirm(t('Clears Freemod and Freestyle on all beatmaps. Continue?'))) {
+      return;
+    }
+    edit((next) => {
+      for (const slot of next.stages[stageIndex]!.slots) {
+        if (!slot.requiredMods.includes('NF')) slot.requiredMods = [...slot.requiredMods, 'NF'];
+        slot.allowedMods = slot.allowedMods.filter((mod) => mod !== 'NF');
+        slot.freestyle = false;
+        slot.freemod = false;
+      }
+    });
+  };
+
   const patchSlotById = (id: string, mutator: (slot: Stage['slots'][number]) => void) => {
     edit((next) => {
       const slot = next.stages[stageIndex]!.slots.find((entry) => entry.id === id);
@@ -1309,6 +1326,14 @@ function PoolEditor({
   return (
     <div className="flow-card">
       <div className="panel-head">
+        <button
+          type="button"
+          className="ghost small"
+          disabled={stage.slots.length === 0}
+          onClick={forceNoFail}
+        >
+          {t('Force NF')}
+        </button>
         <button type="button" className="ghost small" onClick={addSlot}>
           {t('+ Slot')}
         </button>
@@ -1398,12 +1423,14 @@ function PoolEditor({
           <ModSelector
             required={modSlot.requiredMods}
             allowed={modSlot.allowedMods}
+            freemod={modSlot.freemod}
             freestyle={modSlot.freestyle}
             platform={draft.platform}
             onChange={(mods) =>
               patchSlotById(modSlot.id, (target) => {
                 target.requiredMods = mods.required;
                 target.allowedMods = mods.allowed;
+                target.freemod = mods.freemod;
                 target.freestyle = mods.freestyle;
               })
             }

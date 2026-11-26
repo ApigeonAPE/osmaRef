@@ -1,4 +1,5 @@
 import { KNOWN_MODS } from '@osmaref/contracts';
+import { freemodPoolPlaylist } from '@osmaref/domain';
 import type { HubTeam, RoomSnapshot, UserRef } from '../types';
 import type {
   HubAction,
@@ -302,15 +303,17 @@ function planMods(tokens: string[], ctx: MpContext): PlanResult {
 
   let requiredMods: string[] = [];
   let allowedMods: string[] = [];
-  const freestyle = false;
   if (hasFreemod) {
     // Freemod lets players choose any mod that is valid for the current
     // ruleset; it is not freestyle (which also allows difficulty adjustment).
-    allowedMods = ctx.freemodPool
-      ? [...ctx.freemodPool]
-      : KNOWN_MODS.filter(
-          (mod) => mod !== 'NM' && mod !== 'FREEMOD' && mod !== 'NONE' && mod !== 'V2',
-        );
+    // The pool splits into forced mods (NF) and the mods players may pick.
+    const pool = ctx.freemodPool ?? {
+      required: ['NF'],
+      allowed: KNOWN_MODS.filter(
+        (mod) => mod !== 'NM' && mod !== 'FREEMOD' && mod !== 'NONE' && mod !== 'V2' && mod !== 'NF',
+      ),
+    };
+    ({ requiredMods, allowedMods } = freemodPoolPlaylist(pool));
   } else if (!hasNone) {
     requiredMods = mods.filter((mod) => mod !== 'NM');
   }
@@ -321,7 +324,7 @@ function planMods(tokens: string[], ctx: MpContext): PlanResult {
         {
           type: 'editBeatmap',
           roomId: room.roomId,
-          patch: { requiredMods, allowedMods, freestyle },
+          patch: { requiredMods, allowedMods, freestyle: false },
         },
       ],
       [],

@@ -89,6 +89,8 @@
 }
 
 .chat-slot {
+  --button-bg: var(--pink-soft);
+  --button-bg-hover: var(--pink-a4);
   display: inline-flex;
   align-items: center;
   padding: 0 4px;
@@ -103,10 +105,6 @@
   white-space: nowrap;
   vertical-align: baseline;
   cursor: pointer;
-}
-
-.chat-slot:hover {
-  background: var(--pink-a4);
 }
 
 .chat-send {

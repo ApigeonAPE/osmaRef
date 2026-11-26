@@ -17,6 +17,7 @@ function slot(label: string, beatmapId: number): MappoolSlot {
     requiredMods: [],
     allowedMods: [],
     freestyle: false,
+    freemod: false,
   };
 }
 

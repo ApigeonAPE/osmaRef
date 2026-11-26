@@ -168,12 +168,13 @@
   border-radius: var(--radius-sm);
 }
 
-.workspace-nav-item:hover:not(:disabled) {
+.workspace-nav-item:hover:not(:disabled):not(.active) {
   color: var(--text);
   background: var(--panel-2);
 }
 
 .workspace-nav-item.active {
+  --button-bg-hover: var(--pink-soft);
   color: var(--text);
   font-weight: 700;
   background: var(--pink-soft);
@@ -212,11 +213,12 @@
   padding: 10px 12px;
 }
 
-.tournament-item:hover {
+.tournament-item:hover:not(.active) {
   background: var(--panel-2);
 }
 
 .tournament-item.active {
+  --button-bg-hover: var(--pink-soft);
   background: var(--pink-soft);
   border-color: var(--pink-border);
 }
@@ -273,12 +275,13 @@
   border-radius: var(--radius-sm);
 }
 
-.management-item:hover {
+.management-item:hover:not(.active) {
   color: var(--text);
   background: var(--panel-2);
 }
 
 .management-item.active {
+  --button-bg-hover: var(--pink-soft);
   color: var(--text);
   background: var(--pink-soft);
   border-color: var(--pink-border);
@@ -320,7 +323,7 @@
   background: var(--panel);
 }
 
-.management-content .tournament-item:hover {
+.management-content .tournament-item:hover:not(.active) {
   background: var(--panel-2);
 }
 
@@ -431,15 +434,17 @@
 }
 
 .team-toggle {
+  --button-bg: transparent;
+  --button-bg-hover: var(--panel-2);
   font-size: 12px;
   padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: transparent;
   color: var(--muted);
 }
 
 .team-toggle.active {
+  --button-bg-hover: var(--pink-soft);
   color: var(--text);
   border-color: var(--pink-border);
   background: var(--pink-soft);

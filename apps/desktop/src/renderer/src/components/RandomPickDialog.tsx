@@ -1,4 +1,4 @@
-import type { BeatmapInfo, BeatmapLookupFailure, MappoolSlot } from '@osmaref/contracts';
+import type { BeatmapInfo, BeatmapLookupFailure, MappoolSlot, Platform } from '@osmaref/contracts';
 import { useI18n } from '../i18n';
 import { Modal } from '../ui';
 import { MappoolSlotRow } from './MappoolSlotRow';
@@ -64,7 +64,7 @@ export function RandomPickDialog({
             info={beatmaps[slot.beatmapId]}
             failure={failures[slot.beatmapId]}
             index={index + 1}
-          />
+            />
         ))}
       </div>
     </Modal>

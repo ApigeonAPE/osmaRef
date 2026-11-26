@@ -249,6 +249,9 @@ export const zhCN: Record<string, string> = {
   Captain: '队长',
   'best of': 'BO',
   'Create a mappool to add beatmaps.': '创建图池以添加谱面。',
+  'Force NF': '强制 NF',
+  'Clears Freemod and Freestyle on all beatmaps. Continue?':
+    '此操作将覆盖所有 Freemod/Freestyle 谱面，确认吗？',
   '+ Slot': '+ 槽位',
   Native: '原始模式',
   Type: '类型',

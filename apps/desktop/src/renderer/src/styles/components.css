@@ -34,6 +34,7 @@
 }
 
 .segmented-item.active {
+  --button-bg-hover: var(--pink-soft);
   background: var(--pink-soft);
   border-color: var(--pink-border);
   color: var(--text);
@@ -290,11 +291,12 @@
   padding: 10px 12px;
 }
 
-.list-item:hover {
+.list-item:hover:not(.active) {
   background: var(--panel-2);
 }
 
 .list-item.active {
+  --button-bg-hover: var(--pink-soft);
   background: var(--pink-soft);
   border-color: var(--pink-border);
 }
@@ -375,6 +377,7 @@
 }
 
 .pill.active {
+  --button-bg-hover: var(--green-soft);
   border-color: var(--green-border);
   color: var(--green-text);
   background: var(--green-soft);
@@ -408,6 +411,7 @@
 }
 
 .tab.active {
+  --button-bg-hover: var(--pink-soft);
   border-color: var(--pink-border);
   color: var(--text);
   background: var(--pink-soft);

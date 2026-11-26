@@ -373,6 +373,46 @@ describe('Bancho bot messages', () => {
     expect(state.mods).toEqual(['DoubleTime', 'Freemod']);
   });
 
+  it('tracks the mod set across consecutive !mp mods calls', () => {
+    const state = createBanchoRoomState('1');
+    const steps: Array<[string, string[]]> = [
+      ['Enabled NoFail, HardRock, disabled FreeMod', ['NoFail', 'HardRock']],
+      ['Disabled all mods, enabled FreeMod', ['Freemod']],
+      ['Enabled DoubleTime, enabled FreeMod', ['DoubleTime', 'Freemod']],
+      ['Enabled NoFail, DoubleTime, disabled FreeMod', ['NoFail', 'DoubleTime']],
+      ['Enabled DoubleTime, enabled FreeMod', ['DoubleTime', 'Freemod']],
+    ];
+    for (const [line, expected] of steps) {
+      const event = parseBanchoLine(line);
+      expect(event, line).not.toBeNull();
+      applyBanchoEvent(state, event!);
+      expect(state.mods, line).toEqual(expected);
+    }
+  });
+
+  it('keeps the per-player mods from slot lines in the room snapshot', () => {
+    const transport = new IrcMatchTransport({
+      host: 'irc.ppy.sh',
+      port: 6667,
+      username: 'referee',
+      password: 'token',
+    });
+    const internal = transport as unknown as {
+      rooms: Map<string, ReturnType<typeof createBanchoRoomState>>;
+      handleBotMessage: (from: string, target: string, text: string) => void;
+    };
+    internal.rooms.set('123', createBanchoRoomState('123'));
+    internal.handleBotMessage(
+      'BanchoBot',
+      '#mp_123',
+      'Slot 2  Ready     https://osu.ppy.sh/u/3407743 Miyaguni Akari  [Team Red  / NoFail, HardRock]',
+    );
+
+    const snapshot = transport.snapshot('123');
+    expect(snapshot.players).toHaveLength(1);
+    expect(snapshot.players[0]?.mods).toEqual(['NoFail', 'HardRock']);
+  });
+
   it('tracks roster and room state from real events', () => {
     const state = createBanchoRoomState('1');
     applyBanchoEvent(state, { kind: 'room_name', name: 'Cup: A vs B' });

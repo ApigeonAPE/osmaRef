@@ -23,8 +23,12 @@ describe('IPC input validation', () => {
     );
     const parsed = SettingsPatchSchema.parse({ serverBaseUrl: 'https://x.test', extra: 1 });
     expect(parsed).not.toHaveProperty('extra');
-    expect(SettingsPatchSchema.safeParse({ freemodMods: ['NF', 'HR'] }).success).toBe(true);
-    expect(SettingsPatchSchema.safeParse({ freemodMods: [1] }).success).toBe(false);
+    expect(
+      SettingsPatchSchema.safeParse({ freemodMods: { required: ['NF'], allowed: ['HR'] } }).success,
+    ).toBe(true);
+    expect(
+      SettingsPatchSchema.safeParse({ freemodMods: { required: [1], allowed: [] } }).success,
+    ).toBe(false);
   });
 
   it('validates playlist mod and beatmap inputs', () => {

@@ -8,6 +8,7 @@ import {
   type BanchoRoomState,
 } from './bancho';
 import { channelForRoom, roomIdFromChannel } from './parser';
+import { stableModArguments } from '@osmaref/domain';
 import type {
   BeatmapPatch,
   ChatEnvelope,
@@ -319,15 +320,11 @@ export class IrcMatchTransport implements MatchTransport {
       const mode = patch.rulesetId !== undefined ? ` ${patch.rulesetId}` : '';
       this.sendToRoom(roomId, `!mp map ${patch.beatmapId}${mode}`);
     }
-    if (patch.requiredMods !== undefined || patch.allowedMods !== undefined) {
-      const mods =
-        patch.requiredMods && patch.requiredMods.length > 0
-          ? patch.requiredMods
-          : patch.allowedMods && patch.allowedMods.length > 0 && !patch.freestyle
-            ? patch.allowedMods
-            : patch.allowedMods && patch.allowedMods.length > 0
-              ? ['Freemod']
-              : [];
+    if (patch.requiredMods !== undefined || patch.freemod !== undefined) {
+      const mods = stableModArguments({
+        requiredMods: patch.requiredMods ?? [],
+        freemod: patch.freemod ?? false,
+      });
       this.sendToRoom(roomId, mods.length === 0 ? '!mp mods None' : `!mp mods ${mods.join(' ')}`);
     }
 
@@ -386,7 +383,7 @@ export class IrcMatchTransport implements MatchTransport {
       .map((player) => ({
         userId: player.userId ?? 0,
         username: player.username,
-        mods: [],
+        mods: [...player.mods],
         team: player.team,
         slot: player.slot,
         status: player.ready ? 'ready' : 'idle',

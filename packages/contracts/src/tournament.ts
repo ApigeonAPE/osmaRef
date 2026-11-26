@@ -198,7 +198,10 @@ export const MappoolSlotSchema = z.object({
   rulesetId: RulesetOverrideSchema,
   requiredMods: z.array(z.string().min(1).max(16)).default([]),
   allowedMods: z.array(z.string().min(1).max(16)).default([]),
+  /** Lazer-only: players may pick any mod and adjust difficulty. */
   freestyle: z.boolean().default(false),
+  /** Stable-only: `!mp mods Freemod`; Bancho filters out conflicting mods. */
+  freemod: z.boolean().default(false),
   note: z.string().max(500).optional(),
 });
 export type MappoolSlot = z.infer<typeof MappoolSlotSchema>;
@@ -743,6 +746,10 @@ export function migrateTournament(input: unknown): unknown {
               const nextSlot = { ...slot };
               delete nextSlot.winCondition;
               delete nextSlot.winConditionWinner;
+              if (platform === 'stable' && nextSlot.freestyle === true && nextSlot.freemod === undefined) {
+                nextSlot.freemod = true;
+                nextSlot.freestyle = false;
+              }
               return nextSlot;
             })
           : stage.slots;

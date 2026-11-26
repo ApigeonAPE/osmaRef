@@ -24,92 +24,94 @@ const STABLE_MODS = [
   'MR',
 ];
 
+export type ModSelection = {
+  required: string[];
+  allowed: string[];
+  freemod: boolean;
+  freestyle: boolean;
+};
+
 export function ModSelector({
   required,
   allowed,
+  freemod,
   freestyle,
   onChange,
-  allowedOnly = false,
   platform = 'lazer',
+  showFreeToggle = true,
 }: {
   required: string[];
   allowed: string[];
+  freemod: boolean;
   freestyle: boolean;
-  onChange: (next: { required: string[]; allowed: string[]; freestyle: boolean }) => void;
-  allowedOnly?: boolean;
+  onChange: (next: ModSelection) => void;
   platform?: Platform;
+  /** Hides the Freemod/Freestyle toggle for callers that only edit mods. */
+  showFreeToggle?: boolean;
 }) {
   const { t } = useI18n();
   const stable = platform === 'stable';
-  const forcedOnly = stable && !allowedOnly;
-  const freestyleActive = freestyle && !stable;
   const mods = [...new Set([...(stable ? STABLE_MODS : SELECTABLE_MODS), ...required, ...allowed])];
+  const locked = !stable && freestyle;
+  const isForced = (mod: string) => required.includes(mod) || (stable && allowed.includes(mod));
 
   const toggleRequired = (mod: string) => {
-    if (freestyleActive) return;
-    if (required.includes(mod)) {
-      onChange({
-        required: required.filter((item) => item !== mod),
-        allowed: forcedOnly ? [] : allowed,
-        freestyle: forcedOnly ? false : freestyle,
-      });
-      return;
-    }
+    if (locked) return;
     onChange({
-      required: [...required, mod],
-      allowed: forcedOnly ? [] : allowed.filter((item) => item !== mod),
-      freestyle: forcedOnly ? false : freestyle,
+      required: required.includes(mod)
+        ? required.filter((item) => item !== mod)
+        : [...required, mod],
+      allowed: stable ? [] : allowed.filter((item) => item !== mod),
+      freemod: stable ? freemod : false,
+      freestyle: stable ? false : freestyle,
     });
   };
 
   const toggleAllowed = (mod: string) => {
-    if (freestyleActive) return;
-    if (forcedOnly) {
+    if (locked) return;
+    if (stable) {
       toggleRequired(mod);
-      return;
-    }
-    if (allowed.includes(mod)) {
-      onChange({ required, allowed: allowed.filter((item) => item !== mod), freestyle });
       return;
     }
     onChange({
       required: required.filter((item) => item !== mod),
-      allowed: [...allowed, mod],
+      allowed: allowed.includes(mod)
+        ? allowed.filter((item) => item !== mod)
+        : [...allowed, mod],
+      freemod: false,
       freestyle,
     });
   };
 
   return (
-    <div className={`mod-selector${allowedOnly ? ' allowed-only' : ''}${stable ? ' stable' : ''}`}>
-      {!allowedOnly && !stable ? (
+    <div className={`mod-selector${stable ? ' stable' : ''}`}>
+      {showFreeToggle ? (
         <div className="mod-selector-side">
           <button
             type="button"
-            className={`freestyle-toggle${freestyle ? ' active' : ''}`}
+            className={`freestyle-toggle${(stable ? freemod : freestyle) ? ' active' : ''}`}
             onClick={() =>
-              onChange({
-                required: [],
-                allowed: [],
-                freestyle: !freestyle,
-              })
+              stable
+                ? onChange({ required, allowed: [], freemod: !freemod, freestyle: false })
+                : onChange({ required: [], allowed: [], freemod: false, freestyle: !freestyle })
             }
           >
-            Freestyle
+            {stable ? 'Freemod' : 'Freestyle'}
           </button>
         </div>
       ) : null}
-      <div className={`mod-selector-grid${freestyleActive ? ' disabled' : ''}`}>
+      <div className={`mod-selector-grid${locked ? ' disabled' : ''}`}>
         {mods.map((mod) => {
-          const forced = required.includes(mod) || (forcedOnly && allowed.includes(mod));
-          const optional = allowed.includes(mod) && !forcedOnly;
+          const forced = isForced(mod);
+          const optional = !stable && allowed.includes(mod);
           return (
             <button
               key={mod}
               type="button"
-              disabled={freestyleActive}
+              disabled={locked}
               aria-pressed={forced || optional}
               className={`mod-selector-button${forced ? ' forced' : ''}${optional ? ' allowed' : ''}`}
-              onClick={() => (allowedOnly ? toggleAllowed(mod) : toggleRequired(mod))}
+              onClick={() => toggleRequired(mod)}
               onContextMenu={(event) => {
                 event.preventDefault();
                 toggleAllowed(mod);

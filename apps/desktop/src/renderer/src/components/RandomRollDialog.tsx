@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { BeatmapInfo, BeatmapLookupFailure, MappoolSlot } from '@osmaref/contracts';
+import type { BeatmapInfo, BeatmapLookupFailure, MappoolSlot, Platform } from '@osmaref/contracts';
 import { useI18n } from '../i18n';
 import { Modal } from '../ui';
 import { MappoolSlotRow } from './MappoolSlotRow';

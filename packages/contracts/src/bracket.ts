@@ -12,6 +12,7 @@ import {
   type MappoolSlot,
   type Match,
   type MatchFlow,
+  type Platform,
   type Stage,
   type RulesetId,
   type Team,
@@ -250,7 +251,7 @@ export function convertBracketToTournament(
       protects: 0,
       winCondition: tournament.platform === 'lazer' ? 'score' : 'score_v2',
       winByRuleId: BUILTIN_WIN_BY_RULE_ID,
-      slots: buildSlots(raw.Beatmaps ?? [], id, stageName, tournament.mode, notes),
+      slots: buildSlots(raw.Beatmaps ?? [], id, stageName, tournament.mode, tournament.platform, notes),
       flow: buildFlow(id, stageName, bans, notes),
       matches: [],
     };
@@ -397,6 +398,7 @@ function buildSlots(
   stageId: string,
   stageName: string,
   mode: TournamentMode,
+  platform: Platform,
   notes: string[],
 ): MappoolSlot[] {
   const slots: MappoolSlot[] = [];
@@ -435,7 +437,7 @@ function buildSlots(
           : mode === 'multi' || mode === 'osu'
             ? null
             : MODE_RULESET[mode],
-      ...modsForCategory(category),
+      ...modsForCategory(category, platform),
     });
   }
 
@@ -532,22 +534,25 @@ function lookupTeam(
   return key ? lookup.get(key) : undefined;
 }
 
-function modsForCategory(category: string): {
+function modsForCategory(category: string, platform: Platform): {
   requiredMods: string[];
   allowedMods: string[];
   freestyle: boolean;
+  freemod: boolean;
 } {
   switch (category) {
     case 'HD':
-      return { requiredMods: ['HD'], allowedMods: [], freestyle: false };
+      return { requiredMods: ['HD'], allowedMods: [], freestyle: false, freemod: false };
     case 'HR':
-      return { requiredMods: ['HR'], allowedMods: [], freestyle: false };
+      return { requiredMods: ['HR'], allowedMods: [], freestyle: false, freemod: false };
     case 'DT':
-      return { requiredMods: ['DT'], allowedMods: [], freestyle: false };
+      return { requiredMods: ['DT'], allowedMods: [], freestyle: false, freemod: false };
     case 'FM':
-      return { requiredMods: [], allowedMods: [], freestyle: true };
+      return platform === 'stable'
+        ? { requiredMods: [], allowedMods: [], freestyle: false, freemod: true }
+        : { requiredMods: [], allowedMods: [], freestyle: true, freemod: false };
     default:
-      return { requiredMods: [], allowedMods: [], freestyle: false };
+      return { requiredMods: [], allowedMods: [], freestyle: false, freemod: false };
   }
 }
 

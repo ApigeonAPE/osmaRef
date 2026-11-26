@@ -224,7 +224,8 @@ describe('bracket conversion edge cases', () => {
     const { tournament } = convertBracketToTournament(document);
     const slots = tournament.stages[0]!.slots;
     expect(slots[0]?.requiredMods).toEqual(['HD']);
-    expect(slots[1]?.freestyle).toBe(true);
+    expect(slots[1]?.freemod).toBe(true);
+    expect(slots[1]?.freestyle).toBe(false);
     expect(slots[2]?.label).toBe('TB');
     expect(parseTournament(tournament).success).toBe(true);
   });

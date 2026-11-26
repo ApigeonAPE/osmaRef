@@ -96,16 +96,18 @@
 }
 
 .quick-mode button {
+  --button-bg: var(--panel-2);
+  --button-bg-hover: var(--panel-3);
   padding: 10px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
-  background: var(--panel-2);
   color: var(--text);
   cursor: pointer;
   font-weight: 700;
 }
 
 .quick-mode button.active {
+  --button-bg-hover: var(--pink-soft);
   border-color: var(--pink-border);
   background: var(--pink-soft);
 }
@@ -350,12 +352,9 @@
 }
 
 .room-list-item.active {
+  --button-bg-hover: var(--pink-a4);
   border-color: var(--pink-border);
   background: var(--pink-soft);
-}
-
-.room-list-item.active:hover {
-  background: var(--pink-a4);
 }
 
 .room-list-name {

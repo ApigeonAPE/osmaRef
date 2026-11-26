@@ -41,6 +41,8 @@ export interface BeatmapPatch {
   requiredMods?: string[];
   allowedMods?: string[];
   freestyle?: boolean;
+  /** Stable only: adds the Freemod keyword to `!mp mods`. */
+  freemod?: boolean;
 }
 
 export interface MoveUserRequest {

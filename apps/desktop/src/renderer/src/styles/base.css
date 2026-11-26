@@ -49,16 +49,18 @@ input[type='checkbox'] {
 }
 
 button {
+  --button-bg: var(--panel-2);
+  --button-bg-hover: var(--panel-3);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   padding: 8px 14px;
-  background: var(--panel-2);
+  background: var(--button-bg);
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
 }
 
 button:hover:not(:disabled) {
-  background: var(--panel-3);
+  background: var(--button-bg-hover);
 }
 
 button:active:not(:disabled) {
@@ -71,42 +73,30 @@ button:disabled {
 }
 
 button.primary {
-  background: var(--pink);
+  --button-bg: var(--pink);
+  --button-bg-hover: var(--pink-hover);
   color: var(--on-accent);
   font-weight: 700;
   border-color: transparent;
 }
 
-button.primary:hover:not(:disabled) {
-  background: var(--pink-hover);
-}
-
 button.primary.confirm-start {
-  background: var(--red-9);
+  --button-bg: var(--red-9);
+  --button-bg-hover: var(--red-10);
   color: var(--black-a12);
 }
 
-button.primary.confirm-start:hover:not(:disabled) {
-  background: var(--red-10);
-}
-
 button.ghost {
-  background: transparent;
+  --button-bg: transparent;
+  --button-bg-hover: var(--panel-2);
   border-color: var(--line);
   color: var(--text);
 }
 
-button.ghost:hover:not(:disabled) {
-  background: var(--panel-2);
-}
-
 button.danger {
+  --button-bg-hover: var(--red-soft);
   color: var(--red-text);
   border-color: var(--red-border);
-}
-
-button.danger:hover:not(:disabled) {
-  background: var(--red-soft);
 }
 
 button.small {
