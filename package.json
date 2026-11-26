@@ -1,6 +1,6 @@
 {
   "name": "osmaref",
-  "version": "0.1.7-preview.1",
+  "version": "0.1.8-preview",
   "private": true,
   "description": "osu! referee client",
   "license": "MIT",
