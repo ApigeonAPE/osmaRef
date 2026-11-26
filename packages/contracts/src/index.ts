@@ -1,6 +1,7 @@
 export * from './tournament';
 export * from './winby';
 export * from './bracket';
+export * from './mayumi';
 export * from './session';
 export * from './room';
 export * from './ipc';

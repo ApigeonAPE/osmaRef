@@ -28,6 +28,8 @@ export function SettingsPage() {
   const [licenseTab, setLicenseTab] = useState<'harmony' | 'osmaref'>('osmaref');
   const [logsOpen, setLogsOpen] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [mayumiUuid, setMayumiUuid] = useState('');
+  const [mayumiConfigured, setMayumiConfigured] = useState(false);
   const [updateSupported, setUpdateSupported] = useState(false);
   const [checking, setChecking] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -43,6 +45,8 @@ export function SettingsPage() {
     void (async () => {
       setVersion(await window.osmaRef.app.getVersion());
       setUpdateSupported(await window.osmaRef.app.isUpdateSupported());
+      const status = await window.osmaRef.mayumi.sessionStatus();
+      setMayumiConfigured(status.configured);
       await model.refreshAll();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -121,6 +125,26 @@ export function SettingsPage() {
     patch('updateChannel', channel);
     try {
       setSettings(await saveSettings({ updateChannel: channel }));
+    } catch (cause) {
+      toast.error(errorText(cause));
+    }
+  };
+
+  const saveMayumiSession = async () => {
+    try {
+      const status = await window.osmaRef.mayumi.setSession(mayumiUuid.trim());
+      setMayumiConfigured(status.configured);
+      setMayumiUuid('');
+      toast.success(t('Saved'));
+    } catch (cause) {
+      toast.error(errorText(cause));
+    }
+  };
+
+  const clearMayumiSession = async () => {
+    try {
+      const status = await window.osmaRef.mayumi.clearSession();
+      setMayumiConfigured(status.configured);
     } catch (cause) {
       toast.error(errorText(cause));
     }
@@ -242,7 +266,7 @@ export function SettingsPage() {
             ) : (
               <>
                 {settings.freemodMods.required.map((mod) => (
-                  <span className="mod-chip" key={`required-${mod}`}>
+                  <span className="mod-chip required" key={`required-${mod}`}>
                     {mod}
                   </span>
                 ))}
@@ -288,18 +312,24 @@ export function SettingsPage() {
                 />
               </Field>
               <Field label={t('Use TLS')}>
-                <input
-                  type="checkbox"
-                  checked={settings.ircUseTls}
-                  onChange={(event) => patch('ircUseTls', event.target.checked)}
-                />
+                <span className="switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.ircUseTls}
+                    onChange={(event) => patch('ircUseTls', event.target.checked)}
+                  />
+                  <span className="switch-track" />
+                </span>
               </Field>
               <Field label={t('Connect on startup')}>
-                <input
-                  type="checkbox"
-                  checked={settings.ircAutoConnect}
-                  onChange={(event) => patch('ircAutoConnect', event.target.checked)}
-                />
+                <span className="switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.ircAutoConnect}
+                    onChange={(event) => patch('ircAutoConnect', event.target.checked)}
+                  />
+                  <span className="switch-track" />
+                </span>
               </Field>
               <Field label={t('Default channels')}>
                 <input
@@ -357,6 +387,40 @@ export function SettingsPage() {
             </button>
           </div>
         </details>
+      </Section>
+
+      <Section title={t('Mayumi')}>
+        <div className="form-grid">
+          <Field label={t('Base URL')} wide>
+            <input
+              value={settings.mayumiBaseUrl}
+              onChange={(event) => patch('mayumiBaseUrl', event.target.value)}
+            />
+          </Field>
+          <Field label={t('Session uuid')} wide>
+            <input
+              type="password"
+              value={mayumiUuid}
+              placeholder={mayumiConfigured ? t('Saved') : ''}
+              onChange={(event) => setMayumiUuid(event.target.value)}
+            />
+          </Field>
+        </div>
+        <div className="row-actions">
+          <button
+            type="button"
+            className="ghost small"
+            disabled={mayumiUuid.trim().length === 0}
+            onClick={() => void saveMayumiSession()}
+          >
+            {t('Save session')}
+          </button>
+          {mayumiConfigured ? (
+            <button type="button" className="ghost small" onClick={() => void clearMayumiSession()}>
+              {t('Clear session')}
+            </button>
+          ) : null}
+        </div>
       </Section>
 
       <Section title={t('Discord webhook')}>

@@ -4,19 +4,23 @@ import { dialog } from 'electron';
 import {
   parseTournament as parseTournamentInput,
   convertBracketToTournament,
+  convertMayumiToTournament,
   createEmptyTournament,
   createTournamentId,
   validateTournamentReferences,
   type ImportPreview,
+  type Platform,
   type Tournament,
 } from '@osmaref/contracts';
 import type { AppStore } from './store';
 import type { AppLogger } from './logger';
+import type { MayumiClient } from './mayumi-client';
 
 export class TournamentImporter {
   constructor(
     private readonly store: AppStore,
     private readonly logger: AppLogger,
+    private readonly mayumi: MayumiClient | null = null,
   ) {}
 
   async exportToFile(tournamentId: string): Promise<string | null> {
@@ -48,7 +52,7 @@ export class TournamentImporter {
     const raw = JSON.parse(readFileSync(file, 'utf8')) as unknown;
     const tournament = parseTournament(raw);
     this.logger.runtime('info', 'tournament', `imported "${tournament.name}" from ${file}`);
-    return this.buildPreview(basename(file, '.json'), null, null, tournament);
+    return this.buildPreview('file', basename(file, '.json'), null, null, tournament);
   }
 
   /**
@@ -77,7 +81,35 @@ export class TournamentImporter {
         `${tournament.stages.length} stages, ${matchCount} matches, ` +
         `${notes.length} notes)`,
     );
-    return this.buildPreview(remoteId, null, null, tournament, notes);
+    return this.buildPreview('file', remoteId, null, null, tournament, notes);
+  }
+
+  /**
+   * Reads a tournament from Mayumi and converts it.
+   *
+   * The session is optional: without it the bracket configuration is skipped
+   * and best-of/bans fall back to the public draw or the defaults.
+   */
+  async importFromMayumi(abbreviation: string, platform: Platform): Promise<ImportPreview> {
+    if (!this.mayumi) throw new Error('the Mayumi client is not available');
+    const snapshot = await this.mayumi.fetchSnapshot(abbreviation);
+    const { tournament, notes } = convertMayumiToTournament(snapshot, { platform });
+    const matchCount = tournament.stages.reduce((total, stage) => total + stage.matches.length, 0);
+    this.logger.runtime(
+      'info',
+      'tournament',
+      `converted Mayumi ${abbreviation} (${tournament.teams.length} teams, ` +
+        `${tournament.stages.length} stages, ${matchCount} matches, ${notes.length} notes)`,
+    );
+    const revision = snapshot.bracket?.revision;
+    return this.buildPreview(
+      'mayumi',
+      `mayumi:${abbreviation}`.slice(0, 200),
+      typeof revision === 'number' ? String(revision) : null,
+      null,
+      tournament,
+      notes,
+    );
   }
 
   /**
@@ -121,6 +153,7 @@ export class TournamentImporter {
   }
 
   private buildPreview(
+    provider: ImportPreview['provider'],
     remoteId: string,
     remoteRevision: string | null,
     etag: string | null,
@@ -134,7 +167,7 @@ export class TournamentImporter {
       message: issue.message,
     }));
     return {
-      provider: 'file',
+      provider,
       remoteId,
       remoteRevision,
       etag,

@@ -201,6 +201,14 @@ export const zhCN: Record<string, string> = {
   // --- tournaments ---------------------------------------------------------
   Browse: '浏览',
   'Local tournaments': '本地赛事',
+  Mayumi: 'Mayumi',
+  'Session uuid': '会话 uuid',
+  'Save session': '保存会话',
+  'Clear session': '清除会话',
+  'No tournaments in progress': '当前没有进行中的赛事',
+  'Show all': '显示全部',
+  Refresh: '刷新',
+  Passed: '通过',
   Import: '导入',
   'Import file': '导入文件',
   'Import bracket.json': '从 bracket.json 导入',
@@ -349,6 +357,7 @@ export const zhCN: Record<string, string> = {
   'Import preview': '导入预览',
   'Import as new tournament': '导入为新赛事',
   'from file': '来自文件',
+  'from Mayumi': '来自 Mayumi',
   'References to review': '需要检查的引用',
 
   // --- logs -----------------------------------------------------------------

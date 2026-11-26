@@ -563,7 +563,7 @@ function modsForCategory(category: string, platform: Platform): {
  * merge different key modes into one `K` pool.
  */
 function sanitizeCategory(raw: string): string {
-  const cleaned = raw.replace(/[^A-Z0-9]/g, '').slice(0, 4);
+  const cleaned = raw.replace(/[^A-Z0-9]/g, '').slice(0, 5);
   return /[A-Z]/.test(cleaned) ? cleaned : 'NM';
 }
 

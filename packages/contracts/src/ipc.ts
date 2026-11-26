@@ -131,7 +131,7 @@ export const DesktopEventSchema = z.discriminatedUnion('type', [
 export type DesktopEvent = z.infer<typeof DesktopEventSchema>;
 
 export interface ImportPreview {
-  provider: 'file';
+  provider: 'file' | 'mayumi';
   remoteId: string;
   remoteRevision: string | null;
   etag: string | null;
@@ -148,6 +148,23 @@ export interface ServerStatus {
   username: string | null;
   userId: number | null;
   expiresAt: string | null;
+}
+
+/** One Mayumi tournament as listed by the import browser. */
+export interface MayumiTournamentSummary {
+  name: string;
+  abbreviation: string;
+  status: string;
+  /** `start_date` as published, either `YYYY-MM-DD` or an ISO timestamp. */
+  startDate: string;
+  endDate: string;
+  /** Whether today falls inside the published date range. */
+  open: boolean;
+}
+
+export interface MayumiSessionStatus {
+  /** False until a `uuid` cookie has been saved. */
+  configured: boolean;
 }
 
 export interface OsuUserSummary {
@@ -205,6 +222,8 @@ export interface Settings {
   ircUsername: string;
   ircDefaultChannels: string[];
   hubBaseUrl: string;
+  /** Mayumi instance the import browser reads from. */
+  mayumiBaseUrl: string;
   chatWebsocketUrl: string;
   /** Mods injected by `!mp mods freemod` in Referee Hub rooms. */
   freemodMods: FreemodPool;
@@ -231,6 +250,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ircUsername: '',
   ircDefaultChannels: ['#osu'],
   hubBaseUrl: 'https://spectator.osu.ppy.sh',
+  mayumiBaseUrl: 'https://mayumi.xyz',
   chatWebsocketUrl: 'wss://notify.ppy.sh',
   freemodMods: { required: ['NF'], allowed: ['HD', 'HR', 'EZ', 'DT', 'FL', 'HT'] },
   chatFontFamily: 'Cascadia Mono, Consolas, monospace',
@@ -295,6 +315,7 @@ export const SettingsPatchSchema = z.object({
   ircUsername: z.string().max(64).optional(),
   ircDefaultChannels: z.array(ChannelSchema).max(20).optional(),
   hubBaseUrl: HttpUrlSchema.optional(),
+  mayumiBaseUrl: HttpUrlSchema.optional(),
   chatWebsocketUrl: WebSocketUrlSchema.optional(),
   freemodMods: z
     .object({
@@ -429,7 +450,7 @@ export const RecordResultInputSchema = z.object({
 });
 
 export const ImportPreviewSchema = z.object({
-  provider: z.literal('file'),
+  provider: z.enum(['file', 'mayumi']),
   remoteId: z.string().min(1).max(200),
   remoteRevision: z.string().max(100).nullable(),
   etag: z.string().max(200).nullable(),
@@ -476,6 +497,14 @@ export interface DesktopApi {
     /** Imports an osu! tournament client `bracket.json`, converted to a tournament. */
     importBracket(): Promise<ImportPreview | null>;
     applyImport(preview: ImportPreview): Promise<Tournament>;
+  };
+  mayumi: {
+    /** Every tournament published on the configured Mayumi instance. */
+    list(): Promise<MayumiTournamentSummary[]>;
+    preview(abbreviation: string, platform: 'stable' | 'lazer'): Promise<ImportPreview>;
+    setSession(uuid: string): Promise<MayumiSessionStatus>;
+    clearSession(): Promise<MayumiSessionStatus>;
+    sessionStatus(): Promise<MayumiSessionStatus>;
   };
   sessions: {
     list(): Promise<MatchSession[]>;
@@ -602,6 +631,12 @@ export const IPC = {
   tournamentsImportFile: 'tournaments:import-file',
   tournamentsImportBracket: 'tournaments:import-bracket',
   tournamentsApplyImport: 'tournaments:apply-import',
+
+  mayumiList: 'mayumi:list',
+  mayumiPreview: 'mayumi:preview',
+  mayumiSetSession: 'mayumi:set-session',
+  mayumiClearSession: 'mayumi:clear-session',
+  mayumiSessionStatus: 'mayumi:session-status',
 
   sessionsList: 'sessions:list',
   sessionsListLogs: 'sessions:list-logs',

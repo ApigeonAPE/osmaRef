@@ -125,11 +125,15 @@ export function ResultDialog({
               value={row.misses}
               onChange={(event) => update(index, { misses: Number(event.target.value) || 0 })}
             />
-            <input
-              type="checkbox"
-              checked={row.passed}
-              onChange={(event) => update(index, { passed: event.target.checked })}
-            />
+            <label className="switch">
+              <input
+                type="checkbox"
+                aria-label={t('Passed')}
+                checked={row.passed}
+                onChange={(event) => update(index, { passed: event.target.checked })}
+              />
+              <span className="switch-track" />
+            </label>
           </div>
         ))}
       </div>

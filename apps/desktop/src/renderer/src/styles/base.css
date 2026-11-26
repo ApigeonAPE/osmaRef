@@ -30,10 +30,19 @@ input, select, textarea {
   background: var(--bg-soft);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
   min-width: 0;
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:not([type='checkbox']),
+select {
+  height: 32px;
+  padding: 0 10px;
+}
+
+textarea {
+  padding: 8px 10px;
 }
 
 input:focus, select:focus, textarea:focus {

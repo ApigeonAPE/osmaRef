@@ -317,6 +317,119 @@
   gap: 6px;
 }
 
+.mayumi-item {
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.mayumi-meta,
+.mayumi-open {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.mayumi-open {
+  --button-bg: transparent;
+  --button-bg-hover: transparent;
+  padding: 0;
+  border: 0;
+  text-align: left;
+  color: inherit;
+}
+
+.mayumi-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mayumi-download,
+.mayumi-delete,
+.mayumi-refresh {
+  aspect-ratio: 1;
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+.mayumi-download:disabled,
+.mayumi-delete:disabled,
+.mayumi-refresh:disabled {
+  opacity: 0.4;
+}
+
+.mayumi-download::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  background-color: var(--muted);
+  -webkit-mask: url('@assets/HarmonyOS_Icons/ic_public_cloud_download.svg') center / contain no-repeat;
+  mask: url('@assets/HarmonyOS_Icons/ic_public_cloud_download.svg') center / contain no-repeat;
+}
+
+.mayumi-download:hover:not(:disabled)::before {
+  background-color: var(--text);
+}
+
+.mayumi-delete::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  background-color: var(--red-text);
+  -webkit-mask: url('@assets/HarmonyOS_Icons/ic_public_delete.svg') center / contain no-repeat;
+  mask: url('@assets/HarmonyOS_Icons/ic_public_delete.svg') center / contain no-repeat;
+}
+
+.mayumi-delete:hover:not(:disabled)::before {
+  background-color: var(--red);
+}
+
+.mayumi-refresh::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  background-color: var(--muted);
+  -webkit-mask: url('@assets/HarmonyOS_Icons/ic_public_refresh.svg') center / contain no-repeat;
+  mask: url('@assets/HarmonyOS_Icons/ic_public_refresh.svg') center / contain no-repeat;
+}
+
+.mayumi-refresh:hover:not(:disabled)::before {
+  background-color: var(--text);
+}
+
+.mayumi-item.loading {
+  overflow: hidden;
+}
+
+.mayumi-item.loading::after {
+  content: '';
+  position: absolute;
+  left: -12px;
+  bottom: 0;
+  width: calc(40% + 24px);
+  height: 2px;
+  background: var(--pink);
+  animation: mayumi-track 1100ms linear infinite;
+}
+
+@keyframes mayumi-track {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
 .management-content .tournament-item {
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
@@ -574,6 +687,15 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
   align-items: end;
+}
+
+.webhook-row > button {
+  height: 32px;
+}
+
+.danger.small {
+  min-width: 32px;
+  padding: 0 8px;
 }
 
 .webhook-row .field input {

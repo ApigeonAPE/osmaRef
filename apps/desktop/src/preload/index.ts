@@ -8,6 +8,8 @@ import {
   type LobbyLogSummary,
   type LogEntry,
   type MatchSession,
+  type MayumiSessionStatus,
+  type MayumiTournamentSummary,
   type MpCommandResult,
   type RoomSnapshot,
   type ServerStatus,
@@ -57,6 +59,14 @@ const api: DesktopApi = {
     importFile: () => invoke<ImportPreview | null>(IPC.tournamentsImportFile),
     importBracket: () => invoke<ImportPreview | null>(IPC.tournamentsImportBracket),
     applyImport: (preview) => invoke<Tournament>(IPC.tournamentsApplyImport, preview),
+  },
+  mayumi: {
+    list: () => invoke<MayumiTournamentSummary[]>(IPC.mayumiList),
+    preview: (abbreviation, platform) =>
+      invoke<ImportPreview>(IPC.mayumiPreview, abbreviation, platform),
+    setSession: (uuid) => invoke<MayumiSessionStatus>(IPC.mayumiSetSession, uuid),
+    clearSession: () => invoke<MayumiSessionStatus>(IPC.mayumiClearSession),
+    sessionStatus: () => invoke<MayumiSessionStatus>(IPC.mayumiSessionStatus),
   },
   sessions: {
     list: () => invoke<MatchSession[]>(IPC.sessionsList),

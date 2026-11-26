@@ -93,7 +93,7 @@ export const MappoolCategorySchema = z
   .string()
   .trim()
   .min(1)
-  .max(8)
+  .max(5)
   .regex(/^[A-Za-z0-9]+$/, 'category must be a short alphanumeric code');
 export type MappoolCategory = z.infer<typeof MappoolCategorySchema>;
 
@@ -185,10 +185,10 @@ export const MappoolSlotSchema = z.object({
   label: z
     .string()
     .min(1)
-    .max(12)
+    .max(7)
     .regex(
-      /^(?=.*[A-Za-z])[A-Za-z0-9]{1,12}$/,
-      'slot label must be 1–12 letters/digits and contain a letter, e.g. NM1, 4K1 or TB',
+      /^(?=.*[A-Za-z])[A-Za-z0-9]{1,7}$/,
+      'slot label must be 1–7 letters/digits and contain a letter, e.g. NM1, 4K1 or TB',
     ),
   category: MappoolCategorySchema,
   beatmapId: z.number().int().positive(),
@@ -385,7 +385,7 @@ export const WebhookSchema = z.discriminatedUnion('kind', [
 export type Webhook = z.infer<typeof WebhookSchema>;
 
 export const TournamentSourceSchema = z.object({
-  provider: z.enum(['file', 'http']),
+  provider: z.enum(['file', 'http', 'mayumi']),
   remoteId: z.string().min(1),
   remoteRevision: z.string().nullable().default(null),
   etag: z.string().nullable().default(null),

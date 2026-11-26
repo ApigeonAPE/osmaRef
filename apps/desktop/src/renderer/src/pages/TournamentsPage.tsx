@@ -14,6 +14,7 @@ import {
   type ImportPreview,
   type Match,
   type MatchType,
+  type MayumiTournamentSummary,
   type RulesetId,
   type Stage,
   type MappoolBeatmapInfo,
@@ -36,10 +37,10 @@ const RULESET_LABELS = ['osu!', 'osu!taiko', 'osu!catch', 'osu!mania'];
 type WorkspaceView = 'basics' | 'teams' | 'stages' | 'webhooks' | 'automation';
 type StageView = 'groups' | 'mappool' | 'flow' | 'winby' | 'matches';
 
-const SLOT_CATEGORY_PATTERN = /^[A-Z0-9]{1,8}$/;
+const SLOT_CATEGORY_PATTERN = /^[A-Z0-9]{1,5}$/;
 
 function cleanSlotCategory(raw: string): string {
-  return raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  return raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
 }
 
 const WORKSPACE_VIEWS: { id: WorkspaceView; label: string }[] = [
@@ -139,6 +140,12 @@ export function TournamentsPage() {
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('basics');
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [browseView, setBrowseView] = useState<'local' | 'mayumi'>('local');
+  const [mayumiList, setMayumiList] = useState<MayumiTournamentSummary[] | null>(null);
+  const [mayumiAll, setMayumiAll] = useState(false);
+  const [mayumiBusy, setMayumiBusy] = useState(false);
+  const [mayumiDownloading, setMayumiDownloading] = useState<string | null>(null);
+  const [mayumiError, setMayumiError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pendingIds, setPendingIds] = useState<Set<number>>(new Set());
   const [memberInput, setMemberInput] = useState<Record<number, string>>({});
@@ -288,6 +295,21 @@ export function TournamentsPage() {
     }
   };
 
+  const removeTournamentEntry = async (entry: Tournament) => {
+    if (!window.confirm(t('Delete "{name}"? This cannot be undone.', { name: entry.name }))) return;
+    try {
+      await window.osmaRef.tournaments.remove(entry.id);
+      await model.refreshTournaments();
+      if (selectedId === entry.id) {
+        setDirty(false);
+        setSelectedId(null);
+        setDraft(null);
+      }
+    } catch (cause) {
+      toast.error(errorText(cause));
+    }
+  };
+
   const importFromFile = async () => {
     try {
       const preview = await window.osmaRef.tournaments.importFile();
@@ -322,6 +344,48 @@ export function TournamentsPage() {
       toast.error(errorText(cause));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const loadMayumi = async () => {
+    setMayumiBusy(true);
+    setMayumiError(null);
+    try {
+      setMayumiList(await window.osmaRef.mayumi.list());
+    } catch (cause) {
+      setMayumiList([]);
+      setMayumiError(errorText(cause));
+    } finally {
+      setMayumiBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (browseView === 'mayumi' && mayumiList === null) void loadMayumi();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browseView]);
+
+  const visibleMayumi = useMemo(
+    () => (mayumiList ?? []).filter((entry) => mayumiAll || entry.open),
+    [mayumiList, mayumiAll],
+  );
+
+  const downloadMayumi = async (abbreviation: string) => {
+    setMayumiDownloading(abbreviation);
+    setMayumiError(null);
+    try {
+      const preview = await window.osmaRef.mayumi.preview(abbreviation, 'stable');
+      const saved = await window.osmaRef.tournaments.applyImport(preview);
+      await model.refreshTournaments();
+      setDirty(false);
+      setSelectedId(saved.id);
+      setDraft(structuredClone(saved));
+      setActiveStageId(null);
+      setWorkspaceView('basics');
+    } catch (cause) {
+      setMayumiError(errorText(cause));
+    } finally {
+      setMayumiDownloading(null);
     }
   };
 
@@ -542,9 +606,23 @@ export function TournamentsPage() {
             <aside className="management-sidebar">
               <div className="management-group">
                 <span className="management-group-title">{t('Browse')}</span>
-                <button type="button" className="management-item active">
+                <button
+                  type="button"
+                  className={`management-item${browseView === 'local' ? ' active' : ''}`}
+                  onClick={() => setBrowseView('local')}
+                >
                   <span>{t('Local tournaments')}</span>
                   <span className="management-count">{model.tournaments.length}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`management-item${browseView === 'mayumi' ? ' active' : ''}`}
+                  onClick={() => setBrowseView('mayumi')}
+                >
+                  <span>{t('Mayumi')}</span>
+                  {mayumiList === null ? null : (
+                    <span className="management-count">{visibleMayumi.length}</span>
+                  )}
                 </button>
               </div>
               <div className="management-group">
@@ -568,24 +646,86 @@ export function TournamentsPage() {
             </aside>
 
             <section className="management-content">
-              <div className="management-content-head">
-                <h2>{t('Local tournaments')}</h2>
-              </div>
-              <div className="tournament-list">
-                {model.tournaments.map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    className="tournament-item"
-                    onClick={() => select(entry.id)}
-                  >
-                    <span className="list-name">{entry.name}</span>
-                    <span className="muted small">
-                      {entry.abbreviation}, {t('{count} team(s)', { count: entry.teams.length })}
-                    </span>
-                  </button>
-                ))}
-              </div>
+              {browseView === 'mayumi' ? (
+                <>
+                  <div className="management-content-head">
+                    <h2>{t('Mayumi')}</h2>
+                    <div className="mayumi-actions">
+                      <label className="switch">
+                        <input
+                          type="checkbox"
+                          checked={mayumiAll}
+                          onChange={(event) => setMayumiAll(event.target.checked)}
+                        />
+                        <span className="switch-track" />
+                        {t('Show all')}
+                      </label>
+                      <button
+                        type="button"
+                        className="mayumi-refresh"
+                        title={t('Refresh')}
+                        disabled={mayumiBusy}
+                        onClick={() => void loadMayumi()}
+                      />
+                    </div>
+                  </div>
+                  {mayumiError ? <p className="muted small">{mayumiError}</p> : null}
+                  <div className="tournament-list">
+                    {visibleMayumi.map((entry) => (
+                      <div
+                        key={entry.abbreviation}
+                        className={`tournament-item mayumi-item${
+                          mayumiDownloading === entry.abbreviation ? ' loading' : ''
+                        }`}
+                      >
+                        <div className="mayumi-meta">
+                          <span className="list-name">{entry.name}</span>
+                          <span className="muted small">{entry.abbreviation}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="mayumi-download"
+                          title={t('Download')}
+                          disabled={mayumiDownloading !== null}
+                          onClick={() => void downloadMayumi(entry.abbreviation)}
+                        />
+                      </div>
+                    ))}
+                    {mayumiList && visibleMayumi.length === 0 && !mayumiError ? (
+                      <p className="muted small">{t('No tournaments in progress')}</p>
+                    ) : null}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="management-content-head">
+                    <h2>{t('Local tournaments')}</h2>
+                  </div>
+                  <div className="tournament-list">
+                    {model.tournaments.map((entry) => (
+                      <div key={entry.id} className="tournament-item mayumi-item">
+                        <button
+                          type="button"
+                          className="mayumi-open"
+                          onClick={() => select(entry.id)}
+                        >
+                          <span className="list-name">{entry.name}</span>
+                          <span className="muted small">
+                            {entry.abbreviation},{' '}
+                            {t('{count} team(s)', { count: entry.teams.length })}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="mayumi-delete"
+                          title={t('Delete tournament')}
+                          onClick={() => void removeTournamentEntry(entry)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </section>
           </div>
         </>
@@ -636,7 +776,7 @@ export function TournamentsPage() {
           <p>
             <strong>{importPreview.tournament.name}</strong>, revision{' '}
             {importPreview.tournament.revision},{' '}
-            {t('from file')}
+            {t(importPreview.provider === 'mayumi' ? 'from Mayumi' : 'from file')}
           </p>
           {importPreview.notes.length > 0 ? (
             <div className="banner info">
@@ -1453,7 +1593,7 @@ function FlowEditor({
             <span className="pill">{autoPicks}×</span>
           ) : (
             <>
-              <label className="inline-field">
+              <label className="switch">
                 <input
                   type="checkbox"
                   checked={phase.useStageCount}
@@ -1464,6 +1604,7 @@ function FlowEditor({
                     })
                   }
                 />
+                <span className="switch-track" />
                 {t('Stage count')}
               </label>
               {!phase.useStageCount ? (
@@ -2150,7 +2291,7 @@ function AutomationEditor({
             </div>
           ))}
           {draft.webhooks.map((webhook, index) => (
-            <label className="row" key={`${trigger}-webhook-${index}`}>
+            <label className="row switch" key={`${trigger}-webhook-${index}`}>
               <input
                 type="checkbox"
                 checked={webhook.triggers.includes(trigger)}
@@ -2164,6 +2305,7 @@ function AutomationEditor({
                   })
                 }
               />
+              <span className="switch-track" />
               <span>{webhook.name || t('Webhook')}</span>
             </label>
           ))}

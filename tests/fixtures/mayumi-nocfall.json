@@ -1,0 +1,1289 @@
+{
+ "info": {
+  "name": "nuist osu! cup 2026: FALL",
+  "abbreviation": "NOC26FALL",
+  "mode": "mania",
+  "is_group": true,
+  "status": "approved",
+  "start_date": "2026-09-13T12:00:00.000Z",
+  "end_date": "2026-11-02"
+ },
+ "players": {
+  "groups": [
+   {
+    "name": "Team Falcoms",
+    "members": [
+     30174043,
+     34215813,
+     39243177
+    ],
+    "captains": [
+     32739668
+    ]
+   },
+   {
+    "name": "我不到啊",
+    "members": [
+     15889545,
+     37668413,
+     36148388
+    ],
+    "captains": [
+     14502713
+    ]
+   },
+   {
+    "name": "插奈特幼儿园",
+    "members": [
+     38607428,
+     16424668,
+     38902659
+    ],
+    "captains": [
+     20126778
+    ]
+   },
+   {
+    "name": "白毛红瞳双马尾",
+    "members": [
+     38271402,
+     37803200,
+     37941525
+    ],
+    "captains": [
+     12031289
+    ]
+   }
+  ],
+  "players": [
+   {
+    "uid": 32541500,
+    "name": "Kamiina Botan",
+    "player": false
+   },
+   {
+    "uid": 32739668,
+    "name": "AkizukiKanna225",
+    "player": true
+   },
+   {
+    "uid": 14502713,
+    "name": "Ph4nt0mx",
+    "player": true
+   },
+   {
+    "uid": 30174043,
+    "name": "Sikari_Fracture",
+    "player": true
+   },
+   {
+    "uid": 38271402,
+    "name": "kasanagi",
+    "player": true
+   },
+   {
+    "uid": 27392907,
+    "name": "Crane1040",
+    "player": true
+   },
+   {
+    "uid": 31648829,
+    "name": "S10000M",
+    "player": false
+   },
+   {
+    "uid": 38902659,
+    "name": "Yumekui",
+    "player": true
+   },
+   {
+    "uid": 20126778,
+    "name": "adzuki",
+    "player": true
+   },
+   {
+    "uid": 37668413,
+    "name": "STARROAD",
+    "player": true
+   },
+   {
+    "uid": 12031289,
+    "name": "beta dust",
+    "player": true
+   },
+   {
+    "uid": 15889545,
+    "name": "chenziao",
+    "player": true
+   },
+   {
+    "uid": 37803200,
+    "name": "NiJiKa11",
+    "player": true
+   },
+   {
+    "uid": 15964029,
+    "name": "[AR]lv3plane",
+    "player": false
+   },
+   {
+    "uid": 17146433,
+    "name": "OxalicAcid",
+    "player": false
+   },
+   {
+    "uid": 14748844,
+    "name": "qRainbowSmile",
+    "player": false
+   },
+   {
+    "uid": 36148388,
+    "name": "zxingtsai",
+    "player": true
+   },
+   {
+    "uid": 39243177,
+    "name": "Fareeda030",
+    "player": true
+   },
+   {
+    "uid": 26234494,
+    "name": "sliverbell",
+    "player": false
+   },
+   {
+    "uid": 24289042,
+    "name": "[GB]Cinelia",
+    "player": false
+   },
+   {
+    "uid": 38607428,
+    "name": "cminusa",
+    "player": true
+   },
+   {
+    "uid": 32288734,
+    "name": "zxx111",
+    "player": false
+   },
+   {
+    "uid": 7638459,
+    "name": "Kilawhale",
+    "player": false
+   },
+   {
+    "uid": 8829340,
+    "name": "a1987550",
+    "player": false
+   },
+   {
+    "uid": 33835446,
+    "name": "[Paw]FireFoxxx",
+    "player": false
+   },
+   {
+    "uid": 34455976,
+    "name": "[Crz]weweqe",
+    "player": false
+   },
+   {
+    "uid": 39840050,
+    "name": "Sabon",
+    "player": false
+   },
+   {
+    "uid": 16424668,
+    "name": "Tianzyu",
+    "player": true
+   },
+   {
+    "uid": 34215813,
+    "name": "linjiu09",
+    "player": true
+   },
+   {
+    "uid": 37941525,
+    "name": "Lingyan",
+    "player": true
+   },
+   {
+    "uid": 18468376,
+    "name": "Cornet",
+    "player": false
+   },
+   {
+    "uid": 12729608,
+    "name": "Fuiba Fuyu",
+    "player": false
+   }
+  ]
+ },
+ "schedule": [
+  {
+   "stage_name": "资格赛",
+   "is_lobby": true,
+   "match_info": [],
+   "lobby_info": [
+    {
+     "lobby_name": "Q1",
+     "match_id": "dd9f09a2-5ac0-4c50-8302-89a76f176a39",
+     "datetime": "2026-09-18T12:00:00.000Z",
+     "participants": [
+      {
+       "uid": [
+        38607428
+       ],
+       "name": "cminusa"
+      },
+      {
+       "uid": [
+        14502713
+       ],
+       "name": "Ph4nt0mx"
+      },
+      {
+       "uid": [
+        15889545
+       ],
+       "name": "chenziao"
+      }
+     ]
+    },
+    {
+     "lobby_name": "Q2",
+     "match_id": "392f969a-59cf-4d90-be1a-a16e92a02392",
+     "datetime": "2026-09-18T13:00:00.000Z",
+     "participants": [
+      {
+       "uid": [
+        32739668
+       ],
+       "name": "AkizukiKanna225"
+      },
+      {
+       "uid": [
+        38902659
+       ],
+       "name": "Yumekui"
+      }
+     ]
+    },
+    {
+     "lobby_name": "Q3",
+     "match_id": "00c0d038-084f-42d4-a085-3a0bfe7efa65",
+     "datetime": "2026-09-18T14:00:00.000Z",
+     "participants": []
+    },
+    {
+     "lobby_name": "QX1",
+     "match_id": "a32097d5-f911-4ee6-80de-5bb9b4d1b429",
+     "datetime": "2026-09-19T05:30:00.000Z",
+     "participants": [
+      {
+       "uid": [
+        38271402
+       ],
+       "name": "kasanagi"
+      },
+      {
+       "uid": [
+        34215813
+       ],
+       "name": "linjiu09"
+      }
+     ]
+    },
+    {
+     "lobby_name": "Q4",
+     "match_id": "0f769c91-5fad-4f3f-afff-ba30946e03b4",
+     "datetime": "2026-09-19T12:00:00.000Z",
+     "participants": [
+      {
+       "uid": [
+        37803200
+       ],
+       "name": "NiJiKa11"
+      },
+      {
+       "uid": [
+        39243177
+       ],
+       "name": "Fareeda030"
+      },
+      {
+       "uid": [
+        36148388
+       ],
+       "name": "zxingtsai"
+      },
+      {
+       "uid": [
+        16424668
+       ],
+       "name": "Tianzyu"
+      },
+      {
+       "uid": [
+        37668413
+       ],
+       "name": "STARROAD"
+      },
+      {
+       "uid": [
+        37941525
+       ],
+       "name": "Lingyan"
+      }
+     ]
+    },
+    {
+     "lobby_name": "Q5",
+     "match_id": "3f2e3ab8-9395-4383-bb03-16f3768a21d5",
+     "datetime": "2026-09-19T13:00:00.000Z",
+     "participants": []
+    },
+    {
+     "lobby_name": "Q6",
+     "match_id": "9a3b1181-ba05-4a4f-a494-7521007f926c",
+     "datetime": "2026-09-19T14:00:00.000Z",
+     "participants": []
+    },
+    {
+     "lobby_name": "Q7",
+     "match_id": "b62787e6-938d-4253-9101-a7e8a8ae6e85",
+     "datetime": "2026-09-20T12:00:00.000Z",
+     "participants": [
+      {
+       "uid": [
+        30174043
+       ],
+       "name": "Sikari_Fracture"
+      },
+      {
+       "uid": [
+        20126778
+       ],
+       "name": "adzuki"
+      }
+     ]
+    },
+    {
+     "lobby_name": "Q8",
+     "match_id": "cc044525-6b8e-4a10-a261-5ace15b395b9",
+     "datetime": "2026-09-20T13:00:00.000Z",
+     "participants": [
+      {
+       "uid": [
+        12031289
+       ],
+       "name": "beta dust"
+      },
+      {
+       "uid": [
+        27392907
+       ],
+       "name": "Crane1040"
+      }
+     ]
+    },
+    {
+     "lobby_name": "Q9",
+     "match_id": "61c767ec-3f2c-471a-8c77-5cb2665dadff",
+     "datetime": "2026-09-20T14:00:00.000Z",
+     "participants": []
+    }
+   ]
+  },
+  {
+   "stage_name": "半决赛",
+   "is_lobby": false,
+   "match_info": [
+    {
+     "match_id": "a1851efc-972a-4dcd-96b7-71945b450a73",
+     "datetime": "2026-10-17T13:00:00.000Z",
+     "team1_score": 2,
+     "team2_score": 5,
+     "is_winner_bracket": true,
+     "team1": {
+      "uid": [
+       32739668
+      ],
+      "name": "Team Falcoms"
+     },
+     "team2": {
+      "uid": [
+       12031289
+      ],
+      "name": "白毛红瞳双马尾"
+     }
+    },
+    {
+     "match_id": "41ae17bb-7f04-4612-97af-0890d278c997",
+     "datetime": "2026-10-18T12:00:00.000Z",
+     "team1_score": 5,
+     "team2_score": 3,
+     "is_winner_bracket": true,
+     "team1": {
+      "uid": [
+       14502713
+      ],
+      "name": "我不到啊"
+     },
+     "team2": {
+      "uid": [
+       20126778
+      ],
+      "name": "插奈特幼儿园"
+     }
+    }
+   ],
+   "lobby_info": []
+  },
+  {
+   "stage_name": "决赛",
+   "is_lobby": false,
+   "match_info": [
+    {
+     "match_id": "905fb6a9-c890-5248-bf30-6b1270bfd945",
+     "datetime": "2026-10-24T13:00:00.000Z",
+     "team1_score": 6,
+     "team2_score": 4,
+     "is_winner_bracket": false,
+     "team1": {
+      "uid": [
+       32739668
+      ],
+      "name": "Team Falcoms"
+     },
+     "team2": {
+      "uid": [
+       20126778
+      ],
+      "name": "插奈特幼儿园"
+     }
+    },
+    {
+     "match_id": "78a98161-4884-5c6c-b564-cce94377328e",
+     "datetime": "2026-10-25T13:00:00.000Z",
+     "team1_score": 5,
+     "team2_score": 6,
+     "is_winner_bracket": true,
+     "team1": {
+      "uid": [
+       12031289
+      ],
+      "name": "白毛红瞳双马尾"
+     },
+     "team2": {
+      "uid": [
+       14502713
+      ],
+      "name": "我不到啊"
+     }
+    }
+   ],
+   "lobby_info": []
+  },
+  {
+   "stage_name": "总决赛",
+   "is_lobby": false,
+   "match_info": [
+    {
+     "match_id": "5bd01725-8972-425e-afff-ab5dcedd120e",
+     "datetime": "2026-10-31T13:00:00.000Z",
+     "team1_score": 5,
+     "team2_score": 7,
+     "is_winner_bracket": false,
+     "team1": {
+      "uid": [
+       12031289
+      ],
+      "name": "白毛红瞳双马尾"
+     },
+     "team2": {
+      "uid": [
+       32739668
+      ],
+      "name": "Team Falcoms"
+     }
+    },
+    {
+     "match_id": "56a87c46-da6f-4366-9ebc-11d26d75e21b",
+     "datetime": "2026-11-01T12:00:00.000Z",
+     "team1_score": 7,
+     "team2_score": 5,
+     "is_winner_bracket": true,
+     "team1": {
+      "uid": [
+       14502713
+      ],
+      "name": "我不到啊"
+     },
+     "team2": {
+      "uid": [
+       32739668
+      ],
+      "name": "Team Falcoms"
+     }
+    }
+   ],
+   "lobby_info": []
+  }
+ ],
+ "mapPools": [
+  {
+   "stage_name": "资格赛",
+   "mod_bracket": [
+    {
+     "mod": "RC",
+     "maps": [
+      {
+       "map_id": 5363577,
+       "map_name": "雪解け色フラワーズ",
+       "mapper": "[GS]hina",
+       "diff_name": "[4K] 1400.05.09",
+       "mode": "mania",
+       "number": 1
+      },
+      {
+       "map_id": 4373685,
+       "map_name": "風神少女",
+       "mapper": "[GB]Reisen",
+       "diff_name": "[4K] Gensou Fuubi",
+       "mode": "mania",
+       "number": 2
+      },
+      {
+       "map_id": 5036665,
+       "map_name": "Somnidiscotheque",
+       "mapper": "elexire",
+       "diff_name": "[4K] Guise's Another",
+       "mode": "mania",
+       "number": 3
+      }
+     ]
+    },
+    {
+     "mod": "LN",
+     "maps": [
+      {
+       "map_id": 5881754,
+       "map_name": "I",
+       "mapper": "[GB]Cinelia",
+       "diff_name": "[4K] Stage 3: Coordination",
+       "mode": "mania",
+       "number": 1
+      },
+      {
+       "map_id": 4986115,
+       "map_name": "Paranoid Lost (Cut Ver.)",
+       "mapper": "YuEast 2018",
+       "diff_name": "[4K] I'm lost in the starry autumn sky.",
+       "mode": "mania",
+       "number": 2
+      }
+     ]
+    },
+    {
+     "mod": "HB",
+     "maps": [
+      {
+       "map_id": 3958820,
+       "map_name": "Illusional Flashback",
+       "mapper": "TheFunk",
+       "diff_name": "[4K] Stage 3: Phantasm",
+       "mode": "mania",
+       "number": 1
+      },
+      {
+       "map_id": 3610288,
+       "map_name": "Good bye, Merry-Go-Round.",
+       "mapper": "Shima Rin",
+       "diff_name": "[4K] CS' MASTER",
+       "mode": "mania",
+       "number": 2
+      }
+     ]
+    },
+    {
+     "mod": "SV",
+     "maps": [
+      {
+       "map_id": 5776110,
+       "map_name": "Final Step",
+       "mapper": "[AR]lv3plane",
+       "diff_name": "[4K] Terminus",
+       "mode": "mania",
+       "number": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "stage_name": "半决赛",
+   "mod_bracket": [
+    {
+     "mod": "RC",
+     "maps": [
+      {
+       "map_id": 4368305,
+       "map_name": "破! to the Future (Cut Ver.)",
+       "mapper": "YuEast 2018",
+       "diff_name": "[4K] Back! to the YuDong",
+       "mode": "mania",
+       "number": 1
+      },
+      {
+       "map_id": 4333065,
+       "map_name": "TO BE FREE",
+       "mapper": "Hylotl",
+       "diff_name": "[4K] Lost Northern Paradise",
+       "mode": "mania",
+       "number": 2
+      },
+      {
+       "map_id": 5187408,
+       "map_name": "单向地铁 Feat. Karin",
+       "mapper": "AelSan",
+       "diff_name": "[4K] Where is love",
+       "mode": "mania",
+       "number": 3
+      },
+      {
+       "map_id": 5211828,
+       "map_name": "w = addict",
+       "mapper": "G1NYA",
+       "diff_name": "[4K] Typing",
+       "mode": "mania",
+       "number": 4
+      },
+      {
+       "map_id": 4369837,
+       "map_name": "Running In The Dark",
+       "mapper": "elexire",
+       "diff_name": "[4K] Faraway",
+       "mode": "mania",
+       "number": 5
+      },
+      {
+       "map_id": 3760855,
+       "map_name": "ΣgØ",
+       "mapper": "Shoegazer",
+       "diff_name": "[4K] Transference",
+       "mode": "mania",
+       "number": 6
+      }
+     ]
+    },
+    {
+     "mod": "LN",
+     "maps": [
+      {
+       "map_id": 4798172,
+       "map_name": "我喜欢",
+       "mapper": "Hylotl",
+       "diff_name": "[4K] End of April, 2017",
+       "mode": "mania",
+       "number": 1
+      },
+      {
+       "map_id": 4954287,
+       "map_name": "LUCKY CAT",
+       "mapper": "[Crz]FolAH1217",
+       "diff_name": "[4K] UNLUCKY LN",
+       "mode": "mania",
+       "number": 2
+      }
+     ]
+    },
+    {
+     "mod": "HB",
+     "maps": [
+      {
+       "map_id": 4954309,
+       "map_name": "果てなき風の軌跡さえ～破～(Cut ver.)",
+       "mapper": "[Crz]Reimu",
+       "diff_name": "[4K] Kochiya Sanae",
+       "mode": "mania",
+       "number": 1
+      },
+      {
+       "map_id": 4141642,
+       "map_name": "患部で止まってすぐ溶ける ～ 狂気の優曇華院",
+       "mapper": "[GB]Reisen",
+       "diff_name": "[4K] C13H16N2.HCl (Edit)",
+       "mode": "mania",
+       "number": 2
+      }
+     ]
+    },
+    {
+     "mod": "TB",
+     "maps": [
+      {
+       "map_id": 4692822,
+       "map_name": "Together forever, my lovely lovely video game cartridges",
+       "mapper": "[Crz]FolAH1217",
+       "diff_name": "[4K] 2020 Flashback",
+       "mode": "mania",
+       "number": 1
+      }
+     ]
+    },
+    {
+     "mod": "AC",
+     "maps": [
+      {
+       "map_id": 3273376,
+       "map_name": "HowToPlayLN",
+       "mapper": "HowToPlayLN",
+       "diff_name": "[4K] HowToPlayHard",
+       "mode": "mania",
+       "number": 1
+      }
+     ]
+    },
+    {
+     "mod": "SV",
+     "maps": [
+      {
+       "map_id": 3207557,
+       "map_name": "TURBO (Cut Ver)",
+       "mapper": "H1Pur",
+       "diff_name": "[4K] SV on the gas",
+       "mode": "mania",
+       "number": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "stage_name": "决赛",
+   "mod_bracket": [
+    {
+     "mod": "RC",
+     "maps": [
+      {
+       "map_id": 4983634,
+       "map_name": "夜桜に君を隠して",
+       "mapper": "Xzzj",
+       "diff_name": "[4K] 1.05 cut edited by YuEast 2018",
+       "mode": "mania",
+       "number": 1
+      },
+      {
+       "map_id": 4245674,
+       "map_name": "人生マタタビ",
+       "mapper": "YuEast 2018",
+       "diff_name": "[4K] x1.05",
+       "mode": "mania",
+       "number": 2
+      },
+      {
+       "map_id": 3919581,
+       "map_name": "Jasmine Tea Girl",
+       "mapper": "[Crz]FolAH1217",
+       "diff_name": "[4K] CHILLING",
+       "mode": "mania",
+       "number": 3
+      },
+      {
+       "map_id": 5187697,
+       "map_name": "悪趣味",
+       "mapper": "Doshowz",
+       "diff_name": "[4K] Bad Taste",
+       "mode": "mania",
+       "number": 4
+      },
+      {
+       "map_id": 4661716,
+       "map_name": "アドベンチャー",
+       "mapper": "AelSan",
+       "diff_name": "[4K] Memorable Memories",
+       "mode": "mania",
+       "number": 5
+      },
+      {
+       "map_id": 3422101,
+       "map_name": "PARADOXX",
+       "mapper": "Shoegazer",
+       "diff_name": "[4K] Iconoclasm 1.15x (253bpm)",
+       "mode": "mania",
+       "number": 6
+      }
+     ]
+    },
+    {
+     "mod": "LN",
+     "maps": [
+      {
+       "map_id": 4974163,
+       "map_name": "鴇色セレナーデ",
+       "mapper": "[Crz]FolAH1217",
+       "diff_name": "[4K] Despair",
+       "mode": "mania",
+       "number": 1
+      },
+      {
+       "map_id": 4226448,
+       "map_name": "Imperishable Night 2006 (2016 Refine)",
+       "mapper": "[Crz]FolAH1217",
+       "diff_name": "[4K] Stage 3-8: Density",
+       "mode": "mania",
+       "number": 2
+      }
+     ]
+    },
+    {
+     "mod": "HB",
+     "maps": [
+      {
+       "map_id": 3871106,
+       "map_name": "わーーー",
+       "mapper": "YuEast 2018",
+       "diff_name": "[4K] :v1do's_insane:",
+       "mode": "mania",
+       "number": 1
+      },
+      {
+       "map_id": 3402879,
+       "map_name": "Bang Bang",
+       "mapper": "CrewK",
+       "diff_name": "[4K] Gun [1.1x Rate]",
+       "mode": "mania",
+       "number": 2
+      }
+     ]
+    },
+    {
+     "mod": "TB",
+     "maps": [
+      {
+       "map_id": 4226439,
+       "map_name": "Σvreka",
+       "mapper": "Irone OSU",
+       "diff_name": "[4K] Archimedes' Wisdom",
+       "mode": "mania",
+       "number": 1
+      }
+     ]
+    },
+    {
+     "mod": "AC",
+     "maps": [
+      {
+       "map_id": 3105666,
+       "map_name": "EXPLORER-2",
+       "mapper": "HowToPlayLN",
+       "diff_name": "[4K] nsv",
+       "mode": "mania",
+       "number": 1
+      },
+      {
+       "map_id": 4262161,
+       "map_name": "remembrance; image of him before departure",
+       "mapper": "Lott",
+       "diff_name": "[4K] polarin vs. lott's advanced",
+       "mode": "mania",
+       "number": 2
+      }
+     ]
+    },
+    {
+     "mod": "SV",
+     "maps": [
+      {
+       "map_id": 3971246,
+       "map_name": "Sweet Dreams (11t dnb mix)",
+       "mapper": "Paturages",
+       "diff_name": "[4K] Martin Luther King",
+       "mode": "mania",
+       "number": 1
+      },
+      {
+       "map_id": 3989898,
+       "map_name": "Back and Forth",
+       "mapper": "RuleBlazing",
+       "diff_name": "[4K] Reversive",
+       "mode": "mania",
+       "number": 2
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "stage_name": "总决赛",
+   "mod_bracket": [
+    {
+     "mod": "RC",
+     "maps": [
+      {
+       "map_id": 4545255,
+       "map_name": "B.O.L. (Cut Ver.)",
+       "mapper": "Lott",
+       "diff_name": "[4K] Rebellion 1.15x",
+       "mode": "mania",
+       "number": 1
+      },
+      {
+       "map_id": 3181691,
+       "map_name": "FAKE PROMISE",
+       "mapper": "Shoegazer",
+       "diff_name": "[4K] Eternity 1.1x (210bpm)",
+       "mode": "mania",
+       "number": 2
+      },
+      {
+       "map_id": 4750475,
+       "map_name": "夏、透明な青に惹かれて。",
+       "mapper": "YuEast 2018",
+       "diff_name": "[4K] Happy Summer 2024! x1.15",
+       "mode": "mania",
+       "number": 3
+      },
+      {
+       "map_id": 5881767,
+       "map_name": "ウルトラリズム (Prod. Hylen)",
+       "mapper": "[ Kloc ]",
+       "diff_name": "[4K] Stage 2: ULTRAASMR",
+       "mode": "mania",
+       "number": 4
+      },
+      {
+       "map_id": 1281033,
+       "map_name": "WAVE",
+       "mapper": "Alipay",
+       "diff_name": "[4K] Insane",
+       "mode": "mania",
+       "number": 5
+      },
+      {
+       "map_id": 2856150,
+       "map_name": "Scrap Syndrome",
+       "mapper": "Vortex-",
+       "diff_name": "[4K] Fatal 1.1x",
+       "mode": "mania",
+       "number": 6
+      }
+     ]
+    },
+    {
+     "mod": "LN",
+     "maps": [
+      {
+       "map_id": 4031878,
+       "map_name": "Color of Drops",
+       "mapper": "[Crz]FolAH1217",
+       "diff_name": "[4K] Color of Myself.",
+       "mode": "mania",
+       "number": 1
+      },
+      {
+       "map_id": 4853515,
+       "map_name": "Blah!!",
+       "mapper": "PORTTAYER",
+       "diff_name": "[4K] Kick It!!",
+       "mode": "mania",
+       "number": 2
+      },
+      {
+       "map_id": 5730659,
+       "map_name": "エーデルワイス ~edelweiss~",
+       "mapper": "Paturages",
+       "diff_name": "[4K] Oxalis (feat. elexire)",
+       "mode": "mania",
+       "number": 3
+      }
+     ]
+    },
+    {
+     "mod": "HB",
+     "maps": [
+      {
+       "map_id": 5224161,
+       "map_name": "〚盲従〛～Fantasia Sonata Flower",
+       "mapper": "-Terakomari",
+       "diff_name": "[4K] :person_with_probing_cane: :worm:",
+       "mode": "mania",
+       "number": 1
+      },
+      {
+       "map_id": 3400503,
+       "map_name": "Signal (feat. Such) - Mameyudoufu Remix (osu! edit)",
+       "mapper": "HowToPlayLN",
+       "diff_name": "[4K] Periodic Function",
+       "mode": "mania",
+       "number": 2
+      }
+     ]
+    },
+    {
+     "mod": "TB",
+     "maps": [
+      {
+       "map_id": 5826030,
+       "map_name": "Cherokee (Live) (Cut Ver.)",
+       "mapper": "-mint-",
+       "diff_name": "[4K] American Express",
+       "mode": "mania",
+       "number": 1
+      }
+     ]
+    },
+    {
+     "mod": "AC",
+     "maps": [
+      {
+       "map_id": 2840685,
+       "map_name": "VANGUARD-1",
+       "mapper": "Kamikaze",
+       "diff_name": "[4K] Stage 2: SATELITE // HR",
+       "mode": "mania",
+       "number": 1
+      },
+      {
+       "map_id": 4242535,
+       "map_name": "町",
+       "mapper": "Albania Illya",
+       "diff_name": "[4K] boop",
+       "mode": "mania",
+       "number": 2
+      },
+      {
+       "map_id": 4621573,
+       "map_name": "Friction[!]Function",
+       "mapper": "elexire",
+       "diff_name": "[4K] Hyper",
+       "mode": "mania",
+       "number": 3
+      }
+     ]
+    },
+    {
+     "mod": "SV",
+     "maps": [
+      {
+       "map_id": 4266321,
+       "map_name": "OMG (ZSunder remix)",
+       "mapper": "RuleBlazing",
+       "diff_name": "[4K] rabbit",
+       "mode": "mania",
+       "number": 1
+      },
+      {
+       "map_id": 5965244,
+       "map_name": "Colours",
+       "mapper": "[AR]lv3plane",
+       "diff_name": "[4K] Skittles",
+       "mode": "mania",
+       "number": 2
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "roundInfo": [
+  {
+   "stage_name": "资格赛",
+   "is_lobby": true,
+   "is_solo_qualifier": true,
+   "start_time": "2026-09-14",
+   "end_time": "2026-09-20"
+  },
+  {
+   "stage_name": "半决赛",
+   "is_lobby": false,
+   "is_solo_qualifier": false,
+   "start_time": "2026-10-17",
+   "end_time": "2026-10-18"
+  },
+  {
+   "stage_name": "决赛",
+   "is_lobby": false,
+   "is_solo_qualifier": false,
+   "start_time": "2026-10-24",
+   "end_time": "2026-10-25"
+  },
+  {
+   "stage_name": "总决赛",
+   "is_lobby": false,
+   "is_solo_qualifier": false,
+   "start_time": "2026-10-31",
+   "end_time": "2026-11-01"
+  }
+ ],
+ "draw": {
+  "format": "double",
+  "entrants": [
+   {
+    "uid": null,
+    "name": "Team Falcoms",
+    "id": "team:Team Falcoms"
+   },
+   {
+    "uid": null,
+    "name": "我不到啊",
+    "id": "team:我不到啊"
+   },
+   {
+    "uid": null,
+    "name": "插奈特幼儿园",
+    "id": "team:插奈特幼儿园"
+   },
+   {
+    "uid": null,
+    "name": "白毛红瞳双马尾",
+    "id": "team:白毛红瞳双马尾"
+   }
+  ],
+  "rounds": [
+   {
+    "id": "W1",
+    "name": "半决赛 · 胜者组",
+    "bracket": "winner",
+    "best_of": 9,
+    "stage_name": "半决赛"
+   },
+   {
+    "id": "W2",
+    "name": "决赛 · 胜者组",
+    "bracket": "winner",
+    "best_of": 11,
+    "stage_name": "决赛"
+   },
+   {
+    "id": "L1",
+    "name": "决赛 · 败者组",
+    "bracket": "loser",
+    "best_of": 11,
+    "stage_name": "决赛"
+   },
+   {
+    "id": "L2",
+    "name": "总决赛 · 败者组",
+    "bracket": "loser",
+    "best_of": 13,
+    "stage_name": "总决赛"
+   },
+   {
+    "id": "GF",
+    "name": "总决赛",
+    "bracket": "final",
+    "best_of": 13,
+    "stage_name": "总决赛"
+   },
+   {
+    "id": "RF",
+    "name": "总决赛 · 重置赛",
+    "bracket": "final",
+    "best_of": 13,
+    "stage_name": "总决赛"
+   }
+  ],
+  "matches": [
+   {
+    "id": "M1",
+    "round_id": "W1",
+    "teams": [
+     "team:Team Falcoms",
+     "team:白毛红瞳双马尾"
+    ],
+    "scores": [
+     2,
+     5
+    ],
+    "status": "completed",
+    "datetime": "2026-10-17T13:00:00+00:00"
+   },
+   {
+    "id": "M2",
+    "round_id": "W1",
+    "teams": [
+     "team:我不到啊",
+     "team:插奈特幼儿园"
+    ],
+    "scores": [
+     5,
+     3
+    ],
+    "status": "completed",
+    "datetime": "2026-10-18T12:00:00+00:00"
+   },
+   {
+    "id": "M3",
+    "round_id": "W2",
+    "teams": [
+     "team:白毛红瞳双马尾",
+     "team:我不到啊"
+    ],
+    "scores": [
+     5,
+     6
+    ],
+    "status": "completed",
+    "datetime": "2026-10-25T13:00:00+00:00"
+   },
+   {
+    "id": "M4",
+    "round_id": "L1",
+    "teams": [
+     "team:Team Falcoms",
+     "team:插奈特幼儿园"
+    ],
+    "scores": [
+     6,
+     4
+    ],
+    "status": "completed",
+    "datetime": "2026-10-24T13:00:00+00:00"
+   },
+   {
+    "id": "M5",
+    "round_id": "L2",
+    "teams": [
+     "team:Team Falcoms",
+     "team:白毛红瞳双马尾"
+    ],
+    "scores": [
+     7,
+     5
+    ],
+    "status": "completed",
+    "datetime": "2026-10-31T13:00:00+00:00"
+   },
+   {
+    "id": "M6",
+    "round_id": "GF",
+    "teams": [
+     "team:我不到啊",
+     "team:Team Falcoms"
+    ],
+    "scores": [
+     7,
+     5
+    ],
+    "status": "completed",
+    "datetime": "2026-11-01T12:00:00+00:00"
+   },
+   {
+    "id": "M7",
+    "round_id": "RF",
+    "teams": [
+     null,
+     null
+    ],
+    "scores": [
+     0,
+     0
+    ],
+    "status": "unneeded",
+    "datetime": null
+   }
+  ]
+ },
+ "bracket": null
+}
