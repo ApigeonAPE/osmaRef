@@ -156,20 +156,6 @@ export class ServerClient {
     return this.osu.getUser(userId);
   }
 
-  async listTournaments(): Promise<{ id: string; name: string; revision: number; updatedAt: string }[]> {
-    const payload = await this.request<{
-      tournaments: { id: string; name: string; revision: number; updatedAt: string }[];
-    }>('/api/v1/tournaments');
-    return payload.tournaments;
-  }
-
-  async getTournament(id: string): Promise<unknown> {
-    const payload = await this.request<{ tournament: unknown }>(
-      `/api/v1/tournaments/${encodeURIComponent(id)}`,
-    );
-    return payload.tournament;
-  }
-
   private refresh(): Promise<string> {
     if (this.refreshTask) return this.refreshTask;
     const tokens = this.deps.getTokens();

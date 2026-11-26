@@ -205,7 +205,6 @@ export const zhCN: Record<string, string> = {
   'Import file': '导入文件',
   'Import bracket.json': '从 bracket.json 导入',
   'Conversion notes': '转换说明',
-  'Import from server': '从服务器导入',
   Export: '导出',
   'Save changes': '保存修改',
   Saved: '已保存',
@@ -223,7 +222,6 @@ export const zhCN: Record<string, string> = {
   'Delete tournament': '删除赛事',
   'Team VS': 'Team VS',
   'id {id}, rev {revision}, updated {date}': 'id {id}，修订 {revision}，更新于 {date}',
-  'rev {revision}, {date}': '修订 {revision}，{date}',
   'exported to {path}': '已导出到 {path}',
   'Configuration issues': '配置问题',
   'Teams and roster': '队伍与名单',
@@ -350,11 +348,8 @@ export const zhCN: Record<string, string> = {
   'action applied': '动作执行',
   'Import preview': '导入预览',
   'Import as new tournament': '导入为新赛事',
-  'from server': '来自服务器',
   'from file': '来自文件',
   'References to review': '需要检查的引用',
-  'Tournaments on the companion server': '配套服务器上的赛事',
-  'The server has no published tournaments.': '服务器上没有已发布的赛事。',
 
   // --- logs -----------------------------------------------------------------
   'Lobby logs': '房间日志',

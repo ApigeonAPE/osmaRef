@@ -8,17 +8,14 @@ import {
   createTournamentId,
   validateTournamentReferences,
   type ImportPreview,
-  type RemoteTournamentSummary,
   type Tournament,
 } from '@osmaref/contracts';
 import type { AppStore } from './store';
-import type { ServerClient } from './server-client';
 import type { AppLogger } from './logger';
 
 export class TournamentImporter {
   constructor(
     private readonly store: AppStore,
-    private readonly server: ServerClient,
     private readonly logger: AppLogger,
   ) {}
 
@@ -51,7 +48,7 @@ export class TournamentImporter {
     const raw = JSON.parse(readFileSync(file, 'utf8')) as unknown;
     const tournament = parseTournament(raw);
     this.logger.runtime('info', 'tournament', `imported "${tournament.name}" from ${file}`);
-    return this.buildPreview('file', basename(file, '.json'), null, null, tournament);
+    return this.buildPreview(basename(file, '.json'), null, null, tournament);
   }
 
   /**
@@ -80,17 +77,7 @@ export class TournamentImporter {
         `${tournament.stages.length} stages, ${matchCount} matches, ` +
         `${notes.length} notes)`,
     );
-    return this.buildPreview('file', remoteId, null, null, tournament, notes);
-  }
-
-  async listRemote(): Promise<RemoteTournamentSummary[]> {
-    return this.server.listTournaments();
-  }
-
-  async previewRemote(id: string): Promise<ImportPreview> {
-    const raw = await this.server.getTournament(id);
-    const tournament = parseTournament(raw);
-    return this.buildPreview('http', id, String(tournament.revision), null, tournament);
+    return this.buildPreview(remoteId, null, null, tournament, notes);
   }
 
   /**
@@ -134,7 +121,6 @@ export class TournamentImporter {
   }
 
   private buildPreview(
-    provider: 'file' | 'http',
     remoteId: string,
     remoteRevision: string | null,
     etag: string | null,
@@ -148,7 +134,7 @@ export class TournamentImporter {
       message: issue.message,
     }));
     return {
-      provider,
+      provider: 'file',
       remoteId,
       remoteRevision,
       etag,

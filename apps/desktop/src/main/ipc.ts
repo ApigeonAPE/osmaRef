@@ -189,8 +189,6 @@ export function registerIpc(ctx: IpcContext): void {
   handle(IPC.tournamentsApplyImport, (preview) =>
     ctx.importer.apply(parse(ImportPreviewSchema, preview, 'import preview')),
   );
-  handle(IPC.tournamentsRemoteList, () => ctx.importer.listRemote());
-  handle(IPC.tournamentsRemotePreview, (id) => ctx.importer.previewRemote(String(id)));
 
   handle(IPC.sessionsList, () => ctx.store.listSessions());
   handle(IPC.sessionsListLogs, () => ctx.store.listLobbyLogs());

@@ -130,15 +130,8 @@ export const DesktopEventSchema = z.discriminatedUnion('type', [
 ]);
 export type DesktopEvent = z.infer<typeof DesktopEventSchema>;
 
-export interface RemoteTournamentSummary {
-  id: string;
-  name: string;
-  revision: number;
-  updatedAt: string;
-}
-
 export interface ImportPreview {
-  provider: 'file' | 'http';
+  provider: 'file';
   remoteId: string;
   remoteRevision: string | null;
   etag: string | null;
@@ -436,7 +429,7 @@ export const RecordResultInputSchema = z.object({
 });
 
 export const ImportPreviewSchema = z.object({
-  provider: z.enum(['file', 'http']),
+  provider: z.literal('file'),
   remoteId: z.string().min(1).max(200),
   remoteRevision: z.string().max(100).nullable(),
   etag: z.string().max(200).nullable(),
@@ -483,8 +476,6 @@ export interface DesktopApi {
     /** Imports an osu! tournament client `bracket.json`, converted to a tournament. */
     importBracket(): Promise<ImportPreview | null>;
     applyImport(preview: ImportPreview): Promise<Tournament>;
-    listRemote(): Promise<RemoteTournamentSummary[]>;
-    previewRemote(id: string): Promise<ImportPreview>;
   };
   sessions: {
     list(): Promise<MatchSession[]>;
@@ -611,8 +602,6 @@ export const IPC = {
   tournamentsImportFile: 'tournaments:import-file',
   tournamentsImportBracket: 'tournaments:import-bracket',
   tournamentsApplyImport: 'tournaments:apply-import',
-  tournamentsRemoteList: 'tournaments:remote-list',
-  tournamentsRemotePreview: 'tournaments:remote-preview',
 
   sessionsList: 'sessions:list',
   sessionsListLogs: 'sessions:list-logs',

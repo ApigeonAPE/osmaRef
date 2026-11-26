@@ -8,7 +8,6 @@ import {
   type Tournament,
 } from '@osmaref/contracts';
 import type { AppStore } from '../apps/desktop/src/main/store';
-import type { ServerClient } from '../apps/desktop/src/main/server-client';
 import type { AppLogger } from '../apps/desktop/src/main/logger';
 
 vi.mock('electron', () => ({
@@ -66,7 +65,7 @@ describe('tournament imports', () => {
       },
     } as unknown as AppStore;
     const logger = { runtime: vi.fn() } as unknown as AppLogger;
-    const importer = new TournamentImporter(store, {} as ServerClient, logger);
+    const importer = new TournamentImporter(store, logger);
     return { importer, tournaments };
   }
 

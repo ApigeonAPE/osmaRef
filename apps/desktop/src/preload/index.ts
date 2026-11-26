@@ -9,7 +9,6 @@ import {
   type LogEntry,
   type MatchSession,
   type MpCommandResult,
-  type RemoteTournamentSummary,
   type RoomSnapshot,
   type ServerStatus,
   type SessionEvent,
@@ -58,8 +57,6 @@ const api: DesktopApi = {
     importFile: () => invoke<ImportPreview | null>(IPC.tournamentsImportFile),
     importBracket: () => invoke<ImportPreview | null>(IPC.tournamentsImportBracket),
     applyImport: (preview) => invoke<Tournament>(IPC.tournamentsApplyImport, preview),
-    listRemote: () => invoke<RemoteTournamentSummary[]>(IPC.tournamentsRemoteList),
-    previewRemote: (id) => invoke<ImportPreview>(IPC.tournamentsRemotePreview, id),
   },
   sessions: {
     list: () => invoke<MatchSession[]>(IPC.sessionsList),

@@ -14,7 +14,6 @@ import {
   type ImportPreview,
   type Match,
   type MatchType,
-  type RemoteTournamentSummary,
   type RulesetId,
   type Stage,
   type MappoolBeatmapInfo,
@@ -140,7 +139,6 @@ export function TournamentsPage() {
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('basics');
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importOpen, setImportOpen] = useState(false);
-  const [remoteList, setRemoteList] = useState<RemoteTournamentSummary[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [pendingIds, setPendingIds] = useState<Set<number>>(new Set());
   const [memberInput, setMemberInput] = useState<Record<number, string>>({});
@@ -303,23 +301,6 @@ export function TournamentsPage() {
     try {
       const preview = await window.osmaRef.tournaments.importBracket();
       if (preview) setImportPreview(preview);
-    } catch (cause) {
-      toast.error(errorText(cause));
-    }
-  };
-
-  const importFromServer = async () => {
-    try {
-      setRemoteList(await window.osmaRef.tournaments.listRemote());
-    } catch (cause) {
-      toast.error(errorText(cause));
-    }
-  };
-
-  const previewRemote = async (id: string) => {
-    try {
-      setImportPreview(await window.osmaRef.tournaments.previewRemote(id));
-      setRemoteList(null);
     } catch (cause) {
       toast.error(errorText(cause));
     }
@@ -633,16 +614,6 @@ export function TournamentsPage() {
             >
               {t('Import bracket.json')}
             </button>
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => {
-                setImportOpen(false);
-                void importFromServer();
-              }}
-            >
-              {t('Import from server')}
-            </button>
           </div>
         </Modal>
       ) : null}
@@ -665,7 +636,7 @@ export function TournamentsPage() {
           <p>
             <strong>{importPreview.tournament.name}</strong>, revision{' '}
             {importPreview.tournament.revision},{' '}
-            {importPreview.provider === 'http' ? t('from server') : t('from file')}
+            {t('from file')}
           </p>
           {importPreview.notes.length > 0 ? (
             <div className="banner info">
@@ -689,34 +660,6 @@ export function TournamentsPage() {
               </ul>
             </div>
           ) : null}
-        </Modal>
-      ) : null}
-
-      {remoteList ? (
-        <Modal title={t('Tournaments on the companion server')} onClose={() => setRemoteList(null)}>
-          {remoteList.length === 0 ? (
-            <p className="muted">{t('The server has no published tournaments.')}</p>
-          ) : null}
-          {remoteList.map((remote) => (
-            <div key={remote.id} className="remote-row">
-              <div>
-                <strong>{remote.name}</strong>
-                <span className="muted small">
-                  {remote.id}, {t('rev {revision}, {date}', {
-                    revision: remote.revision,
-                    date: formatDateTime(remote.updatedAt),
-                  })}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="ghost small"
-                onClick={() => void previewRemote(remote.id)}
-              >
-                {t('Preview')}
-              </button>
-            </div>
-          ))}
         </Modal>
       ) : null}
     </div>

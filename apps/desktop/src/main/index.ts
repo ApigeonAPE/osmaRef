@@ -92,7 +92,7 @@ async function bootstrap(): Promise<void> {
     // Replaced by registerIpc once the window exists.
     emit: () => undefined,
   });
-  const importer = new TournamentImporter(store, server, logger);
+  const importer = new TournamentImporter(store, logger);
   const covers = new CoverCache(join(userData, 'covers'));
   covers.register();
 
