@@ -38,9 +38,16 @@ type WorkspaceView = 'basics' | 'teams' | 'stages' | 'webhooks' | 'automation';
 type StageView = 'groups' | 'mappool' | 'flow' | 'winby' | 'matches';
 
 const SLOT_CATEGORY_PATTERN = /^[A-Z0-9]{1,5}$/;
-
 function cleanSlotCategory(raw: string): string {
   return raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+}
+
+/** Accepts a full MP link, `community/matches/<id>` or a bare room id. */
+function parseMpRoomId(raw: string): number | null {
+  const match = /(\d+)\s*$/.exec(raw.trim());
+  if (!match) return null;
+  const roomId = Number(match[1]);
+  return Number.isInteger(roomId) && roomId > 0 ? roomId : null;
 }
 
 const WORKSPACE_VIEWS: { id: WorkspaceView; label: string }[] = [
@@ -1873,6 +1880,7 @@ function MatchesEditor({
 }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [mpLinks, setMpLinks] = useState<Record<string, string>>({});
 
   const toggle = (id: string) => {
     setExpanded((previous) => {
@@ -1894,7 +1902,7 @@ function MatchesEditor({
         groupId: target.groups[0]?.id ?? null,
         refereeIds: [],
         scheduledAt: new Date().toISOString(),
-        result: { scoreRed: 0, scoreBlue: 0 },
+        result: { scoreRed: 0, scoreBlue: 0, roomId: null, beatmaps: [] },
         notes: undefined,
       };
       if (type === 'lobby') {
@@ -1967,6 +1975,18 @@ function MatchesEditor({
                     : '0 : 0'}
                 </span>
                 <span className="match-team blue">{right}</span>
+                <button
+                  type="button"
+                  className="ghost small match-link"
+                  title="MP Link"
+                  aria-label="MP Link"
+                  disabled={!match.result.roomId}
+                  onClick={() =>
+                    void window.osmaRef.app.openExternal(
+                      `https://osu.ppy.sh/community/matches/${match.result.roomId}`,
+                    )
+                  }
+                />
                 <button
                   type="button"
                   className="ghost small danger"
@@ -2145,6 +2165,29 @@ function MatchesEditor({
                             }
                           />
                         </Field>
+                        {match.type === 'match' ? (
+                          <Field label="MP Link">
+                            <input
+                              value={
+                                mpLinks[match.id] ??
+                                (match.result.roomId
+                                  ? `https://osu.ppy.sh/community/matches/${match.result.roomId}`
+                                  : '')
+                              }
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setMpLinks((previous) => ({
+                                  ...previous,
+                                  [match.id]: value,
+                                }));
+                                patchMatch(index, (target) => {
+                                  if (target.type !== 'match') return;
+                                  target.result.roomId = parseMpRoomId(value);
+                                });
+                              }}
+                            />
+                          </Field>
+                        ) : null}
                       </>
                     ) : null}
                   </div>

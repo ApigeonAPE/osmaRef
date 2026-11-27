@@ -145,7 +145,7 @@ describe('automatic messages in an IRC room', () => {
         teamBlueId: 1,
         refereeIds: [],
         scheduledAt: '2026-01-01T00:00:00.000Z',
-        result: { scoreRed: 0, scoreBlue: 0 },
+        result: { scoreRed: 0, scoreBlue: 0, roomId: null, beatmaps: [] },
         roomMode: 'team_versus',
       });
       tournament.automation.action_applied = [{ type: 'chat', template: '{{slot}}' }];

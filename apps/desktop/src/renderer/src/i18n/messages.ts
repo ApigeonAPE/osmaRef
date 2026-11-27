@@ -392,6 +392,15 @@ export const zhCN: Record<string, string> = {
   Message: '消息',
   'No tournaments configured.': '尚未配置赛事。',
   'No matches configured.': '尚未配置比赛。',
+
+  // --- match results -------------------------------------------------------
+  'Match results': '比赛结果',
+  'Fetch missing scores from mplink automatically': '自动从 mplink 获取缺失的分数',
+  'When the match room reports missing scores, osmaRef tries to fetch them from the mplink. On a slow network this can take about 30s and delay the following matches.':
+    '当比赛房间返回的分数有缺失时，osmaRef 会尝试从 mplink 获取分数。当网络条件较差时，此举可能耗费很长时间（约 30s）并拖慢后续比赛流程。',
+  'Disabling it makes osmaRef skip this step and continue with the score processing. Automatic scores may then be wrong.':
+    '若禁用「自动从 mplink 获取缺失的分数」，osmaRef 会跳过这一步骤，并继续接下来的分数处理流程。这可能导致自动比分错误。',
+  'Choose carefully.': '请谨慎决定。',
 };
 
 export const en: Record<string, string> = {};

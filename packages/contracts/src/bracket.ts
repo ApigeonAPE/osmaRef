@@ -325,6 +325,8 @@ export function convertBracketToTournament(
       result: {
         scoreRed: Number.isInteger(raw.Team1Score) ? Math.max(0, raw.Team1Score!) : 0,
         scoreBlue: Number.isInteger(raw.Team2Score) ? Math.max(0, raw.Team2Score!) : 0,
+        roomId: null,
+        beatmaps: [],
       },
       roomMode: 'team_versus',
       notes: matchNote(raw).slice(0, 1000),

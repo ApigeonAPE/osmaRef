@@ -231,6 +231,8 @@ export interface Settings {
   chatFontSize: number;
   chatLineHeight: number;
   storeIrcPassword: boolean;
+  /** Fetches missing or incomplete scores from the multiplayer match link. */
+  autoFetchMplinkScores: boolean;
   logLevel: LogLevel;
   discordAuthorImage: string;
   discordAuthorName: string;
@@ -257,6 +259,7 @@ export const DEFAULT_SETTINGS: Settings = {
   chatFontSize: 13,
   chatLineHeight: 1.35,
   storeIrcPassword: true,
+  autoFetchMplinkScores: true,
   logLevel: 'info',
   discordAuthorImage: '',
   discordAuthorName: '',
@@ -327,6 +330,7 @@ export const SettingsPatchSchema = z.object({
   chatFontSize: z.number().min(9).max(28).optional(),
   chatLineHeight: z.number().min(1).max(2.4).optional(),
   storeIrcPassword: z.boolean().optional(),
+  autoFetchMplinkScores: z.boolean().optional(),
   logLevel: LogLevelSchema.optional(),
   discordAuthorImage: OptionalHttpsUrlSchema.optional(),
   discordAuthorName: z.string().max(80).optional(),

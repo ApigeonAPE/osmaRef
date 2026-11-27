@@ -149,9 +149,28 @@ export const StageGroupSchema = z.object({
 });
 export type StageGroup = z.infer<typeof StageGroupSchema>;
 
+export const MatchScoreSchema = z.object({
+  userId: z.number().int().nonnegative().nullable().default(null),
+  username: z.string().max(64).default(''),
+  score: z.number().int().nonnegative().default(0),
+  passed: z.boolean().default(true),
+});
+export type MatchScore = z.infer<typeof MatchScoreSchema>;
+
+export const MatchBeatmapResultSchema = z.object({
+  slotLabel: z.string().max(16).default(''),
+  beatmapId: z.number().int().positive().nullable().default(null),
+  winner: z.enum(['team_one', 'team_two']).nullable().default(null),
+  scores: z.array(MatchScoreSchema).default([]),
+});
+export type MatchBeatmapResult = z.infer<typeof MatchBeatmapResultSchema>;
+
 export const MatchResultSchema = z.object({
   scoreRed: z.number().int().nonnegative().default(0),
   scoreBlue: z.number().int().nonnegative().default(0),
+  /** Multiplayer room the result was recorded from, used to reopen the MP link. */
+  roomId: z.number().int().positive().nullable().default(null),
+  beatmaps: z.array(MatchBeatmapResultSchema).default([]),
 });
 export type MatchResult = z.infer<typeof MatchResultSchema>;
 

@@ -117,7 +117,7 @@ describe('Mayumi import', () => {
     if (match.type === 'match') {
       expect(match.teamRedId).toBe(0);
       expect(match.teamBlueId).toBe(1);
-      expect(match.result).toEqual({ scoreRed: 5, scoreBlue: 2 });
+      expect(match.result).toEqual({ scoreRed: 5, scoreBlue: 2, roomId: null, beatmaps: [] });
       expect(match.scheduledAt).toBe('2026-11-01T13:00:00.000Z');
     }
     expect(notes).toEqual([]);
@@ -248,7 +248,7 @@ describe('Mayumi import', () => {
     );
     parse(tournament);
     const match = tournament.stages[0]!.matches[0]!;
-    expect(match.result).toEqual({ scoreRed: 0, scoreBlue: 0 });
+    expect(match.result).toEqual({ scoreRed: 0, scoreBlue: 0, roomId: null, beatmaps: [] });
     expect(notes.some((note) => note.includes('forfeit'))).toBe(true);
   });
 
@@ -453,7 +453,7 @@ describe('Mayumi import: NOC26FALL snapshot', () => {
     expect(matches).toHaveLength(6);
     const first = matches[0]!;
     expect(first.scheduledAt).toBe('2026-10-17T13:00:00.000Z');
-    expect(first.result).toEqual({ scoreRed: 2, scoreBlue: 5 });
+    expect(first.result).toEqual({ scoreRed: 2, scoreBlue: 5, roomId: null, beatmaps: [] });
     for (const match of matches) {
       expect(match.type).toBe('match');
       if (match.type === 'match' && match.notes?.includes('losers bracket')) {

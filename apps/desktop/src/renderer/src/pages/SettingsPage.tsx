@@ -24,6 +24,7 @@ export function SettingsPage() {
   const [version, setVersion] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [freemodOpen, setFreemodOpen] = useState(false);
+  const [mplinkHelpOpen, setMplinkHelpOpen] = useState(false);
   const [licenseOpen, setLicenseOpen] = useState(false);
   const [licenseTab, setLicenseTab] = useState<'harmony' | 'osmaref'>('osmaref');
   const [logsOpen, setLogsOpen] = useState(false);
@@ -219,6 +220,29 @@ export function SettingsPage() {
           </Field>
         </div>
       </div>
+
+      <Section title={t('Match results')}>
+        <div className="row-actions">
+          <label className="switch">
+            <input
+              type="checkbox"
+              checked={settings.autoFetchMplinkScores}
+              onChange={(event) => patch('autoFetchMplinkScores', event.target.checked)}
+            />
+            <span className="switch-track" />
+            {t('Fetch missing scores from mplink automatically')}
+          </label>
+          <button
+            type="button"
+            className="ghost small help-button"
+            title={t('Help')}
+            aria-label={t('Help')}
+            onClick={() => setMplinkHelpOpen(true)}
+          >
+            ?
+          </button>
+        </div>
+      </Section>
 
       <Section title={t('Chat appearance')}>
         <div className="form-grid">
@@ -606,6 +630,30 @@ export function SettingsPage() {
           </button>
         </div>
       </Section>
+
+      {mplinkHelpOpen ? (
+        <Modal
+          title={t('Fetch missing scores from mplink automatically')}
+          onClose={() => setMplinkHelpOpen(false)}
+          footer={
+            <button type="button" className="primary" onClick={() => setMplinkHelpOpen(false)}>
+              {t('Done')}
+            </button>
+          }
+        >
+          <p>
+            {t(
+              'When the match room reports missing scores, osmaRef tries to fetch them from the mplink. On a slow network this can take about 30s and delay the following matches.',
+            )}
+          </p>
+          <p>
+            {t(
+              'Disabling it makes osmaRef skip this step and continue with the score processing. Automatic scores may then be wrong.',
+            )}
+          </p>
+          <p>{t('Choose carefully.')}</p>
+        </Modal>
+      ) : null}
 
       {freemodOpen ? (
         <Modal

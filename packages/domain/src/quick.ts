@@ -69,7 +69,7 @@ export function buildQuickTournament(options: QuickRoomOptions): Tournament {
     teamBlueId: 1,
     refereeIds: options.referee ? [options.referee.userId] : [],
     scheduledAt: now,
-    result: { scoreRed: 0, scoreBlue: 0 },
+    result: { scoreRed: 0, scoreBlue: 0, roomId: null, beatmaps: [] },
     roomMode: options.matchType,
   };
   const stage: Stage = {

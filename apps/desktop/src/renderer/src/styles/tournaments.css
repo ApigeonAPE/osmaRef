@@ -641,9 +641,27 @@
 
 .match-summary-row {
   display: grid;
-  grid-template-columns: 26px 40px minmax(0, 1fr) auto minmax(0, 1fr) 32px;
+  grid-template-columns: 26px 40px minmax(0, 1fr) auto minmax(0, 1fr) 32px 32px;
   gap: 8px;
   align-items: center;
+}
+
+.match-summary-row .match-link {
+  width: 100%;
+  padding: 0;
+  position: relative;
+}
+
+.match-summary-row .match-link::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 14px;
+  height: 14px;
+  background-color: currentColor;
+  -webkit-mask: url('@assets/HarmonyOS_Icons/ic_public_connection.svg') center / contain no-repeat;
+  mask: url('@assets/HarmonyOS_Icons/ic_public_connection.svg') center / contain no-repeat;
 }
 
 .match-summary-row .match-expand {

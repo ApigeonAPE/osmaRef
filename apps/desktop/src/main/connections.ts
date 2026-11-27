@@ -874,6 +874,7 @@ export class ConnectionManager {
     if (params.chatOnly) linked.chatOnly = true;
     const snapshot = sanitizeSnapshot(params.snapshot);
     this.persistSession(linked);
+    this.linkSessionRoom(linked);
     this.appendEvent(linked, 'session_created', `opened room ${snapshot.roomId}`, {
       roomId: snapshot.roomId,
       transport: params.kind,
@@ -958,6 +959,8 @@ export class ConnectionManager {
       `score ${input.side} ${input.delta > 0 ? '+' : ''}${input.delta}`,
       { wins: next.wins },
     );
+    const tournament = this.tournamentForSession(next);
+    if (tournament) this.syncMatchResult(tournament, next);
     this.emit({ type: 'session_updated', session: next });
     return next;
   }
@@ -1417,26 +1420,84 @@ export class ConnectionManager {
     });
     if (next.status === 'finished') {
       this.runAutomation(tournament, next, 'match_finished');
-      this.syncMatchResult(tournament, next);
     }
+    this.syncMatchResult(tournament, next);
 
     this.emit({ type: 'session_updated', session: next });
     return next;
   }
 
-  /** Writes a finished two-team match's map wins back into the tournament. */
-  private syncMatchResult(tournament: Tournament, session: MatchSession): void {
+  /** Records the MP link of a freshly opened room without touching scores. */
+  private linkSessionRoom(session: MatchSession): void {
     if (session.matchKind !== 'match') return;
+    const roomId = mplinkRoomId(session.roomId);
+    if (roomId === null) return;
+    const tournament = this.store.getTournament(session.tournamentId);
+    if (!tournament) return;
     const stage = findStageForMatch(tournament, session.matchId);
     const match = stage?.matches.find((entry) => entry.id === session.matchId);
-    if (!stage || !match || match.type !== 'match') return;
-    const result = { scoreRed: session.wins.team_one, scoreBlue: session.wins.team_two };
-    if (match.result.scoreRed === result.scoreRed && match.result.scoreBlue === result.scoreBlue) {
+    if (!stage || !match || match.type !== 'match' || match.result.roomId === roomId) {
       return;
     }
     const next: Tournament = {
       ...tournament,
       stages: tournament.stages.map((entry) =>
+        entry.id !== stage.id
+          ? entry
+          : {
+              ...entry,
+              matches: entry.matches.map((fixture) =>
+                fixture.id !== match.id
+                  ? fixture
+                  : { ...fixture, result: { ...fixture.result, roomId } },
+              ),
+            },
+      ),
+    };
+    try {
+      this.store.saveTournament(next);
+      this.log('info', 'tournament', `linked MP room ${roomId} to match ${match.id}`);
+    } catch (error) {
+      this.log('warn', 'tournament', `could not link the MP room: ${errorMessage(error)}`);
+    }
+  }
+
+  /** Writes a finished two-team match's map wins back into the tournament. */
+  private syncMatchResult(tournament: Tournament, session: MatchSession): void {
+    if (session.matchKind !== 'match') return;
+    // The session keeps a frozen configuration; results must land in the
+    // stored tournament so edits made after the room opened are preserved.
+    const target = this.store.getTournament(session.tournamentId) ?? tournament;
+    const stage = findStageForMatch(target, session.matchId);
+    const match = stage?.matches.find((entry) => entry.id === session.matchId);
+    if (!stage || !match || match.type !== 'match') return;
+    const result = {
+      scoreRed: session.wins.team_one,
+      scoreBlue: session.wins.team_two,
+      roomId: mplinkRoomId(session.roomId),
+      beatmaps: session.results.map((entry) => ({
+        slotLabel: entry.slotLabel,
+        beatmapId: entry.beatmapId,
+        winner: entry.winner,
+        scores: entry.scores.map((score) => ({
+          userId: score.userId > 0 ? score.userId : null,
+          username: score.username ?? '',
+          score: Math.round(score.score),
+          passed: score.passed,
+        })),
+      })),
+    };
+    if (
+      match.result.scoreRed === result.scoreRed &&
+      match.result.scoreBlue === result.scoreBlue &&
+      match.result.roomId === result.roomId &&
+      match.result.beatmaps.length === result.beatmaps.length
+    ) {
+      return;
+    }
+    const next: Tournament = {
+      ...target,
+      stages: target.stages.map((entry) =>
         entry.id !== stage.id
           ? entry
           : {
@@ -1972,23 +2033,36 @@ export class ConnectionManager {
     try {
       let finalScores = scores;
       if (!complete) {
-        const merged = await this.waitForMplinkScores(
-          session,
-          beatmapId,
-          scores,
-          teamByUser,
-          teamSize,
-        );
-        if (merged) {
-          finalScores = merged;
-        } else if (scores.length === 0) {
-          this.emiteSystemChat(session, 'no player scores were reported; enter the result manually');
-          return;
+        if (!this.settings.get().autoFetchMplinkScores) {
+          if (scores.length === 0) {
+            this.emiteSystemChat(
+              session,
+              'no player scores were reported; enter the result manually',
+            );
+            return;
+          }
         } else {
-          this.emiteSystemChat(
+          const merged = await this.waitForMplinkScores(
             session,
-            'mplink scores were not available in time; recording the IRC scores',
+            beatmapId,
+            scores,
+            teamByUser,
+            teamSize,
           );
+          if (merged) {
+            finalScores = merged;
+          } else if (scores.length === 0) {
+            this.emiteSystemChat(
+              session,
+              'no player scores were reported; enter the result manually',
+            );
+            return;
+          } else {
+            this.emiteSystemChat(
+              session,
+              'mplink scores were not available in time; recording the IRC scores',
+            );
+          }
         }
       }
 
@@ -2124,6 +2198,7 @@ export class ConnectionManager {
 
   /** Replaces an IRC result with the merged IRC+mplink scores once mplink catches up. */
   private async correctIrcResultWithMplink(sessionId: string, resultId: string): Promise<void> {
+    if (!this.settings.get().autoFetchMplinkScores) return;
     if (this.mplinkCorrections.has(resultId)) return;
     this.mplinkCorrections.add(resultId);
     try {
@@ -2220,7 +2295,8 @@ export class ConnectionManager {
           `Result for ${result.slotLabel} needs review: ${evaluation.reviewReason ?? 'unknown reason'}`,
         );
       }
-      if (next.status === 'finished') this.syncMatchResult(tournament, next);
+      if (next.status === 'finished') this.runAutomation(tournament, next, 'match_finished');
+      this.syncMatchResult(tournament, next);
       this.emit({ type: 'session_updated', session: next });
     } catch (error) {
       this.diagnose('warn', 'osu', `mplink correction failed: ${errorMessage(error)}`);
@@ -3255,4 +3331,10 @@ export function sanitizeSnapshot(snapshot: RoomSnapshot): RoomSnapshot {
 
 function normalizePlayerName(value: string): string {
   return value.replace(/_/g, ' ').trim().toLowerCase();
+}
+
+/** Multiplayer room id, or null for chat-only sessions and lobby channels. */
+function mplinkRoomId(roomId: string | null): number | null {
+  const parsed = Number(roomId);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
