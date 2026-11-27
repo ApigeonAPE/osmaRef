@@ -395,6 +395,12 @@ export const SetFirstTeamsInputSchema = z.object({
     .max(64),
 });
 
+export const BindMatchInputSchema = z.object({
+  sessionId: z.string().min(1).max(128),
+  tournamentId: z.string().min(1).max(128),
+  matchId: z.string().min(1).max(128),
+});
+
 export const PlaylistModsInputSchema = z.object({
   sessionId: z.string().min(1).max(128),
   playlistItemId: z.string().min(1).max(64),
@@ -544,6 +550,12 @@ export interface DesktopApi {
       source: 'irc' | 'referee_hub' | 'manual';
     }): Promise<MatchSession>;
     undo(sessionId: string): Promise<MatchSession>;
+    /** Binds an ad-hoc room to a stored match; only allowed once per room. */
+    bindMatch(input: {
+      sessionId: string;
+      tournamentId: string;
+      matchId: string;
+    }): Promise<MatchSession>;
     adjustScore(input: { sessionId: string; side: 'team_one' | 'team_two'; delta: number }): Promise<MatchSession>;
     setFirstTeams(input: {
       sessionId: string;
@@ -662,6 +674,7 @@ export const IPC = {
   sessionsUndo: 'sessions:undo',
   sessionsAdjustScore: 'sessions:adjust-score',
   sessionsSetFirstTeams: 'sessions:set-first-teams',
+  sessionsBindMatch: 'sessions:bind-match',
   sessionsSetPlaylistMods: 'sessions:set-playlist-mods',
   sessionsSelectBeatmap: 'sessions:select-beatmap',
   sessionsStartMatch: 'sessions:start-match',

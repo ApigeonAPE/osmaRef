@@ -9,6 +9,9 @@ export const zhCN: Record<string, string> = {
   // --- shell ---------------------------------------------------------------
   Workbench: '工作台',
   Tournaments: '赛事',
+  'Competition settings': '比赛设置',
+  'This room is already bound to a match.': '当前房间已绑定比赛，不能再修改。',
+  'That match already has an MP link.': '该比赛已有 MP Link，无法绑定。',
   Settings: '设置',
   disconnected: '未连接',
   connecting: '连接中',
@@ -238,6 +241,7 @@ export const zhCN: Record<string, string> = {
   Invite: '邀请',
   'Remove player': '移除玩家',
   '+ player': '+ 选手',
+  '+ referee': '+ 裁判',
   Stages: '阶段',
   '+ Stage': '+ 阶段',
   'No stages yet.': '还没有阶段。',

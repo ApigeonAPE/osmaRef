@@ -18,6 +18,7 @@ import {
   QuickRoomInputSchema,
   RecordResultInputSchema,
   SettingsPatchSchema,
+  BindMatchInputSchema,
   SetFirstTeamsInputSchema,
   TournamentSchema,
   type DesktopEvent,
@@ -251,6 +252,9 @@ export function registerIpc(ctx: IpcContext): void {
   );
   handle(IPC.sessionsSetFirstTeams, (input) =>
     ctx.connections.setFirstTeams(parse(SetFirstTeamsInputSchema, input, 'first teams')),
+  );
+  handle(IPC.sessionsBindMatch, (input) =>
+    ctx.connections.bindSessionRoom(parse(BindMatchInputSchema, input, 'match binding')),
   );
   handle(IPC.sessionsSetPlaylistMods, (input) =>
     ctx.connections.setPlaylistMods(parse(PlaylistModsInputSchema, input, 'playlist mods')),

@@ -380,7 +380,12 @@ describe('Mayumi import', () => {
                 lobby_name: 'Lobby A',
                 match_id: 'l1',
                 datetime: '2026-10-01T12:00:00Z',
+                match_url: ['https://osu.ppy.sh/community/matches/120000123'],
                 participants: [{ uid: [501], name: 'Solo A' }, { uid: [502], name: 'Solo B' }],
+                referee: [
+                  { uid: [901], name: 'Ref A' },
+                  { uid: [902, 903], name: 'Ref B' },
+                ],
               },
             ],
             match_info: [],
@@ -401,6 +406,8 @@ describe('Mayumi import', () => {
     if (match.type === 'lobby') {
       expect(match.roomMode).toBe('head_to_head');
       expect(match.teamIds).toEqual([0, 1]);
+      expect(match.result.roomId).toBe(120000123);
+      expect(match.refereeIds).toEqual([901, 902, 903]);
     }
   });
 
@@ -453,7 +460,10 @@ describe('Mayumi import: NOC26FALL snapshot', () => {
     expect(matches).toHaveLength(6);
     const first = matches[0]!;
     expect(first.scheduledAt).toBe('2026-10-17T13:00:00.000Z');
-    expect(first.result).toEqual({ scoreRed: 2, scoreBlue: 5, roomId: null, beatmaps: [] });
+    expect(first.result).toEqual({ scoreRed: 2, scoreBlue: 5, roomId: 122026887, beatmaps: [] });
+    expect(matches.map((match) => match.result.roomId)).toEqual([
+      122026887, 122032633, 122060823, 122067057, 122095599, 122100150,
+    ]);
     for (const match of matches) {
       expect(match.type).toBe('match');
       if (match.type === 'match' && match.notes?.includes('losers bracket')) {

@@ -22,6 +22,7 @@ import { useI18n } from '../i18n';
 import { Empty, Section } from '../ui';
 import { ChatPanel } from '../components/ChatPanel';
 import { FirstTeamsDialog } from '../components/FirstTeamsDialog';
+import { BindMatchDialog } from '../components/BindMatchDialog';
 import { PlaylistModsDialog } from '../components/PlaylistModsDialog';
 import { JoinRoomDialog } from '../components/JoinRoomDialog';
 import { useToast } from '../toast';
@@ -68,6 +69,7 @@ export function WorkbenchPage({
   const busyRef = useRef<string | null>(null);
   const [resultOpen, setResultOpen] = useState(false);
   const [firstTeamsOpen, setFirstTeamsOpen] = useState(false);
+  const [bindOpen, setBindOpen] = useState(false);
   const [playlistBeatmapId, setPlaylistBeatmapId] = useState('');
   const [playlistRulesetId, setPlaylistRulesetId] = useState(0);
   const [inviteUser, setInviteUser] = useState('');
@@ -1420,6 +1422,16 @@ export function WorkbenchPage({
                     {t('Remove room')}
                   </button>
                 )}
+                {session.chatOnly ? null : (
+                  <button
+                    type="button"
+                    className="ghost small"
+                    disabled={busy !== null}
+                    onClick={() => setBindOpen(true)}
+                  >
+                    {t('Competition settings')}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1720,6 +1732,19 @@ export function WorkbenchPage({
           session={session}
           onClose={() => setFirstTeamsOpen(false)}
           onSave={saveFirstTeams}
+        />
+      ) : null}
+      {bindOpen && session ? (
+        <BindMatchDialog
+          session={session}
+          tournaments={model.tournaments}
+          onClose={() => setBindOpen(false)}
+          onSave={async (input) => {
+            await window.osmaRef.sessions.bindMatch({ sessionId: session.id, ...input });
+            setBindOpen(false);
+            await model.refreshSessions();
+            await model.refreshTournaments();
+          }}
         />
       ) : null}
       {randomOpen && pool ? (

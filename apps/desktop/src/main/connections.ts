@@ -1427,16 +1427,87 @@ export class ConnectionManager {
     return next;
   }
 
+  /**
+   * Binds an ad-hoc or joined room to a stored match. A room can only be bound
+   * once, and a match that already has an MP link cannot be rebound.
+   */
+  async bindSessionRoom(input: {
+    sessionId: string;
+    tournamentId: string;
+    matchId: string;
+  }): Promise<MatchSession> {
+    const session = this.store.getSession(input.sessionId);
+    if (!session) throw new Error('session not found');
+    const boundTournament = this.store.getTournament(session.tournamentId);
+    if (boundTournament && findMatch(boundTournament, session.matchId)) {
+      throw new Error('this room is already bound to a match');
+    }
+    const tournament = this.store.getTournament(input.tournamentId);
+    if (!tournament) throw new Error('tournament not found');
+    const match = findMatch(tournament, input.matchId);
+    if (!match) throw new Error('match not found');
+    const stage = findStageForMatch(tournament, match.id);
+    if (!stage) throw new Error('stage not found');
+    if (match.result.roomId !== null) throw new Error('that match already has an MP link');
+    const teamIds = matchTeamIds(match);
+    if (teamIds.length < 2) throw new Error('the match needs two teams');
+
+    const now = new Date().toISOString();
+    const winBy = this.winby.get(stage.winByRuleId);
+    const flow =
+      match.type === 'lobby'
+        ? { id: `flow_${stage.id}`, name: stage.name, phases: [], triggers: [] }
+        : stage.flow;
+    const rebound = createSession(
+      {
+        id: session.id,
+        tournamentId: tournament.id,
+        matchId: match.id,
+        matchName: matchSessionName(tournament, stage, match),
+        matchKind: match.type,
+        participantIds: teamIds.map(String),
+        teamOneId: String(teamIds[0]),
+        teamTwoId: String(teamIds[1]),
+        tournamentRevision: tournament.revision,
+        rulesetId: resolveTournamentRuleset(tournament.mode, stage.slots),
+        matchType: match.roomMode,
+        transport: session.transport,
+        bestOf: stage.bestOf,
+        bans: stage.bans,
+        protects: stage.protects,
+        configSnapshot: tournament,
+        winBy: winBy ? winBySnapshot(winBy) : null,
+        firstTeamsSet: false,
+        now,
+      },
+      flow,
+    );
+    rebound.roomId = session.roomId;
+    rebound.roomName = session.roomName;
+    rebound.createdAt = session.createdAt;
+    rebound.chatOnly = session.chatOnly;
+    if (session.status !== 'active') rebound.status = session.status;
+    this.persistSession(rebound);
+    this.linkSessionRoom(rebound);
+    this.appendEvent(rebound, 'room_settings_changed', `bound to ${stage.name} / ${match.id}`, {
+      tournamentId: tournament.id,
+      matchId: match.id,
+    });
+    this.emit({ type: 'session_updated', session: rebound });
+    this.emitState();
+    this.log('info', 'room', `bound room ${session.roomId ?? ''} to ${match.id}`);
+    return rebound;
+  }
+
   /** Records the MP link of a freshly opened room without touching scores. */
   private linkSessionRoom(session: MatchSession): void {
-    if (session.matchKind !== 'match') return;
     const roomId = mplinkRoomId(session.roomId);
     if (roomId === null) return;
     const tournament = this.store.getTournament(session.tournamentId);
     if (!tournament) return;
     const stage = findStageForMatch(tournament, session.matchId);
     const match = stage?.matches.find((entry) => entry.id === session.matchId);
-    if (!stage || !match || match.type !== 'match' || match.result.roomId === roomId) {
+    if (!stage || !match || match.result.roomId === roomId) {
       return;
     }
     const next: Tournament = {
@@ -1651,9 +1722,7 @@ export class ConnectionManager {
     const session = this.requireSession(sessionId);
     const target = this.chatTargetFor(session);
     const history = await target.transport.history(target.channelId, limit);
-    return history
-      .filter((message) => session.transport !== 'irc' || !this.isSelfIrcMpCommand(message))
-      .map((message) => this.toChatMessage(message, sessionId, session.transport));
+    return history.map((message) => this.toChatMessage(message, sessionId, session.transport));
   }
 
   getRoomSnapshot(sessionId: string): RoomSnapshot | null {
@@ -2792,7 +2861,6 @@ export class ConnectionManager {
   }
 
   private onChat(envelope: ChatEnvelope, source: 'irc' | 'referee_hub'): void {
-    if (source === 'irc' && this.isSelfIrcMpCommand(envelope)) return;
     const sessionId = [...this.channels.entries()].find(([, channel]) => channel === envelope.channelId)?.[0];
     if (!sessionId && source === 'irc' && !/^#mp_\d+$/i.test(envelope.channelId)) {
       void this.ensureIrcChatSession(envelope.channelId, envelope.username).then((created) => {
@@ -2807,12 +2875,6 @@ export class ConnectionManager {
     const session = sessionId ? this.store.getSession(sessionId) : null;
     if (session) this.appendChatLog(session, message);
     this.emit({ type: 'chat_message', message });
-  }
-
-  private isSelfIrcMpCommand(message: ChatEnvelope): boolean {
-    if (!isMpCommand(message.text)) return false;
-    const self = this.settings.get().ircUsername || this.serverUser?.username || '';
-    return Boolean(self) && normalizePlayerName(message.username) === normalizePlayerName(self);
   }
 
   private async ensureIrcChatSession(channel: string, username: string): Promise<MatchSession | null> {

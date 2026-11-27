@@ -81,6 +81,8 @@ export const MayumiMatchInfoSchema = z
     team1_score: z.number().nullish(),
     team2_score: z.number().nullish(),
     is_winner_bracket: z.boolean().nullish(),
+    match_url: z.array(z.string().nullable()).nullish(),
+    referee: z.array(SimpleInfoSchema).nullish(),
   })
   .passthrough();
 
@@ -91,6 +93,7 @@ export const MayumiLobbyInfoSchema = z
     datetime: z.string().nullish(),
     match_url: z.array(z.string().nullable()).nullish(),
     participants: z.array(SimpleInfoSchema).nullish(),
+    referee: z.array(SimpleInfoSchema).nullish(),
   })
   .passthrough();
 
@@ -566,6 +569,27 @@ export function convertMayumiToTournament(
     return id;
   };
 
+  const roomIdFromLinks = (links: (string | null)[] | null | undefined): number | null => {
+    const link = links?.find((entry) => typeof entry === 'string' && entry.trim() !== '');
+    if (!link) return null;
+    const digits = /(\d+)\s*$/.exec(link.trim());
+    if (!digits) return null;
+    const roomId = Number(digits[1]);
+    return Number.isInteger(roomId) && roomId > 0 ? roomId : null;
+  };
+
+  const refereeIdsOf = (
+    referees: { uid?: number[] | null }[] | null | undefined,
+  ): number[] => {
+    const ids = new Set<number>();
+    for (const referee of referees ?? []) {
+      for (const uid of referee.uid ?? []) {
+        if (Number.isInteger(uid) && uid > 0) ids.add(uid);
+      }
+    }
+    return [...ids];
+  };
+
   const scheduledAtOf = (raw: string | null | undefined, label: string): string => {
     const parsed = raw ? Date.parse(raw) : Number.NaN;
     if (!Number.isFinite(parsed)) {
@@ -681,12 +705,12 @@ export function convertMayumiToTournament(
         type: 'match',
         id: uniqueId(`m_${stageName}_${raw.match_id}`, usedMatchIds),
         groupId: null,
-        refereeIds: [],
+        refereeIds: refereeIdsOf(raw.referee),
         scheduledAt: scheduledAtOf(raw.datetime, label),
         result: {
           scoreRed: Math.max(0, scoreRed),
           scoreBlue: Math.max(0, scoreBlue),
-          roomId: null,
+          roomId: roomIdFromLinks(raw.match_url),
           beatmaps: [],
         },
         teamRedId: one,
@@ -713,9 +737,14 @@ export function convertMayumiToTournament(
         type: 'lobby',
         id: uniqueId(`l_${stageName}_${raw.match_id}`, usedMatchIds),
         groupId: null,
-        refereeIds: [],
+        refereeIds: refereeIdsOf(raw.referee),
         scheduledAt: scheduledAtOf(raw.datetime, label),
-        result: { scoreRed: 0, scoreBlue: 0, roomId: null, beatmaps: [] },
+        result: {
+          scoreRed: 0,
+          scoreBlue: 0,
+          roomId: roomIdFromLinks(raw.match_url),
+          beatmaps: [],
+        },
         teamIds,
         roomMode: 'head_to_head',
         notes: `Mayumi lobby ${raw.lobby_name ?? raw.match_id}`.slice(0, 1000),

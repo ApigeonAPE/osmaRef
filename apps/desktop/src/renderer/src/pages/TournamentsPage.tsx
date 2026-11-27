@@ -1881,6 +1881,49 @@ function MatchesEditor({
   const { t } = useI18n();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [mpLinks, setMpLinks] = useState<Record<string, string>>({});
+  const [refereeInput, setRefereeInput] = useState<Record<string, string>>({});
+  const [resolvedReferees, setResolvedReferees] = useState<Record<number, string>>({});
+  const refereeLookups = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    const ids = new Set<number>();
+    for (const entry of draft.stages) {
+      for (const fixture of entry.matches) {
+        for (const userId of fixture.refereeIds) ids.add(userId);
+      }
+    }
+    for (const userId of ids) {
+      if (refereeLookups.current.has(userId)) continue;
+      refereeLookups.current.add(userId);
+      void window.osmaRef.osu
+        .lookupUser(userId)
+        .then((user) =>
+          setResolvedReferees((previous) => ({ ...previous, [userId]: user.username })),
+        )
+        .catch(() => undefined);
+    }
+  }, [draft.stages]);
+
+  const refereeNames = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const team of draft.teams) {
+      for (const member of team.members) {
+        if (member.username) map.set(member.userId, member.username);
+      }
+    }
+    return map;
+  }, [draft.teams]);
+
+  const addReferee = (matchId: string) => {
+    const userId = Number((refereeInput[matchId] ?? '').trim().replace(/^#/, ''));
+    if (!Number.isInteger(userId) || userId <= 0) return;
+    edit((next) => {
+      const target = next.stages[stageIndex]!.matches.find((entry) => entry.id === matchId);
+      if (!target || target.refereeIds.includes(userId)) return;
+      target.refereeIds = [...target.refereeIds, userId];
+    });
+    setRefereeInput({ ...refereeInput, [matchId]: '' });
+  };
 
   const toggle = (id: string) => {
     setExpanded((previous) => {
@@ -2061,7 +2104,8 @@ function MatchesEditor({
                         </Field>
                       </>
                     ) : (
-                      <Field label={t('Teams')} wide>
+                      <div className="field field-wide">
+                        <span className="field-label">{t('Teams')}</span>
                         <div className="member-chips">
                           {draft.teams.map((team) => (
                             <button
@@ -2086,7 +2130,7 @@ function MatchesEditor({
                             </button>
                           ))}
                         </div>
-                      </Field>
+                      </div>
                     )}
 
                     <Field label={t('Time (UTC)')}>
@@ -2120,19 +2164,51 @@ function MatchesEditor({
                         ))}
                       </select>
                     </Field>
-                    <Field label={t('Referees (user ids)')}>
-                      <input
-                        value={match.refereeIds.join(', ')}
-                        onChange={(event) =>
-                          patchMatch(index, (target) => {
-                            target.refereeIds = event.target.value
-                              .split(/[\s,]+/)
-                              .map((value) => Number(value))
-                              .filter((value) => Number.isInteger(value) && value > 0);
-                          })
-                        }
-                      />
-                    </Field>
+                    <div className="field field-wide">
+                      <span className="field-label">{t('Referees (user ids)')}</span>
+                      <div className="member-chips">
+                        {match.refereeIds.map((userId) => (
+                          <span className="member-chip" key={userId}>
+                            {refereeNames.get(userId) ?? resolvedReferees[userId] ?? `#${userId}`}
+                            <button
+                              type="button"
+                              className="member-remove"
+                              onClick={() =>
+                                patchMatch(index, (target) => {
+                                  target.refereeIds = target.refereeIds.filter(
+                                    (entry) => entry !== userId,
+                                  );
+                                })
+                              }
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                        <IdInput
+                          kind="user"
+                          className="compact-input"
+                          value={refereeInput[match.id] ?? ''}
+                          onChange={(value) =>
+                            setRefereeInput({ ...refereeInput, [match.id]: value })
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+                            event.preventDefault();
+                            addReferee(match.id);
+                          }}
+                          placeholder={t('user id')}
+                        />
+                        <button
+                          type="button"
+                          className="ghost small"
+                          disabled={!(refereeInput[match.id] ?? '').trim()}
+                          onClick={() => addReferee(match.id)}
+                        >
+                          {t('+ referee')}
+                        </button>
+                      </div>
+                    </div>
                     {match.type === 'match' ? (
                       <>
                         <Field label={t('Red score')}>
@@ -2165,29 +2241,23 @@ function MatchesEditor({
                             }
                           />
                         </Field>
-                        {match.type === 'match' ? (
-                          <Field label="MP Link">
-                            <input
-                              value={
-                                mpLinks[match.id] ??
-                                (match.result.roomId
-                                  ? `https://osu.ppy.sh/community/matches/${match.result.roomId}`
-                                  : '')
-                              }
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                setMpLinks((previous) => ({
-                                  ...previous,
-                                  [match.id]: value,
-                                }));
-                                patchMatch(index, (target) => {
-                                  if (target.type !== 'match') return;
-                                  target.result.roomId = parseMpRoomId(value);
-                                });
-                              }}
-                            />
-                          </Field>
-                        ) : null}
+                        <Field label="MP Link">
+                          <input
+                            value={
+                              mpLinks[match.id] ??
+                              (match.result.roomId
+                                ? `https://osu.ppy.sh/community/matches/${match.result.roomId}`
+                                : '')
+                            }
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setMpLinks((previous) => ({ ...previous, [match.id]: value }));
+                              patchMatch(index, (target) => {
+                                target.result.roomId = parseMpRoomId(value);
+                              });
+                            }}
+                          />
+                        </Field>
                       </>
                     ) : null}
                   </div>

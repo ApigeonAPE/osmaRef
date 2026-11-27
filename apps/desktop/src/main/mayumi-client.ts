@@ -70,7 +70,7 @@ export class MayumiClient {
         endDate: entry.end_date ?? '',
         open: mayumiOpenState(entry.start_date, entry.end_date, now) !== 'closed',
       }))
-      .sort((left, right) => left.startDate.localeCompare(right.startDate));
+      .sort((left, right) => right.startDate.localeCompare(left.startDate));
   }
 
   /**
