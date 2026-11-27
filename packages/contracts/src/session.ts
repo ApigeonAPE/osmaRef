@@ -63,7 +63,7 @@ export const MatchPlayerSchema = z.object({
 });
 export type MatchPlayer = z.infer<typeof MatchPlayerSchema>;
 
-export const ResultSourceSchema = z.enum(['irc', 'referee_hub', 'manual']);
+export const ResultSourceSchema = z.enum(['irc', 'referee_hub', 'manual', 'skip']);
 
 export const BeatmapResultSchema = z.object({
   id: z.string().min(1),
@@ -71,7 +71,7 @@ export const BeatmapResultSchema = z.object({
   beatmapId: z.number().int().positive(),
   scores: z.array(PlayerScoreSchema).default([]),
   winner: TeamSideSchema.nullable().default(null),
-  teamValues: z
+  teamMapScores: z
     .object({
       team_one: z.number().nullable().default(null),
       team_two: z.number().nullable().default(null),
@@ -140,9 +140,6 @@ export const MatchSessionSchema = z.object({
   wins: z.object({ team_one: z.number().int().nonnegative(), team_two: z.number().int().nonnegative() }).default({ team_one: 0, team_two: 0 }),
   /** False until the referee assigns the first team for every flow step. */
   firstTeamsSet: z.boolean().default(false),
-  teamScores: z
-    .object({ team_one: z.number().nonnegative(), team_two: z.number().nonnegative() })
-    .default({ team_one: 0, team_two: 0 }),
   actions: z.array(MatchActionSchema).default([]),
   results: z.array(BeatmapResultSchema).default([]),
   /** Slots/teams captured at the last map start, used to resolve team sides. */
@@ -154,6 +151,8 @@ export const MatchSessionSchema = z.object({
   /** True for an IRC channel/PM session that has no multiplayer match. */
   chatOnly: z.boolean().default(false),
   needsReview: z.array(z.string()).default([]),
+  /** Set once the snapshot has been committed to the stored tournament. */
+  committedAt: z.string().min(1).nullable().default(null),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
 });
@@ -170,7 +169,9 @@ export const SessionEventTypeSchema = z.enum([
   'action_applied',
   'action_rejected',
   'result_recorded',
+  'result_skipped',
   'result_needs_review',
+  'result_committed',
   'manual_adjustment',
   'match_started',
   'match_finished',

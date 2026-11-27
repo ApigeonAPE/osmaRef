@@ -79,7 +79,7 @@ function result(winner: 'team_one' | 'team_two', slot: string, second: number): 
     scores: [],
     winner,
     winByRuleId: null,
-    teamValues: {
+    teamMapScores: {
       team_one: winner === 'team_one' ? 1000 : 500,
       team_two: winner === 'team_two' ? 1000 : 500,
     },
@@ -202,14 +202,13 @@ describe('match state machine', () => {
     const corrected = {
       ...first.results[0]!,
       winner: 'team_two' as const,
-      teamValues: { team_one: 400, team_two: 500 },
+      teamMapScores: { team_one: 400, team_two: 500 },
       scores: [],
     };
     const next = amendResult(first, corrected.id, corrected, at(2));
     expect(next.results).toHaveLength(1);
     expect(next.results[0]).toEqual(corrected);
     expect(next.wins).toEqual({ team_one: 0, team_two: 1 });
-    expect(next.teamScores).toEqual({ team_one: 400, team_two: 500 });
   });
 
   it('rejects amending a result that was never recorded', () => {
@@ -237,7 +236,7 @@ describe('match state machine', () => {
     const lobbyResult = {
       ...result('team_one', 'HB1', 1),
       winner: null,
-      teamValues: { team_one: null, team_two: null },
+      teamMapScores: { team_one: null, team_two: null },
     };
     const once = recordResult(lobby, lobbyResult);
     expect(once.results).toHaveLength(1);
@@ -432,7 +431,7 @@ describe('match state machine', () => {
       scores: [],
       winner: null,
       winByRuleId: 'builtin:higher-score',
-      teamValues: { team_one: 1000, team_two: 1000 },
+      teamMapScores: { team_one: 1000, team_two: 1000 },
       source: 'manual',
       recordedAt: at(4),
       needsReview: true,
@@ -548,7 +547,7 @@ describe('match state machine', () => {
     state = recordResult(state, {
       ...result('team_one', 'NM1', 2),
       winner: null,
-      teamValues: { team_one: 0, team_two: 0 },
+      teamMapScores: { team_one: 0, team_two: 0 },
     });
     state = applyAction(state, {
       kind: 'pick',
@@ -561,7 +560,7 @@ describe('match state machine', () => {
     state = recordResult(state, {
       ...result('team_two', 'NM2', 4),
       winner: null,
-      teamValues: { team_one: 0, team_two: 0 },
+      teamMapScores: { team_one: 0, team_two: 0 },
     });
     expect(state.status).toBe('finished');
     expect(state.needsReview.join(' ')).toMatch(/flow ended/);

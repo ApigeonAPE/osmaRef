@@ -11,7 +11,6 @@ import { ServerClient } from './server-client';
 import { ConnectionManager } from './connections';
 import { TournamentImporter } from './importer';
 import { MayumiClient } from './mayumi-client';
-import { MayumiSession } from './mayumi-session';
 import { AppLogger } from './logger';
 import { registerIpc } from './ipc';
 import { CoverCache, COVER_SCHEME } from './covers';
@@ -74,10 +73,8 @@ async function bootstrap(): Promise<void> {
   windowState = windowStateStore;
   const winby = new WinByStore(join(userData, 'config'));
   const vault = new TokenVault(join(userData, 'credentials'));
-  const mayumiSession = new MayumiSession(join(userData, 'credentials'));
   await settings.init();
   await vault.init();
-  await mayumiSession.init();
   const logger = new AppLogger(store);
 
   const server = new ServerClient({
@@ -96,10 +93,7 @@ async function bootstrap(): Promise<void> {
     // Replaced by registerIpc once the window exists.
     emit: () => undefined,
   });
-  const mayumi = new MayumiClient({
-    baseUrl: () => settings.get().mayumiBaseUrl,
-    session: () => mayumiSession.get(),
-  });
+  const mayumi = new MayumiClient();
   const importer = new TournamentImporter(store, logger, mayumi);
   const covers = new CoverCache(join(userData, 'covers'));
   covers.register();
@@ -117,7 +111,6 @@ async function bootstrap(): Promise<void> {
     connections,
     importer,
     mayumi,
-    mayumiSession,
     covers,
     updates,
     winby,

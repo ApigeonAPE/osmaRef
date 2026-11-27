@@ -62,7 +62,6 @@ export function createSession(input: CreateSessionInput, flow: MatchFlow): Match
     cursor: 0,
     wins: { team_one: 0, team_two: 0 },
     firstTeamsSet: input.firstTeamsSet ?? false,
-    teamScores: { team_one: 0, team_two: 0 },
     actions: [],
     results: [],
     matchPlayers: [],
@@ -72,6 +71,7 @@ export function createSession(input: CreateSessionInput, flow: MatchFlow): Match
     roomName: null,
     chatOnly: false,
     needsReview: [],
+    committedAt: null,
     createdAt: input.now,
     updatedAt: input.now,
   };
@@ -186,10 +186,6 @@ export function recordResult(
     ...session,
     results: [...session.results, result],
     updatedAt: at,
-    teamScores: {
-      team_one: session.teamScores.team_one + (result.teamValues.team_one ?? 0),
-      team_two: session.teamScores.team_two + (result.teamValues.team_two ?? 0),
-    },
     wins: {
       team_one: session.wins.team_one + (result.winner === 'team_one' ? 1 : 0),
       team_two: session.wins.team_two + (result.winner === 'team_two' ? 1 : 0),
@@ -261,20 +257,6 @@ export function amendResult(
         (result.winner === 'team_two' ? 1 : 0),
     ),
   };
-  const teamScores = {
-    team_one: Math.max(
-      0,
-      session.teamScores.team_one -
-        (previous.teamValues.team_one ?? 0) +
-        (result.teamValues.team_one ?? 0),
-    ),
-    team_two: Math.max(
-      0,
-      session.teamScores.team_two -
-        (previous.teamValues.team_two ?? 0) +
-        (result.teamValues.team_two ?? 0),
-    ),
-  };
 
   let needsReview = session.needsReview.filter(
     (entry) => !entry.startsWith(`${previous.slotLabel}:`),
@@ -289,7 +271,6 @@ export function amendResult(
     ...session,
     results,
     wins,
-    teamScores,
     needsReview,
     updatedAt: at,
   });
@@ -303,7 +284,6 @@ export function undoLast(session: MatchSession, at: string): MatchSession {
 
   let results = session.results;
   let wins = { ...session.wins };
-  let teamScores = { ...session.teamScores };
   let needsReview = [...session.needsReview];
 
   if (last.kind === 'pick') {
@@ -311,10 +291,6 @@ export function undoLast(session: MatchSession, at: string): MatchSession {
     if (result && normalize(result.slotLabel) === normalize(last.slotLabel ?? '')) {
       results = results.slice(0, -1);
       needsReview = needsReview.filter((entry) => !entry.startsWith(`${result.slotLabel}:`));
-      teamScores = {
-        team_one: teamScores.team_one - (result.teamValues.team_one ?? 0),
-        team_two: teamScores.team_two - (result.teamValues.team_two ?? 0),
-      };
       if (result.winner === 'team_one') wins.team_one -= 1;
       if (result.winner === 'team_two') wins.team_two -= 1;
       if (result.needsReview) {
@@ -331,7 +307,6 @@ export function undoLast(session: MatchSession, at: string): MatchSession {
     cursor: Math.max(0, session.cursor - 1),
     results,
     wins,
-    teamScores,
     needsReview,
     status: 'active',
     currentSlotLabel: null,
@@ -470,6 +445,9 @@ export function setFirstTeams(
   });
 }
 export function closeRoomSession(session: MatchSession, at: string): MatchSession {
+  // A finished match keeps its status. Closing the room afterwards must not
+  // turn it into an aborted match that could be resumed mid-way.
+  if (session.status === 'finished') return session;
   const next: MatchSession = {
     ...session,
     status: 'closed',
@@ -483,7 +461,7 @@ export function closeRoomSession(session: MatchSession, at: string): MatchSessio
 
 /** Re-opens a room whose session was closed while the room still exists. */
 export function reopenRoomSession(session: MatchSession, at: string): MatchSession {
-  if (session.status !== 'closed') return session;
+  if (session.status !== 'closed' && session.status !== 'aborted') return session;
   return MatchSessionSchema.parse({
     ...session,
     status: 'active',

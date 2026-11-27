@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import {
-  MayumiBracketConfigSchema,
   MayumiDrawSchema,
   MayumiPlayersResponseSchema,
   MayumiPoolStageSchema,
@@ -31,25 +30,21 @@ export class MayumiError extends Error {
 }
 
 export interface MayumiClientOptions {
-  /** Read on every request so a settings change applies immediately. */
-  baseUrl: () => string;
-  /** The stored `uuid` cookie, if any. */
-  session: () => string | null;
   timeoutMs?: number;
 }
 
+const MAYUMI_BASE_URL = 'https://mayumi.xyz';
 const REQUEST_TIMEOUT = 20_000;
 
 /**
- * Read-only client for a Mayumi instance.
+ * Read-only client for mayumi.xyz.
  *
- * Only public endpoints are used for the import; the optional session cookie
- * unlocks the bracket configuration (`bestOf`/`banCount`) and the private draw.
+ * Only public endpoints are used: the import never needs a session cookie.
  */
 export class MayumiClient {
   private readonly timeoutMs: number;
 
-  constructor(private readonly options: MayumiClientOptions) {
+  constructor(private readonly options: MayumiClientOptions = {}) {
     this.timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT;
   }
 
@@ -94,13 +89,9 @@ export class MayumiClient {
       throw new MayumiError('protocol', 'Mayumi returned an unexpected player list.');
     }
 
-    const optional = async <T>(
-      path: string,
-      schema: z.ZodType<T>,
-      withSession = false,
-    ): Promise<T | null> => {
+    const optional = async <T>(path: string, schema: z.ZodType<T>): Promise<T | null> => {
       try {
-        const payload = await this.request(path, withSession);
+        const payload = await this.request(path);
         const parsed = schema.safeParse(payload);
         return parsed.success ? parsed.data : null;
       } catch (cause) {
@@ -112,7 +103,7 @@ export class MayumiClient {
       }
     };
 
-    const [schedule, mapPools, roundInfo, drawPublic, drawPrivate, bracket] = await Promise.all([
+    const [schedule, mapPools, roundInfo, draw] = await Promise.all([
       optional(`/api/schedule?${query}`, z.array(MayumiScheduleStageSchema)),
       optional(`/api/map_pools?${query}`, z.array(MayumiPoolStageSchema)),
       optional(`/api/tournament-round-info?${query}`, z.array(MayumiRoundInfoSchema)),
@@ -120,43 +111,24 @@ export class MayumiClient {
         `/api/tournament-draw/${encodeURIComponent(abbreviation)}/public`,
         MayumiDrawSchema,
       ),
-      this.options.session()
-        ? optional(`/api/tournament-draw/${encodeURIComponent(abbreviation)}`, MayumiDrawSchema, true)
-        : Promise.resolve(null),
-      this.options.session()
-        ? optional(
-            `/api/tournament-bracket/${encodeURIComponent(abbreviation)}`,
-            MayumiBracketConfigSchema,
-            true,
-          )
-        : Promise.resolve(null),
     ]);
-
-    const draw = drawPrivate?.state ?? drawPublic?.state ?? null;
     return {
       info: info.data,
       players: players.data,
       schedule,
       mapPools,
       roundInfo,
-      draw,
-      bracket,
+      draw: draw?.state ?? null,
     };
   }
 
-  private async request(path: string, withSession = false): Promise<unknown> {
-    const base = this.options.baseUrl().trim().replace(/\/$/, '');
-    if (!/^https?:\/\//i.test(base)) {
-      throw new MayumiError('network', `Cannot reach Mayumi at ${base}.`);
-    }
-    const headers: Record<string, string> = { Accept: 'application/json' };
-    const session = withSession ? this.options.session() : null;
-    if (session) headers['Cookie'] = `uuid=${session}`;
+  private async request(path: string): Promise<unknown> {
+    const base = MAYUMI_BASE_URL;
 
     let response: Response;
     try {
       response = await fetch(`${base}${path}`, {
-        headers,
+        headers: { Accept: 'application/json' },
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch {

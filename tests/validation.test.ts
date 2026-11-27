@@ -7,7 +7,7 @@ import {
   JoinRoomInputSchema,
   PlaylistModsInputSchema,
   QuickRoomInputSchema,
-  RecordResultInputSchema,
+  SkipScoreInputSchema,
   RemovePlaylistBeatmapInputSchema,
   SettingsPatchSchema,
 } from '@osmaref/contracts';
@@ -99,24 +99,14 @@ describe('IPC input validation', () => {
     ).toBe(true);
   });
 
-  it('rejects out-of-range score values', () => {
+  it('accepts a skip score and rejects an unknown winner', () => {
     expect(
-      RecordResultInputSchema.safeParse({
-        sessionId: 's',
-        slotLabel: 'NM1',
-        scores: [
-          {
-            userId: 1,
-            score: 100,
-            accuracy: 1.5,
-            maxCombo: 0,
-            misses: 0,
-            mods: [],
-            passed: true,
-          },
-        ],
-        source: 'manual',
-      }).success,
+      SkipScoreInputSchema.safeParse({ sessionId: 's', slotLabel: 'NM1', winner: 'team_two' })
+        .success,
+    ).toBe(true);
+    expect(
+      SkipScoreInputSchema.safeParse({ sessionId: 's', slotLabel: 'NM1', winner: 'team_three' })
+        .success,
     ).toBe(false);
   });
 

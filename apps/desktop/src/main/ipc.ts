@@ -11,12 +11,13 @@ import {
   SelectBeatmapInputSchema,
   StartMatchInputSchema,
   JoinRoomInputSchema,
+  MatchRoomLinkInputSchema,
   PlaylistModsInputSchema,
   PlayerActionInputSchema,
   PlayerInviteInputSchema,
   RemovePlaylistBeatmapInputSchema,
   QuickRoomInputSchema,
-  RecordResultInputSchema,
+  SkipScoreInputSchema,
   SettingsPatchSchema,
   BindMatchInputSchema,
   SetFirstTeamsInputSchema,
@@ -31,7 +32,6 @@ import type { ServerClient } from './server-client';
 import type { ConnectionManager } from './connections';
 import type { TournamentImporter } from './importer';
 import type { MayumiClient } from './mayumi-client';
-import type { MayumiSession } from './mayumi-session';
 import type { AppLogger } from './logger';
 import type { WinByStore } from './winby-store';
 import type { CoverCache } from './covers';
@@ -45,7 +45,6 @@ export interface IpcContext {
   connections: ConnectionManager;
   importer: TournamentImporter;
   mayumi: MayumiClient;
-  mayumiSession: MayumiSession;
   covers: CoverCache;
   updates: UpdateManager;
   winby: WinByStore;
@@ -194,6 +193,12 @@ export function registerIpc(ctx: IpcContext): void {
   handle(IPC.tournamentsApplyImport, (preview) =>
     ctx.importer.apply(parse(ImportPreviewSchema, preview, 'import preview')),
   );
+  handle(IPC.tournamentsAddRoomLink, (input) =>
+    ctx.connections.addRoomLink(parse(MatchRoomLinkInputSchema, input, 'room link')),
+  );
+  handle(IPC.tournamentsRemoveRoomLink, (input) =>
+    ctx.connections.removeRoomLink(parse(MatchRoomLinkInputSchema, input, 'room link')),
+  );
 
   handle(IPC.mayumiList, () => ctx.mayumi.list());
   handle(IPC.mayumiPreview, (abbreviation, platform) =>
@@ -202,17 +207,6 @@ export function registerIpc(ctx: IpcContext): void {
       platform === 'lazer' ? 'lazer' : 'stable',
     ),
   );
-  handle(IPC.mayumiSetSession, async (uuid) => {
-    const value = parse(z.string().max(512), uuid, 'Mayumi uuid');
-    await ctx.mayumiSession.set(value);
-    return { configured: ctx.mayumiSession.configured };
-  });
-  handle(IPC.mayumiClearSession, async () => {
-    await ctx.mayumiSession.set(null);
-    return { configured: false };
-  });
-  handle(IPC.mayumiSessionStatus, () => ({ configured: ctx.mayumiSession.configured }));
-
   handle(IPC.sessionsList, () => ctx.store.listSessions());
   handle(IPC.sessionsListLogs, () => ctx.store.listLobbyLogs());
   handle(IPC.sessionsExportLog, (sessionId) =>
@@ -243,8 +237,9 @@ export function registerIpc(ctx: IpcContext): void {
   handle(IPC.sessionsApplyAction, (input) =>
     ctx.connections.applyAction(parse(ApplyActionInputSchema, input, 'apply action')),
   );
-  handle(IPC.sessionsRecordResult, (input) =>
-    ctx.connections.recordScores(parse(RecordResultInputSchema, input, 'record result')),
+  handle(IPC.sessionsSyncMatch, (sessionId) => ctx.connections.syncMatch(String(sessionId)));
+  handle(IPC.sessionsSkipScore, (input) =>
+    ctx.connections.skipScore(parse(SkipScoreInputSchema, input, 'skip score')),
   );
   handle(IPC.sessionsUndo, (id) => ctx.connections.undo(String(id)));
   handle(IPC.sessionsAdjustScore, (input) =>

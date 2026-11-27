@@ -78,7 +78,6 @@ function base(overrides: Partial<MayumiSnapshot> = {}): MayumiSnapshot {
       ],
       matches: [],
     },
-    bracket: null,
     ...overrides,
   };
 }
@@ -117,28 +116,17 @@ describe('Mayumi import', () => {
     if (match.type === 'match') {
       expect(match.teamRedId).toBe(0);
       expect(match.teamBlueId).toBe(1);
-      expect(match.result).toEqual({ scoreRed: 5, scoreBlue: 2, roomId: null, beatmaps: [] });
+      expect(match.result).toEqual({ scoreRed: 5, scoreBlue: 2, roomIds: [], activeRoomId: null, beatmaps: [] });
       expect(match.scheduledAt).toBe('2026-11-01T13:00:00.000Z');
     }
     expect(notes).toEqual([]);
   });
 
-  it('reads best-of and bans from the bracket configuration', () => {
-    const { tournament } = convertMayumiToTournament(
-      base({
-        bracket: {
-          settings: { rounds: { Quarterfinal: { bestOf: 9, banCount: 2 } } },
-        },
-      }),
-      { platform: 'stable' },
-    );
+  it('reads best-of from the public draw', () => {
+    const { tournament } = convertMayumiToTournament(base(), { platform: 'stable' });
     parse(tournament);
-    expect(tournament.stages[0]!.bestOf).toBe(9);
-    expect(tournament.stages[0]!.bans).toBe(2);
-    expect(tournament.stages[0]!.flow.phases[0]).toMatchObject({
-      action: 'ban',
-      useStageCount: true,
-    });
+    expect(tournament.stages[0]!.bestOf).toBe(7);
+    expect(tournament.stages[0]!.bans).toBe(0);
   });
 
   it('maps FM by platform', () => {
@@ -199,7 +187,7 @@ describe('Mayumi import', () => {
     expect(slots[1]!.label).toBe('HD');
   });
 
-  it('adjusts an even best-of and caps bans', () => {
+  it('adjusts an even best-of', () => {
     const { tournament, notes } = convertMayumiToTournament(
       base({
         draw: {
@@ -207,13 +195,12 @@ describe('Mayumi import', () => {
           rounds: [{ id: 'R1', stage_name: 'Quarterfinal', best_of: 6 }],
           matches: [],
         },
-        bracket: { settings: { rounds: { Quarterfinal: { banCount: 40 } } } },
       }),
       { platform: 'stable' },
     );
     parse(tournament);
     expect(tournament.stages[0]!.bestOf).toBe(7);
-    expect(tournament.stages[0]!.bans).toBe(10);
+    expect(tournament.stages[0]!.bans).toBe(0);
     expect(notes.some((note) => note.includes('adjusted to 7'))).toBe(true);
   });
 
@@ -248,7 +235,7 @@ describe('Mayumi import', () => {
     );
     parse(tournament);
     const match = tournament.stages[0]!.matches[0]!;
-    expect(match.result).toEqual({ scoreRed: 0, scoreBlue: 0, roomId: null, beatmaps: [] });
+    expect(match.result).toEqual({ scoreRed: 0, scoreBlue: 0, roomIds: [], activeRoomId: null, beatmaps: [] });
     expect(notes.some((note) => note.includes('forfeit'))).toBe(true);
   });
 
@@ -394,7 +381,6 @@ describe('Mayumi import', () => {
         mapPools: null,
         roundInfo: [{ stage_name: 'Qualifier', is_lobby: true, is_solo_qualifier: true }],
         draw: null,
-        bracket: null,
       },
       { platform: 'stable' },
     );
@@ -406,7 +392,8 @@ describe('Mayumi import', () => {
     if (match.type === 'lobby') {
       expect(match.roomMode).toBe('head_to_head');
       expect(match.teamIds).toEqual([0, 1]);
-      expect(match.result.roomId).toBe(120000123);
+      expect(match.result.roomIds).toEqual([120000123]);
+      expect(match.result.activeRoomId).toBe(120000123);
       expect(match.refereeIds).toEqual([901, 902, 903]);
     }
   });
@@ -460,8 +447,8 @@ describe('Mayumi import: NOC26FALL snapshot', () => {
     expect(matches).toHaveLength(6);
     const first = matches[0]!;
     expect(first.scheduledAt).toBe('2026-10-17T13:00:00.000Z');
-    expect(first.result).toEqual({ scoreRed: 2, scoreBlue: 5, roomId: 122026887, beatmaps: [] });
-    expect(matches.map((match) => match.result.roomId)).toEqual([
+    expect(first.result).toEqual({ scoreRed: 2, scoreBlue: 5, roomIds: [122026887], activeRoomId: 122026887, beatmaps: [] });
+    expect(matches.map((match) => match.result.activeRoomId)).toEqual([
       122026887, 122032633, 122060823, 122067057, 122095599, 122100150,
     ]);
     for (const match of matches) {

@@ -27,8 +27,10 @@ import { PlaylistModsDialog } from '../components/PlaylistModsDialog';
 import { JoinRoomDialog } from '../components/JoinRoomDialog';
 import { useToast } from '../toast';
 import { IdInput } from '../components/IdInput';
-import { ResultDialog, type ResultRow } from '../components/ResultDialog';
+import { SkipScoreDialog } from '../components/SkipScoreDialog';
+import { MatchResultDialog } from '../components/MatchResultDialog';
 import { MappoolSlotRow } from '../components/MappoolSlotRow';
+import { BeatmapRow } from '../components/BeatmapRow';
 import { RandomPickDialog, type RandomPickScope } from '../components/RandomPickDialog';
 import { RandomRollDialog } from '../components/RandomRollDialog';
 
@@ -67,7 +69,9 @@ export function WorkbenchPage({
 
   const [busy, setBusy] = useState<string | null>(null);
   const busyRef = useRef<string | null>(null);
+  const [skipOpen, setSkipOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
+  const resultSeen = useRef<Set<string>>(new Set());
   const [firstTeamsOpen, setFirstTeamsOpen] = useState(false);
   const [bindOpen, setBindOpen] = useState(false);
   const [playlistBeatmapId, setPlaylistBeatmapId] = useState('');
@@ -203,6 +207,14 @@ export function WorkbenchPage({
   // A finished match does not close its room: keep every room operation
   // available until the referee actually closes it.
   const roomOpen = session?.status === 'active' || session?.status === 'finished';
+
+  // The tournament is only overwritten once the referee confirms it.
+  useEffect(() => {
+    if (!session || session.status !== 'finished') return;
+    if (resultSeen.current.has(session.id)) return;
+    resultSeen.current.add(session.id);
+    setResultOpen(true);
+  }, [session]);
   const tournament = session
     ? session.configSnapshot ?? model.tournaments.find((entry) => entry.id === session.tournamentId) ?? null
     : null;
@@ -603,16 +615,6 @@ export function WorkbenchPage({
       lines.push(`${t(pending.kind)} ${team}`);
     }
     return lines.join('\n');
-  };
-
-  const submitResult = async (rows: ResultRow[]) => {
-    if (!session || !session.currentSlotLabel) return;
-    await window.osmaRef.sessions.recordResult({
-      sessionId: session.id,
-      slotLabel: session.currentSlotLabel,
-      scores: rows.map((row) => ({ ...row, mods: [] })),
-      source: 'manual',
-    });
   };
 
   const usedBySlot = useMemo(() => {
@@ -1150,9 +1152,9 @@ export function WorkbenchPage({
                   <button
                     type="button"
                     className="primary score-result"
-                    onClick={() => setResultOpen(true)}
+                    onClick={() => setSkipOpen(true)}
                   >
-                    {t('Enter result — {slot}', { slot: session.currentSlotLabel })}
+                    {t('Skip Score')}
                   </button>
                 ) : null}
               </div>
@@ -1182,10 +1184,7 @@ export function WorkbenchPage({
               />
 
               <div className="card playlist-panel">
-                <div className="playlist-scroll">
-              {room ? (
-                <div className="room-playlist">
-                  {roomOpen ? (
+                {room && roomOpen ? (
                     <div className="playlist-head">
                       <div className="playlist-start">
                         <select
@@ -1244,82 +1243,52 @@ export function WorkbenchPage({
                         </button>
                       </div>
                     </div>
-                  ) : null}
+                ) : null}
+                <div className="playlist-scroll">
+              {room ? (
+                <div className="room-playlist">
                   {playlistViews.map((entry) => {
                     const info = resolvedBeatmaps[entry.beatmapId];
                     const failure = beatmapFailures[entry.beatmapId];
                     const slotLabel =
                       pool?.slots.find((slot) => slot.beatmapId === entry.beatmapId)?.label ?? '';
+                    const canRemove =
+                      session.transport === 'referee_hub' &&
+                      roomOpen &&
+                      (entry.played || playlistViews.length > 1);
                     return (
-                      <div
-                        className={`playlist-row${entry.active ? ' active' : ''}${entry.played ? ' played' : ''}`}
+                      <BeatmapRow
                         key={entry.key}
-                      >
-                        <span className="playlist-remove">
-                          {session.transport === 'referee_hub' &&
-                          roomOpen &&
-                          (entry.played || playlistViews.length > 1) ? (
-                            <button
-                              type="button"
-                              className="ghost playlist-remove playlist-remove-button"
-                              title={t('Remove from playlist')}
-                              aria-label={t('Remove from playlist')}
-                              disabled={busy !== null}
-                              onClick={() => {
-                                if (entry.item) void removePlaylistBeatmap(entry.item);
-                              }}
-                            >
-                              <span className="playlist-remove-icon" aria-hidden="true" />
-                            </button>
-                          ) : null}
-                        </span>
-                        <span className="playlist-slot">
-                          {slotLabel ? <span className="slot-tag">{slotLabel}</span> : null}
-                        </span>
-                        <div className="playlist-main">
-                          <div className="beatmap-title">
-                            {info
-                              ? `${info.title} - ${info.artist}`
-                              : `Beatmap #${entry.beatmapId}`}
-                            {!info && failure ? (
-                              <span
-                                className={`beatmap-state${failure.notFound ? ' missing' : ' failed'}`}
-                                title={failure.message}
+                        label={slotLabel || undefined}
+                        beatmapId={entry.beatmapId}
+                        mode={entry.mode}
+                        requiredMods={entry.required}
+                        allowedMods={entry.allowed}
+                        freestyle={entry.freestyle}
+                        info={info}
+                        failure={failure}
+                        current={entry.active}
+                        played={entry.played}
+                        leading={
+                          <span className="playlist-remove">
+                            {canRemove ? (
+                              <button
+                                type="button"
+                                className="ghost playlist-remove playlist-remove-button"
+                                title={t('Remove from playlist')}
+                                aria-label={t('Remove from playlist')}
+                                disabled={busy !== null}
+                                onClick={() => {
+                                  if (entry.item) void removePlaylistBeatmap(entry.item);
+                                }}
                               >
-                                {failure.notFound ? t('not found') : t('lookup failed')}
-                              </span>
+                                <span className="playlist-remove-icon" aria-hidden="true" />
+                              </button>
                             ) : null}
-                          </div>
-                          <div className="beatmap-meta">
-                            {entry.mode} #{entry.beatmapId}
-                            {info?.difficultyName ? ` [${info.difficultyName}]` : ''} -{' '}
-                            {info?.mapper || '—'}
-                            {entry.played ? ` (${t('played')})` : entry.active ? ` (${t('next')})` : ''}
-                          </div>
-                        </div>
-                        <div className="playlist-mods">
-                          {entry.required.map((mod) => (
-                            <span className="mod-chip required" key={`req-${mod}`}>
-                              {mod}
-                            </span>
-                          ))}
-                          {entry.allowed.map((mod) => (
-                            <span className="mod-chip allowed" key={`allow-${mod}`}>
-                              {mod}
-                            </span>
-                          ))}
-                          {entry.freestyle ? (
-                            <span className="mod-chip allowed">Freestyle</span>
-                          ) : null}
-                          {entry.required.length === 0 &&
-                          entry.allowed.length === 0 &&
-                          !entry.freestyle ? (
-                            <span className="mod-chip">NM</span>
-                          ) : null}
-                        </div>
-                        <span className="playlist-actions">
-                          {session.transport === 'referee_hub' &&
-                          roomOpen ? (
+                          </span>
+                        }
+                        trailing={
+                          session.transport === 'referee_hub' && roomOpen ? (
                             <button
                               type="button"
                               className="ghost small"
@@ -1331,9 +1300,9 @@ export function WorkbenchPage({
                             >
                               {t('Mods')}
                             </button>
-                          ) : null}
-                        </span>
-                      </div>
+                          ) : undefined
+                        }
+                      />
                     );
                   })}
                 </div>
@@ -1595,7 +1564,7 @@ export function WorkbenchPage({
                               red: grouped.red.reduce((sum, score) => sum + score.score, 0),
                               blue: grouped.blue.reduce((sum, score) => sum + score.score, 0),
                             };
-                            const { team_one, team_two } = result.teamValues;
+                            const { team_one, team_two } = result.teamMapScores;
                             const diff =
                               team_one !== null && team_two !== null
                                 ? Math.abs(team_one - team_two)
@@ -1708,13 +1677,34 @@ export function WorkbenchPage({
         </div>
       )}
 
-      {resultOpen && session && tournament && session.currentSlotLabel ? (
-        <ResultDialog
-          session={session}
-          tournament={tournament}
+      {skipOpen && session && session.currentSlotLabel ? (
+        <SkipScoreDialog
           slotLabel={session.currentSlotLabel}
+          teamOneName={teamName(session.teamOneId)}
+          teamTwoName={teamName(session.teamTwoId)}
+          onClose={() => setSkipOpen(false)}
+          onPick={async (winner) => {
+            const slotLabel = session.currentSlotLabel;
+            if (!slotLabel) return;
+            await window.osmaRef.sessions.skipScore({
+              sessionId: session.id,
+              slotLabel,
+              winner,
+            });
+            setSkipOpen(false);
+          }}
+        />
+      ) : null}
+      {resultOpen && session && session.status === 'finished' ? (
+        <MatchResultDialog
+          session={session}
+          teamOneName={teamName(session.teamOneId)}
+          teamTwoName={teamName(session.teamTwoId)}
           onClose={() => setResultOpen(false)}
-          onSubmit={submitResult}
+          onSync={async () => {
+            await window.osmaRef.sessions.syncMatch(session.id);
+            await model.refreshTournaments();
+          }}
         />
       ) : null}
       {modsOpen && modsEntry ? (

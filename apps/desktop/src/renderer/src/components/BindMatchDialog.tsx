@@ -56,7 +56,7 @@ export function BindMatchDialog({
   const tournament = tournaments.find((entry) => entry.id === tournamentId);
   const stage = tournament?.stages.find((entry) => entry.id === stageId);
   const selected = stage?.matches.find((entry) => entry.id === matchId);
-  const hasMplink = selected ? selected.result.roomId !== null : false;
+  const hasMplink = selected ? selected.result.activeRoomId !== null : false;
 
   const teamName = (teamId: number) =>
     tournament?.teams.find((team) => team.id === teamId)?.name ?? `Team ${teamId}`;

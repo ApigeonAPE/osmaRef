@@ -23,6 +23,8 @@ import {
   type LogLevel,
   type Match,
   type MatchFlow,
+  type MatchResult,
+  type MatchRoomLinkInput,
   type MatchSession,
   type MpCommandResult,
   type PlayerScore,
@@ -618,7 +620,36 @@ export class ConnectionManager {
     if (!stage) throw new Error('stage not found');
     const flow = stage.flow;
 
-    const kind = tournament.platform === 'lazer' ? 'referee_hub' : 'irc';
+    const existing = this.store
+      .listSessions()
+      .filter(
+        (entry) =>
+          entry.tournamentId === tournament.id &&
+          entry.matchId === match.id &&
+          entry.matchKind === 'match' &&
+          !entry.chatOnly,
+      );
+    const openSession = existing.find((entry) => entry.status === 'active');
+    if (openSession) {
+      throw new Error(`this match already has an open room (${openSession.id})`);
+    }
+    const resumable = existing.find(
+      (entry) => entry.status === 'closed' || entry.status === 'aborted',
+    );
+    const restart =
+      !resumable &&
+      (existing.some((entry) => entry.status === 'finished') ||
+        (existing.length === 0 && match.result.roomIds.length > 0));
+
+    // A mid-match reopen keeps the configuration the session was created with.
+    const source = resumable?.configSnapshot ?? tournament;
+    const sourceMatch = findMatch(source, match.id) ?? match;
+    const sourceStage = findStageForMatch(source, sourceMatch.id) ?? stage;
+    const kind = resumable
+      ? resumable.transport
+      : tournament.platform === 'lazer'
+        ? 'referee_hub'
+        : 'irc';
     const transport = kind === 'irc' ? this.irc : this.hub;
     if (!transport) {
       throw new Error(
@@ -626,26 +657,28 @@ export class ConnectionManager {
       );
     }
 
-    const beatmapId = kind === 'referee_hub' ? stage.slots[0]?.beatmapId ?? null : null;
+    const beatmapId = kind === 'referee_hub' ? sourceStage.slots[0]?.beatmapId ?? null : null;
     if (!beatmapId && kind === 'referee_hub') {
       throw new Error('the Referee Hub requires a mappool beatmap; add one to the stage');
     }
 
-    const participants = matchTeamIds(match);
-    const name = buildRoomName(tournament, stage, match);
+    const participants = matchTeamIds(sourceMatch);
+    const name = buildRoomName(source, sourceStage, sourceMatch);
     const maxParticipants = Math.min(
       16,
-      Math.max(2, tournament.teamSize * participants.length + 2),
+      Math.max(2, source.teamSize * participants.length + 2),
     );
 
     const snapshot = await transport.createRoom({
       name,
-      rulesetId: resolveTournamentRuleset(tournament.mode, stage.slots),
+      rulesetId: resolveTournamentRuleset(source.mode, sourceStage.slots),
       ...(beatmapId ? { beatmapId } : {}),
-      teamMode: match.roomMode,
-      winCondition: tournament.platform === 'lazer' ? 'score' : stage.winCondition,
+      teamMode: sourceMatch.roomMode,
+      winCondition: source.platform === 'lazer' ? 'score' : sourceStage.winCondition,
       maxParticipants,
     });
+
+    if (resumable) return this.reopenExistingRoom(resumable, snapshot, tournament);
 
     return this.registerRoom({
       tournament,
@@ -658,8 +691,54 @@ export class ConnectionManager {
       protects: stage.protects,
       kind,
       snapshot,
-      configSnapshot: tournament,
+      configSnapshot: restart
+        ? this.resetMatchResult(this.snapshotFor(tournament), match.id)
+        : this.snapshotFor(tournament),
     });
+  }
+
+  /** Re-opens a session whose room was closed mid-match, keeping its results. */
+  private async reopenExistingRoom(
+    session: MatchSession,
+    snapshot: RoomSnapshot,
+    tournament: Tournament,
+  ): Promise<MatchSession> {
+    const now = new Date().toISOString();
+    const linked = linkRoom(reopenRoomSession(session, now), snapshot.roomId, snapshot.name, now);
+    const projected = this.updateSnapshotResult({
+      ...linked,
+      configSnapshot: linked.configSnapshot ?? this.snapshotFor(tournament),
+    });
+    this.persistSession(projected);
+    this.linkRoomInTournament(projected);
+    const sanitized = sanitizeSnapshot(snapshot);
+    this.snapshots.set(projected.id, sanitized);
+    this.activeSessionId = projected.id;
+    this.appendEvent(projected, 'room_linked', `reopened room ${snapshot.name}`, sanitized);
+    await this.ensureChatChannel(projected, snapshot);
+    this.emit({ type: 'session_updated', session: projected });
+    this.emit({ type: 'room_snapshot', sessionId: projected.id, snapshot: sanitized });
+    this.emitState();
+    this.log('info', 'room', `reopened room ${snapshot.roomId} for match ${projected.matchId}`);
+    return projected;
+  }
+
+  /** Clears a match result so a rematch starts from zero. */
+  private resetMatchResult(tournament: Tournament, matchId: string): Tournament {
+    return {
+      ...tournament,
+      stages: tournament.stages.map((stage) => ({
+        ...stage,
+        matches: stage.matches.map((match) =>
+          match.id !== matchId
+            ? match
+            : {
+                ...match,
+                result: { scoreRed: 0, scoreBlue: 0, roomIds: [], activeRoomId: null, beatmaps: [] },
+              },
+        ),
+      })),
+    };
   }
 
   /**
@@ -874,7 +953,11 @@ export class ConnectionManager {
     if (params.chatOnly) linked.chatOnly = true;
     const snapshot = sanitizeSnapshot(params.snapshot);
     this.persistSession(linked);
-    this.linkSessionRoom(linked);
+    if (!params.chatOnly) {
+      const withResult = this.updateSnapshotResult(linked);
+      this.persistSession(withResult);
+      this.linkRoomInTournament(withResult);
+    }
     this.appendEvent(linked, 'session_created', `opened room ${snapshot.roomId}`, {
       roomId: snapshot.roomId,
       transport: params.kind,
@@ -952,17 +1035,18 @@ export class ConnectionManager {
     if (session.status !== 'active' && session.status !== 'finished')
       throw new Error('the room is no longer active');
     const next = adjustWins(session, input.side, input.delta, new Date().toISOString());
-    this.persistSession(next);
+    const projected = this.updateSnapshotResult(next);
+    this.persistSession(projected);
     this.appendEvent(
-      next,
+      projected,
       'manual_adjustment',
       `score ${input.side} ${input.delta > 0 ? '+' : ''}${input.delta}`,
-      { wins: next.wins },
+      { wins: projected.wins },
     );
-    const tournament = this.tournamentForSession(next);
-    if (tournament) this.syncMatchResult(tournament, next);
-    this.emit({ type: 'session_updated', session: next });
-    return next;
+    let current = projected;
+    if (current.committedAt !== null) current = this.commitSnapshot(current);
+    this.emit({ type: 'session_updated', session: current });
+    return current;
   }
 
   async setFirstTeams(input: {
@@ -1394,14 +1478,15 @@ export class ConnectionManager {
       beatmapId,
       scores,
       winner: evaluation?.winner ?? null,
-      teamValues: evaluation?.teamValues ?? { team_one: null, team_two: null },
+      teamMapScores: evaluation?.teamMapScores ?? { team_one: null, team_two: null },
       source: input.source,
       recordedAt,
       winByRuleId: evaluation ? winBy.ruleId : null,
       needsReview,
     };
 
-    const next = recordSessionResult(session, result);
+    let next = recordSessionResult(session, result);
+    next = this.updateSnapshotResult(next);
     this.persistSession(next);
     this.appendEvent(
       next,
@@ -1421,8 +1506,66 @@ export class ConnectionManager {
     if (next.status === 'finished') {
       this.runAutomation(tournament, next, 'match_finished');
     }
-    this.syncMatchResult(tournament, next);
 
+    this.emit({ type: 'session_updated', session: next });
+    return next;
+  }
+
+  /**
+   * Records a beatmap win without player scores. The referee only picks the
+   * winner; the result still goes through the normal reducer so undo, score
+   * triggers and the match result sync all behave like a reported score.
+   */
+  async skipScore(input: {
+    sessionId: string;
+    slotLabel: string;
+    winner: 'team_one' | 'team_two';
+  }): Promise<MatchSession> {
+    const session = this.requireSession(input.sessionId);
+    if (session.matchKind === 'lobby') {
+      throw new Error('a lobby has no winner to record');
+    }
+    const tournament = this.tournamentForSession(session);
+    if (!tournament) throw new Error('tournament not found');
+    const match = findMatch(tournament, session.matchId);
+    const stage = match ? findStageForMatch(tournament, match.id) : undefined;
+    const slot = stage ? findSlotByLabel(stage, input.slotLabel) : undefined;
+    if (!slot) throw new Error(`unknown mappool slot "${input.slotLabel}"`);
+
+    const recordedAt = new Date().toISOString();
+    const result: BeatmapResult = {
+      id: `${input.slotLabel}:${recordedAt}`,
+      slotLabel: input.slotLabel,
+      beatmapId: slot.beatmapId,
+      scores: [],
+      winner: input.winner,
+      teamMapScores: {
+        team_one: input.winner === 'team_one' ? 1 : 0,
+        team_two: input.winner === 'team_two' ? 1 : 0,
+      },
+      source: 'skip',
+      recordedAt,
+      winByRuleId: null,
+      needsReview: false,
+    };
+
+    let next = recordSessionResult(session, result);
+    next = this.updateSnapshotResult(next);
+    this.persistSession(next);
+    this.appendEvent(
+      next,
+      'result_skipped',
+      `${input.slotLabel}: skipped, winner ${input.winner}`,
+      result,
+    );
+    this.runAutomation(tournament, next, 'beatmap_completed', {
+      winner: input.winner,
+      slot: input.slotLabel,
+      beatmap_id: String(slot.beatmapId),
+    });
+    if (next.status === 'finished') {
+      this.runAutomation(tournament, next, 'match_finished');
+    }
     this.emit({ type: 'session_updated', session: next });
     return next;
   }
@@ -1448,9 +1591,27 @@ export class ConnectionManager {
     if (!match) throw new Error('match not found');
     const stage = findStageForMatch(tournament, match.id);
     if (!stage) throw new Error('stage not found');
-    if (match.result.roomId !== null) throw new Error('that match already has an MP link');
     const teamIds = matchTeamIds(match);
     if (teamIds.length < 2) throw new Error('the match needs two teams');
+
+    const others = this.store
+      .listSessions()
+      .filter(
+        (entry) =>
+          entry.id !== session.id &&
+          entry.tournamentId === tournament.id &&
+          entry.matchId === match.id &&
+          !entry.chatOnly,
+      );
+    if (others.some((entry) => entry.status === 'active')) {
+      throw new Error('that match already has an open room');
+    }
+    if (others.some((entry) => entry.status !== 'finished')) {
+      throw new Error('that match already has a room session');
+    }
+    // Finished sessions and recorded rooms are replaced by this bind, which
+    // is the same path as reopening a finished match.
+    const replay = others.length > 0 || match.result.roomIds.length > 0;
 
     const now = new Date().toISOString();
     const winBy = this.winby.get(stage.winByRuleId);
@@ -1475,7 +1636,9 @@ export class ConnectionManager {
         bestOf: stage.bestOf,
         bans: stage.bans,
         protects: stage.protects,
-        configSnapshot: tournament,
+        configSnapshot: replay
+          ? this.resetMatchResult(this.snapshotFor(tournament), match.id)
+          : this.snapshotFor(tournament),
         winBy: winBy ? winBySnapshot(winBy) : null,
         firstTeamsSet: false,
         now,
@@ -1487,32 +1650,109 @@ export class ConnectionManager {
     rebound.createdAt = session.createdAt;
     rebound.chatOnly = session.chatOnly;
     if (session.status !== 'active') rebound.status = session.status;
-    this.persistSession(rebound);
-    this.linkSessionRoom(rebound);
-    this.appendEvent(rebound, 'room_settings_changed', `bound to ${stage.name} / ${match.id}`, {
+    const projected = this.updateSnapshotResult(rebound);
+    this.persistSession(projected);
+    this.linkRoomInTournament(projected);
+    this.appendEvent(projected, 'room_settings_changed', `bound to ${stage.name} / ${match.id}`, {
       tournamentId: tournament.id,
       matchId: match.id,
     });
-    this.emit({ type: 'session_updated', session: rebound });
+    this.emit({ type: 'session_updated', session: projected });
     this.emitState();
     this.log('info', 'room', `bound room ${session.roomId ?? ''} to ${match.id}`);
-    return rebound;
+    return projected;
   }
 
-  /** Records the MP link of a freshly opened room without touching scores. */
-  private linkSessionRoom(session: MatchSession): void {
-    const roomId = mplinkRoomId(session.roomId);
-    if (roomId === null) return;
-    const tournament = this.store.getTournament(session.tournamentId);
-    if (!tournament) return;
-    const stage = findStageForMatch(tournament, session.matchId);
-    const match = stage?.matches.find((entry) => entry.id === session.matchId);
-    if (!stage || !match || match.result.roomId === roomId) {
-      return;
-    }
+  private mutateMatchResult(
+    input: MatchRoomLinkInput,
+    update: (result: MatchResult) => MatchResult,
+  ): Tournament {
+    const tournament = this.store.getTournament(input.tournamentId);
+    if (!tournament) throw new Error('tournament not found');
+    const match = findMatch(tournament, input.matchId);
+    if (!match) throw new Error('match not found');
     const next: Tournament = {
       ...tournament,
-      stages: tournament.stages.map((entry) =>
+      stages: tournament.stages.map((stage) => ({
+        ...stage,
+        matches: stage.matches.map((entry) =>
+          entry.id !== match.id ? entry : { ...entry, result: update(entry.result) },
+        ),
+      })),
+    };
+    const saved = this.store.saveTournament(next);
+    this.emit({ type: 'tournaments_changed' });
+    return saved;
+  }
+
+  /** Adds an MP link and makes it the active one. */
+  async addRoomLink(input: MatchRoomLinkInput): Promise<Tournament> {
+    return this.mutateMatchResult(input, (result) => ({
+      ...result,
+      roomIds: result.roomIds.includes(input.roomId)
+        ? result.roomIds
+        : [...result.roomIds, input.roomId],
+      activeRoomId: input.roomId,
+    }));
+  }
+
+  /** Removes an MP link; the active one falls back to the last remaining link. */
+  async removeRoomLink(input: MatchRoomLinkInput): Promise<Tournament> {
+    return this.mutateMatchResult(input, (result) => {
+      const roomIds = result.roomIds.filter((id) => id !== input.roomId);
+      const activeRoomId =
+        result.activeRoomId === input.roomId
+          ? (roomIds[roomIds.length - 1] ?? null)
+          : result.activeRoomId;
+      return { ...result, roomIds, activeRoomId };
+    });
+  }
+
+  /** Deep copy so room edits never alias the caller's tournament object. */
+  private snapshotFor(tournament: Tournament): Tournament {
+    return structuredClone(tournament);
+  }
+
+  /**
+   * Projects the session's runtime state into the snapshot this room reads
+   * from. Never touches the stored tournament.
+   */
+  private updateSnapshotResult(session: MatchSession): MatchSession {
+    const snapshot = session.configSnapshot;
+    if (!snapshot) return session;
+    const stage = findStageForMatch(snapshot, session.matchId);
+    const match = stage?.matches.find((entry) => entry.id === session.matchId);
+    if (!stage || !match) return session;
+
+    const roomId = mplinkRoomId(session.roomId);
+    const roomIds = [...match.result.roomIds];
+    if (roomId !== null && !roomIds.includes(roomId)) roomIds.push(roomId);
+    const activeRoomId = roomId ?? match.result.activeRoomId;
+    const beatmaps = session.results.map((entry) => ({
+      slotLabel: entry.slotLabel,
+      beatmapId: entry.beatmapId,
+      winner: entry.winner,
+      scores: entry.scores.map((score) => ({
+        userId: score.userId > 0 ? score.userId : null,
+        username: score.username ?? '',
+        score: Math.round(score.score),
+        passed: score.passed,
+      })),
+    }));
+
+    if (
+      match.result.scoreRed === session.wins.team_one &&
+      match.result.scoreBlue === session.wins.team_two &&
+      match.result.activeRoomId === activeRoomId &&
+      match.result.roomIds.length === roomIds.length &&
+      match.result.beatmaps.length === beatmaps.length
+    ) {
+      return session;
+    }
+
+    const nextSnapshot: Tournament = {
+      ...snapshot,
+      stages: snapshot.stages.map((entry) =>
         entry.id !== stage.id
           ? entry
           : {
@@ -1520,52 +1760,45 @@ export class ConnectionManager {
               matches: entry.matches.map((fixture) =>
                 fixture.id !== match.id
                   ? fixture
-                  : { ...fixture, result: { ...fixture.result, roomId } },
+                  : {
+                      ...fixture,
+                      result: {
+                        ...fixture.result,
+                        scoreRed: session.wins.team_one,
+                        scoreBlue: session.wins.team_two,
+                        roomIds,
+                        activeRoomId,
+                        beatmaps,
+                      },
+                    },
               ),
             },
       ),
     };
-    try {
-      this.store.saveTournament(next);
-      this.log('info', 'tournament', `linked MP room ${roomId} to match ${match.id}`);
-    } catch (error) {
-      this.log('warn', 'tournament', `could not link the MP room: ${errorMessage(error)}`);
-    }
+    return { ...session, configSnapshot: nextSnapshot };
   }
 
-  /** Writes a finished two-team match's map wins back into the tournament. */
-  private syncMatchResult(tournament: Tournament, session: MatchSession): void {
-    if (session.matchKind !== 'match') return;
-    // The session keeps a frozen configuration; results must land in the
-    // stored tournament so edits made after the room opened are preserved.
-    const target = this.store.getTournament(session.tournamentId) ?? tournament;
+  /**
+   * Replaces this match's result in the stored tournament with the session's
+   * snapshot. Other matches and tournament edits made after the room opened
+   * are preserved.
+   */
+  /**
+   * Records the session's room in its tournament without touching the score or
+   * the map list. Opening a room must not overwrite a stored result.
+   */
+  private linkRoomInTournament(session: MatchSession): void {
+    const roomId = mplinkRoomId(session.roomId);
+    if (roomId === null) return;
+    const target = this.store.getTournament(session.tournamentId);
+    if (!target) return;
     const stage = findStageForMatch(target, session.matchId);
     const match = stage?.matches.find((entry) => entry.id === session.matchId);
-    if (!stage || !match || match.type !== 'match') return;
-    const result = {
-      scoreRed: session.wins.team_one,
-      scoreBlue: session.wins.team_two,
-      roomId: mplinkRoomId(session.roomId),
-      beatmaps: session.results.map((entry) => ({
-        slotLabel: entry.slotLabel,
-        beatmapId: entry.beatmapId,
-        winner: entry.winner,
-        scores: entry.scores.map((score) => ({
-          userId: score.userId > 0 ? score.userId : null,
-          username: score.username ?? '',
-          score: Math.round(score.score),
-          passed: score.passed,
-        })),
-      })),
-    };
-    if (
-      match.result.scoreRed === result.scoreRed &&
-      match.result.scoreBlue === result.scoreBlue &&
-      match.result.roomId === result.roomId &&
-      match.result.beatmaps.length === result.beatmaps.length
-    ) {
-      return;
-    }
+    if (!stage || !match) return;
+    if (match.result.roomIds.includes(roomId) && match.result.activeRoomId === roomId) return;
+    const roomIds = match.result.roomIds.includes(roomId)
+      ? match.result.roomIds
+      : [...match.result.roomIds, roomId];
     const next: Tournament = {
       ...target,
       stages: target.stages.map((entry) =>
@@ -1574,30 +1807,94 @@ export class ConnectionManager {
           : {
               ...entry,
               matches: entry.matches.map((fixture) =>
-                fixture.id !== match.id ? fixture : { ...fixture, result },
+                fixture.id !== match.id
+                  ? fixture
+                  : {
+                      ...fixture,
+                      result: { ...fixture.result, roomIds, activeRoomId: roomId },
+                    },
               ),
             },
       ),
     };
     try {
       this.store.saveTournament(next);
-      this.log('info', 'tournament', `synced result ${result.scoreRed}-${result.scoreBlue} for match ${match.id}`);
+      this.log('info', 'tournament', `linked room ${roomId} to match ${match.id}`);
+      this.emit({ type: 'tournaments_changed' });
     } catch (error) {
-      this.log('warn', 'tournament', `could not sync match result: ${errorMessage(error)}`);
+      this.log('warn', 'tournament', `could not record the MP link: ${errorMessage(error)}`);
     }
+  }
+
+  private commitSnapshot(session: MatchSession): MatchSession {
+    const snapshot = session.configSnapshot;
+    if (!snapshot) return session;
+    const stage = findStageForMatch(snapshot, session.matchId);
+    const match = stage?.matches.find((entry) => entry.id === session.matchId);
+    if (!stage || !match) return session;
+    const target = this.store.getTournament(session.tournamentId);
+    if (!target) {
+      this.log('warn', 'tournament', `could not commit ${session.matchId}: tournament not found`);
+      return session;
+    }
+    const targetStage = findStageForMatch(target, session.matchId);
+    const targetMatch = targetStage?.matches.find((entry) => entry.id === session.matchId);
+    if (!targetStage || !targetMatch) {
+      this.log('warn', 'tournament', `could not commit ${session.matchId}: match not found`);
+      return session;
+    }
+    const next: Tournament = {
+      ...target,
+      stages: target.stages.map((entry) =>
+        entry.id !== targetStage.id
+          ? entry
+          : {
+              ...entry,
+              matches: entry.matches.map((fixture) =>
+                fixture.id !== targetMatch.id ? fixture : { ...fixture, result: match.result },
+              ),
+            },
+      ),
+    };
+    try {
+      this.store.saveTournament(next);
+      this.log(
+        'info',
+        'tournament',
+        `committed ${match.result.scoreRed}-${match.result.scoreBlue} for match ${match.id}`,
+      );
+    } catch (error) {
+      this.log('warn', 'tournament', `could not commit the match result: ${errorMessage(error)}`);
+      return session;
+    }
+    const committed: MatchSession = { ...session, committedAt: new Date().toISOString() };
+    this.persistSession(committed);
+    this.appendEvent(
+      committed,
+      'result_committed',
+      `result ${match.result.scoreRed}-${match.result.scoreBlue}`,
+      match.result,
+    );
+    this.emit({ type: 'tournaments_changed' });
+    return committed;
+  }
+
+  /** Re-syncs a finished session's snapshot into its tournament. */
+  async syncMatch(sessionId: string): Promise<MatchSession> {
+    const session = this.requireSession(sessionId);
+    const committed = this.commitSnapshot(this.updateSnapshotResult(session));
+    this.emit({ type: 'session_updated', session: committed });
+    return committed;
   }
 
   async undo(sessionId: string): Promise<MatchSession> {
     const session = this.requireSession(sessionId);
-    const tournament = this.tournamentForSession(session);
-    const next = undoLast(session, new Date().toISOString());
+    const next = this.updateSnapshotResult(undoLast(session, new Date().toISOString()));
     this.persistSession(next);
     this.appendEvent(next, 'manual_adjustment', 'undo of the last action');
-    if (tournament) {
-      this.syncMatchResult(tournament, next);
-    }
-    this.emit({ type: 'session_updated', session: next });
-    return next;
+    const committed = next.committedAt !== null ? this.commitSnapshot(next) : next;
+    this.emit({ type: 'session_updated', session: committed });
+    return committed;
   }
 
   async sendChat(sessionId: string, text: string): Promise<MpCommandResult | null> {
@@ -2196,8 +2493,11 @@ export class ConnectionManager {
     ircScores: readonly PlayerScore[],
     at = new Date().toISOString(),
   ): Promise<PlayerScore[] | null> {
-    const roomId = Number(session.roomId);
-    if (!Number.isInteger(roomId) || roomId <= 0) return null;
+    const snapshotMatch = session.configSnapshot
+      ? findMatch(session.configSnapshot, session.matchId)
+      : null;
+    const roomId = snapshotMatch ? snapshotMatch.result.activeRoomId : mplinkRoomId(session.roomId);
+    if (roomId === null) return null;
     const match = await this.server.osu.getMatch(roomId);
     const game: MplinkGame | null = selectLatestGame(mplinkGames(match), beatmapId, at);
     if (!game || game.scores.length === 0) return null;
@@ -2337,7 +2637,7 @@ export class ConnectionManager {
         beatmapId: result.beatmapId,
         scores: merged,
         winner: evaluation.winner,
-        teamValues: evaluation.teamValues,
+        teamMapScores: evaluation.teamMapScores,
         source: 'irc',
         recordedAt: result.recordedAt,
         winByRuleId: winBy.ruleId,
@@ -2345,7 +2645,8 @@ export class ConnectionManager {
       };
       if (!scoresDiffer(result.scores, corrected.scores)) return;
 
-      const next = amendResult(session, result.id, corrected, new Date().toISOString());
+      let next = amendResult(session, result.id, corrected, new Date().toISOString());
+      next = this.updateSnapshotResult(next);
       this.persistSession(next);
       this.appendEvent(
         next,
@@ -2364,8 +2665,9 @@ export class ConnectionManager {
           `Result for ${result.slotLabel} needs review: ${evaluation.reviewReason ?? 'unknown reason'}`,
         );
       }
-      if (next.status === 'finished') this.runAutomation(tournament, next, 'match_finished');
-      this.syncMatchResult(tournament, next);
+      if (next.status === 'finished') {
+        this.runAutomation(tournament, next, 'match_finished');
+      }
       this.emit({ type: 'session_updated', session: next });
     } catch (error) {
       this.diagnose('warn', 'osu', `mplink correction failed: ${errorMessage(error)}`);
@@ -3240,8 +3542,8 @@ export class ConnectionManager {
       return { red, blue };
     }
     return {
-      red: result.teamValues.team_one ?? 0,
-      blue: result.teamValues.team_two ?? 0,
+      red: result.teamMapScores.team_one ?? 0,
+      blue: result.teamMapScores.team_two ?? 0,
     };
   }
 

@@ -42,7 +42,7 @@ describe('automatic messages', () => {
       teamBlueId: 1,
       refereeIds: [],
       scheduledAt: '2026-01-01T00:00:00.000Z',
-      result: { scoreRed: 0, scoreBlue: 0, roomId: null, beatmaps: [] },
+      result: { scoreRed: 0, scoreBlue: 0, roomIds: [], activeRoomId: null, beatmaps: [] },
       roomMode: 'team_versus',
     });
     const session = {
@@ -78,7 +78,6 @@ describe('automatic messages', () => {
       cursor: 0,
       wins: { team_one: 2, team_two: 1 },
       firstTeamsSet: true,
-      teamScores: { team_one: 0, team_two: 0 },
       actions: [
         {
           id: 'a0',
@@ -98,6 +97,7 @@ describe('automatic messages', () => {
       roomName: null,
       chatOnly: false,
       needsReview: [],
+      committedAt: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     };

@@ -16,8 +16,9 @@ import {
   parseTournament as parseTournamentInput,
   toLobbyLogSession,
 } from '@osmaref/contracts';
+import { runMigrations, type MigrationStore, type RawSessionRecord } from './migrations';
 
-export interface AppStore {
+export interface AppStore extends MigrationStore {
   listTournaments(): Tournament[];
   getTournament(id: string): Tournament | null;
   saveTournament(tournament: Tournament): Tournament;
@@ -67,12 +68,16 @@ export async function createAppStore(dataDir: string): Promise<AppStore> {
   try {
     const module = (await import('node:sqlite')) as unknown as { DatabaseSync: SqliteConstructor };
     if (typeof module.DatabaseSync === 'function') {
-      return new SqliteStore(join(dataDir, 'osmaRef.db'), module.DatabaseSync);
+      const store = new SqliteStore(join(dataDir, 'osmaRef.db'), module.DatabaseSync);
+      runMigrations(store);
+      return store;
     }
   } catch {
     // fall through to JSON
   }
-  return new JsonStore(join(dataDir, 'osmaRef-store.json'));
+  const store = new JsonStore(join(dataDir, 'osmaRef-store.json'));
+  runMigrations(store);
+  return store;
 }
 
 class SqliteStore implements AppStore {
@@ -116,6 +121,10 @@ class SqliteStore implements AppStore {
         status TEXT NOT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS migrations (
+        id TEXT PRIMARY KEY,
+        applied_at TEXT NOT NULL
       );
     `);
 
@@ -327,6 +336,33 @@ class SqliteStore implements AppStore {
     }
   }
 
+  rawSessions(): RawSessionRecord[] {
+    const rows = this.db.prepare('SELECT id, data FROM sessions').all();
+    return rows.flatMap((row) => {
+      try {
+        return [{ id: String(row['id']), data: JSON.parse(String(row['data'])) }];
+      } catch {
+        return [];
+      }
+    });
+  }
+
+  writeRawSession(id: string, data: unknown): void {
+    this.db
+      .prepare('UPDATE sessions SET data = ? WHERE id = ?')
+      .run(JSON.stringify(data), id);
+  }
+
+  isMigrationApplied(id: string): boolean {
+    return this.db.prepare('SELECT 1 AS present FROM migrations WHERE id = ?').get(id) !== undefined;
+  }
+
+  markMigrationApplied(id: string): void {
+    this.db
+      .prepare('INSERT OR IGNORE INTO migrations (id, applied_at) VALUES (?, ?)')
+      .run(id, new Date().toISOString());
+  }
+
   close(): void {
     this.db.close();
   }
@@ -338,6 +374,7 @@ interface JsonSnapshot {
   sessions: MatchSession[];
   events: SessionEvent[];
   runtimeLogs: LogEntry[];
+  migrations?: string[];
   lobbyLogSessions: LobbyLogSession[];
 }
 
@@ -355,6 +392,7 @@ class JsonStore implements AppStore {
       events: [],
       runtimeLogs: [],
       lobbyLogSessions: [],
+      migrations: [],
     };
     if (existsSync(file)) {
       try {
@@ -362,6 +400,7 @@ class JsonStore implements AppStore {
         this.state.events = parsed.events ?? [];
         this.state.runtimeLogs = parsed.runtimeLogs ?? [];
         this.state.lobbyLogSessions = parsed.lobbyLogSessions ?? [];
+        this.state.migrations = parsed.migrations ?? [];
         if ((parsed.dataVersion ?? 0) < STORE_DATA_VERSION) {
           // Match the SQLite v3 upgrade: old tournament configs and sessions
           // are intentionally discarded, but both log collections survive.
@@ -535,6 +574,33 @@ class JsonStore implements AppStore {
       if (!this.state.events.some((event) => event.sessionId === session.id)) continue;
       this.upsertLobbyLogSession(toLobbyLogSession(session));
     }
+  }
+
+  rawSessions(): RawSessionRecord[] {
+    return this.state.sessions.map((session) => ({
+      id: (session as { id?: string }).id ?? '',
+      data: session,
+    }));
+  }
+
+  writeRawSession(id: string, data: unknown): void {
+    const index = this.state.sessions.findIndex(
+      (session) => (session as { id?: string }).id === id,
+    );
+    if (index === -1) return;
+    this.state.sessions[index] = data as MatchSession;
+    this.scheduleSave();
+  }
+
+  isMigrationApplied(id: string): boolean {
+    return (this.state.migrations ?? []).includes(id);
+  }
+
+  markMigrationApplied(id: string): void {
+    if (!this.state.migrations) this.state.migrations = [];
+    if (this.state.migrations.includes(id)) return;
+    this.state.migrations.push(id);
+    this.scheduleSave();
   }
 
   close(): void {

@@ -27,7 +27,7 @@ function fixture(): Tournament {
       groupId: null,
       refereeIds: [],
       scheduledAt: '2026-01-02T12:00:00.000Z',
-      result: { scoreRed: 0, scoreBlue: 0, roomId: null, beatmaps: [] },
+      result: { scoreRed: 0, scoreBlue: 0, roomIds: [], activeRoomId: null, beatmaps: [] },
       teamRedId: tournament.teams[0]!.id,
       teamBlueId: tournament.teams[1]!.id,
       roomMode: 'team_versus',
@@ -104,28 +104,34 @@ describe('binding a room to a stored match', () => {
 
       const saved = store.getTournament(tournament.id)!;
       const match = saved.stages[0]!.matches[0]!;
-      expect(match.result.roomId).toBe(990001);
+      expect(match.result.roomIds).toEqual([990001]);
+      expect(match.result.activeRoomId).toBe(990001);
     } finally {
       store.close();
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it('refuses a match that already has an MP link', async () => {
+  it('adds its room to a match that already has an MP link', async () => {
     const { dir, store, manager } = await setup();
     try {
       const tournament = fixture();
-      tournament.stages[0]!.matches[0]!.result.roomId = 123456;
+      tournament.stages[0]!.matches[0]!.result.roomIds = [123456];
+      tournament.stages[0]!.matches[0]!.result.activeRoomId = 123456;
       store.saveTournament(tournament);
       store.saveSession(quickSession('990002'));
 
-      await expect(
-        manager.bindSessionRoom({
-          sessionId: 'sess_quick',
-          tournamentId: tournament.id,
-          matchId: 'match_a',
-        }),
-      ).rejects.toThrow('MP link');
+      await manager.bindSessionRoom({
+        sessionId: 'sess_quick',
+        tournamentId: tournament.id,
+        matchId: 'match_a',
+      });
+      const saved = store.getTournament(tournament.id)!;
+      const result = saved.stages[0]!.matches[0]!.result;
+      expect(result.roomIds).toEqual([123456, 990002]);
+      expect(result.activeRoomId).toBe(990002);
+      expect(result.scoreRed).toBe(0);
+      expect(result.beatmaps).toEqual([]);
     } finally {
       store.close();
       rmSync(dir, { recursive: true, force: true });

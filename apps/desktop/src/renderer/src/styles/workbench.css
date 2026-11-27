@@ -237,7 +237,11 @@
 
 .wb-center {
   overflow: hidden;
-  padding: 12px;
+  padding: 12px 0;
+}
+
+.wb-center .wb-chat {
+  padding-inline: 12px;
 }
 
 .wb-center .wb-split {
@@ -245,7 +249,7 @@
 }
 
 .wb-center .wb-split > .row-resizer {
-  margin-inline: -12px;
+  margin-inline: 0;
 }
 
 .wb-center .wb-split > .row-resizer::before {
@@ -261,7 +265,7 @@
   gap: 8px;
 }
 
-.workbench-page .card + .card {
+.workbench-page .card + .card:not(.playlist-panel) {
   border-top: 1px solid var(--line-soft);
   padding-top: 10px;
 }
@@ -373,6 +377,9 @@
 }
 
 .room-playlist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   margin-top: 0;
   border: 0;
   border-radius: 0;

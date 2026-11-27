@@ -168,8 +168,10 @@ export type MatchBeatmapResult = z.infer<typeof MatchBeatmapResultSchema>;
 export const MatchResultSchema = z.object({
   scoreRed: z.number().int().nonnegative().default(0),
   scoreBlue: z.number().int().nonnegative().default(0),
-  /** Multiplayer room the result was recorded from, used to reopen the MP link. */
-  roomId: z.number().int().positive().nullable().default(null),
+  /** Every multiplayer room this match was played in, oldest first. */
+  roomIds: z.array(z.number().int().positive()).default([]),
+  /** The room mplink lookups read. Always one of roomIds or null. */
+  activeRoomId: z.number().int().positive().nullable().default(null),
   beatmaps: z.array(MatchBeatmapResultSchema).default([]),
 });
 export type MatchResult = z.infer<typeof MatchResultSchema>;
@@ -730,6 +732,27 @@ export function parseTournament(input: unknown) {
   return TournamentSchema.safeParse(migrateTournament(input));
 }
 
+function migrateMatchResult(input: Record<string, unknown>): Record<string, unknown> {
+  const roomIds = Array.isArray(input.roomIds)
+    ? input.roomIds.filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0)
+    : [];
+  const legacyRoomId =
+    typeof input.roomId === 'number' && Number.isInteger(input.roomId) && input.roomId > 0
+      ? input.roomId
+      : null;
+  const merged =
+    legacyRoomId !== null && !roomIds.includes(legacyRoomId) ? [...roomIds, legacyRoomId] : roomIds;
+  const requested =
+    typeof input.activeRoomId === 'number' && merged.includes(input.activeRoomId)
+      ? input.activeRoomId
+      : null;
+  const next: Record<string, unknown> = { ...input };
+  delete next.roomId;
+  next.roomIds = merged;
+  next.activeRoomId = requested ?? legacyRoomId ?? merged[merged.length - 1] ?? null;
+  return next;
+}
+
 export function migrateTournament(input: unknown): unknown {
   if (!isRecord(input)) return input;
   if (input.schemaVersion !== 4 && input.schemaVersion !== TOURNAMENT_SCHEMA_VERSION) {
@@ -777,6 +800,7 @@ export function migrateTournament(input: unknown): unknown {
               if (!isRecord(match)) return match;
               const nextMatch = { ...match };
               delete nextMatch.winCondition;
+              if (isRecord(match.result)) nextMatch.result = migrateMatchResult(match.result);
               return {
                 ...nextMatch,
                 roomMode:

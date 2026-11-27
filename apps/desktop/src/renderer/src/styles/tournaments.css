@@ -761,3 +761,74 @@
 .reference-list code {
   color: var(--pink-text);
 }
+
+.mp-links {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mp-link-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  min-height: 20px;
+}
+
+.mp-link-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mp-link-item.active {
+  color: var(--pink-text);
+}
+
+.mp-link-open {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.mp-link-open:hover {
+  color: var(--text);
+}
+
+.mp-link-active {
+  color: var(--pink-text);
+}
+
+.mp-link-remove {
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mp-link-remove:hover {
+  color: var(--red-text);
+}
+
+.mp-link-add {
+  display: flex;
+  gap: 8px;
+}
+
+.mp-link-add > input {
+  flex: 1;
+  min-width: 0;
+}

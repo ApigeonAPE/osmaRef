@@ -101,11 +101,10 @@ export class TournamentImporter {
       `converted Mayumi ${abbreviation} (${tournament.teams.length} teams, ` +
         `${tournament.stages.length} stages, ${matchCount} matches, ${notes.length} notes)`,
     );
-    const revision = snapshot.bracket?.revision;
     return this.buildPreview(
       'mayumi',
       `mayumi:${abbreviation}`.slice(0, 200),
-      typeof revision === 'number' ? String(revision) : null,
+      null,
       null,
       tournament,
       notes,

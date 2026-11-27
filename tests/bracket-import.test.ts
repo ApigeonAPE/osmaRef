@@ -111,7 +111,7 @@ describe('osu! tournament bracket import', () => {
     expect(matchTwo.teamRedId).toBe(3);
     expect(matchTwo.teamBlueId).toBe(1);
     expect(matchTwo.scheduledAt).toBe('2026-10-25T13:00:00.000Z');
-    expect(matchTwo.result).toEqual({ scoreRed: 5, scoreBlue: 6, roomId: null, beatmaps: [] });
+    expect(matchTwo.result).toEqual({ scoreRed: 5, scoreBlue: 6, roomIds: [], activeRoomId: null, beatmaps: [] });
     expect(matchTwo.roomMode).toBe('team_versus');
     expect(matchTwo.notes).toContain('score 5-6');
 
@@ -341,7 +341,7 @@ describe('bracket files produced by the osu! client', () => {
     expect(matches[0].teamRedId).toBe(0);
     expect(matches[0].teamBlueId).toBe(1);
     expect(matches[0].scheduledAt).toBe('2026-10-25T07:00:00.000Z');
-    expect(matches[0].result).toEqual({ scoreRed: 5, scoreBlue: 0, roomId: null, beatmaps: [] });
+    expect(matches[0].result).toEqual({ scoreRed: 5, scoreBlue: 0, roomIds: [], activeRoomId: null, beatmaps: [] });
     expect(tournament.stages[0]?.slots.map((slot) => slot.label)).toEqual(['NM', 'TB']);
     expect(notes.join('\n')).toMatch(/1 bracket match\(es\) have undecided teams/);
   });

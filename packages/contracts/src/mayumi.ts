@@ -185,30 +185,6 @@ export const MayumiDrawSchema = z
   .passthrough();
 export type MayumiDraw = z.infer<typeof MayumiDrawSchema>;
 
-export const MayumiBracketConfigSchema = z
-  .object({
-    revision: z.number().nullish(),
-    settings: z
-      .object({
-        rounds: z
-          .record(
-            z
-              .object({
-                bestOf: z.number().nullish(),
-                banCount: z.number().nullish(),
-              })
-              .passthrough(),
-          )
-          .nullish(),
-        acronyms: z.record(z.string()).nullish(),
-        flagNames: z.record(z.string()).nullish(),
-      })
-      .passthrough()
-      .nullish(),
-  })
-  .passthrough();
-export type MayumiBracketConfig = z.infer<typeof MayumiBracketConfigSchema>;
-
 export const MayumiPlayersResponseSchema = z
   .object({
     groups: z.array(MayumiGroupSchema).nullish(),
@@ -223,7 +199,6 @@ export interface MayumiSnapshot {
   mapPools: MayumiPoolStage[] | null;
   roundInfo: MayumiRoundInfo[] | null;
   draw: MayumiDraw['state'] | null;
-  bracket: MayumiBracketConfig | null;
 }
 
 export interface MayumiConversionOptions {
@@ -336,11 +311,6 @@ function normalizeBestOf(value: number | null | undefined, stageName: string, no
   return bestOf;
 }
 
-function normalizeBans(value: number | null | undefined): number {
-  const requested = Math.round(value ?? 0);
-  return Number.isFinite(requested) ? Math.min(10, Math.max(0, requested)) : 0;
-}
-
 function uniqueId(base: string, used: Set<string>): string {
   const safe = (slugify(base) || 'item').slice(0, 120);
   let candidate = safe;
@@ -400,7 +370,6 @@ export function convertMayumiToTournament(
   /** Team index by uid: every roster uid maps to its team. */
   const teamByUid = new Map<number, number>();
   const teamByName = new Map<string, number>();
-  const teamByAcronym = new Map<string, number>();
   const teams: Team[] = [];
 
   const merge = (group: MayumiGroup): number[] => {
@@ -468,16 +437,6 @@ export function convertMayumiToTournament(
     }
   });
 
-  // Bracket configuration acronyms allow matching teams whose name changed.
-  const acronyms = snapshot.bracket?.settings?.acronyms ?? {};
-  for (const [left, right] of Object.entries(acronyms)) {
-    const byName = teamByName.get(key(left));
-    if (byName !== undefined) teamByAcronym.set(key(right), byName);
-    const byValue = teamByName.get(key(right));
-    if (byValue !== undefined) teamByAcronym.set(key(left), byValue);
-  }
-
-  const bracketRounds = snapshot.bracket?.settings?.rounds ?? {};
   const drawRounds = snapshot.draw?.rounds ?? [];
   const drawBestOf = new Map<string, number>();
   for (const round of drawRounds) {
@@ -546,9 +505,7 @@ export function convertMayumiToTournament(
       const byMember = teamByUid.get(uid);
       if (byMember !== undefined) return byMember;
     }
-    const byName = teamByName.get(key(info2.name));
-    if (byName !== undefined) return byName;
-    return teamByAcronym.get(key(info2.name));
+    return teamByName.get(key(info2.name));
   };
 
   const ensureSoloTeam = (info2: { uid?: number[] | null; name?: string | null } | null | undefined): number | undefined => {
@@ -602,11 +559,9 @@ export function convertMayumiToTournament(
   keptStageNames.forEach((stageName, order) => {
     const id = uniqueId(`stage_${stageName}`, usedStageIds);
     const lobbyStage = isLobbyStage(stageName) && !hasTeamConfig;
-    const bracketRound = bracketRounds[stageName];
-    const bestOf = lobbyStage
-      ? 1
-      : normalizeBestOf(bracketRound?.bestOf ?? drawBestOf.get(stageName), stageName, notes);
-    const bans = lobbyStage ? 0 : normalizeBans(bracketRound?.banCount);
+    const bestOf = lobbyStage ? 1 : normalizeBestOf(drawBestOf.get(stageName), stageName, notes);
+    // Mayumi only publishes ban counts behind its login wall.
+    const bans = 0;
 
     // Pool.
     const poolStage = pools.find((entry) => entry.stage_name.trim() === stageName);
@@ -701,6 +656,7 @@ export function convertMayumiToTournament(
       }
       const notes2 = [`Mayumi match ${raw.match_id}`];
       if (raw.is_winner_bracket === false) notes2.push('losers bracket');
+      const roomId = roomIdFromLinks(raw.match_url);
       const match: Match = {
         type: 'match',
         id: uniqueId(`m_${stageName}_${raw.match_id}`, usedMatchIds),
@@ -710,7 +666,8 @@ export function convertMayumiToTournament(
         result: {
           scoreRed: Math.max(0, scoreRed),
           scoreBlue: Math.max(0, scoreBlue),
-          roomId: roomIdFromLinks(raw.match_url),
+          roomIds: roomId === null ? [] : [roomId],
+          activeRoomId: roomId,
           beatmaps: [],
         },
         teamRedId: one,
@@ -733,6 +690,7 @@ export function convertMayumiToTournament(
         notes.push(`${label} has no participants yet; it was skipped.`.slice(0, 500));
         continue;
       }
+      const roomId = roomIdFromLinks(raw.match_url);
       const match: Match = {
         type: 'lobby',
         id: uniqueId(`l_${stageName}_${raw.match_id}`, usedMatchIds),
@@ -742,7 +700,8 @@ export function convertMayumiToTournament(
         result: {
           scoreRed: 0,
           scoreBlue: 0,
-          roomId: roomIdFromLinks(raw.match_url),
+          roomIds: roomId === null ? [] : [roomId],
+          activeRoomId: roomId,
           beatmaps: [],
         },
         teamIds,

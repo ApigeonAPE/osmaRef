@@ -127,6 +127,7 @@ export const DesktopEventSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('update_downloaded') }),
   z.object({ type: z.literal('update_error'), message: z.string().min(1) }),
+  z.object({ type: z.literal('tournaments_changed') }),
 ]);
 export type DesktopEvent = z.infer<typeof DesktopEventSchema>;
 
@@ -160,11 +161,6 @@ export interface MayumiTournamentSummary {
   endDate: string;
   /** Whether today falls inside the published date range. */
   open: boolean;
-}
-
-export interface MayumiSessionStatus {
-  /** False until a `uuid` cookie has been saved. */
-  configured: boolean;
 }
 
 export interface OsuUserSummary {
@@ -222,8 +218,6 @@ export interface Settings {
   ircUsername: string;
   ircDefaultChannels: string[];
   hubBaseUrl: string;
-  /** Mayumi instance the import browser reads from. */
-  mayumiBaseUrl: string;
   chatWebsocketUrl: string;
   /** Mods injected by `!mp mods freemod` in Referee Hub rooms. */
   freemodMods: FreemodPool;
@@ -252,7 +246,6 @@ export const DEFAULT_SETTINGS: Settings = {
   ircUsername: '',
   ircDefaultChannels: ['#osu'],
   hubBaseUrl: 'https://spectator.osu.ppy.sh',
-  mayumiBaseUrl: 'https://mayumi.xyz',
   chatWebsocketUrl: 'wss://notify.ppy.sh',
   freemodMods: { required: ['NF'], allowed: ['HD', 'HR', 'EZ', 'DT', 'FL', 'HT'] },
   chatFontFamily: 'Cascadia Mono, Consolas, monospace',
@@ -318,7 +311,6 @@ export const SettingsPatchSchema = z.object({
   ircUsername: z.string().max(64).optional(),
   ircDefaultChannels: z.array(ChannelSchema).max(20).optional(),
   hubBaseUrl: HttpUrlSchema.optional(),
-  mayumiBaseUrl: HttpUrlSchema.optional(),
   chatWebsocketUrl: WebSocketUrlSchema.optional(),
   freemodMods: z
     .object({
@@ -352,6 +344,13 @@ export const OpenRoomInputSchema = z.object({
   tournamentId: z.string().min(1).max(128),
   matchId: z.string().min(1).max(128),
 });
+
+export const MatchRoomLinkInputSchema = z.object({
+  tournamentId: z.string().min(1).max(128),
+  matchId: z.string().min(1).max(128),
+  roomId: z.number().int().positive(),
+});
+export type MatchRoomLinkInput = z.infer<typeof MatchRoomLinkInputSchema>;
 
 export const JoinRoomInputSchema = z.object({
   transport: z.enum(['irc', 'referee_hub']),
@@ -451,12 +450,10 @@ export const PlayerScoreInputSchema = z.object({  userId: z.number().int().posit
   passed: z.boolean(),
 });
 
-export const RecordResultInputSchema = z.object({
+export const SkipScoreInputSchema = z.object({
   sessionId: z.string().min(1).max(128),
   slotLabel: z.string().min(1).max(12),
-  beatmapId: z.number().int().positive().optional(),
-  scores: z.array(PlayerScoreInputSchema).max(64),
-  source: z.enum(['irc', 'referee_hub', 'manual']),
+  winner: z.enum(['team_one', 'team_two']),
 });
 
 export const ImportPreviewSchema = z.object({
@@ -507,14 +504,15 @@ export interface DesktopApi {
     /** Imports an osu! tournament client `bracket.json`, converted to a tournament. */
     importBracket(): Promise<ImportPreview | null>;
     applyImport(preview: ImportPreview): Promise<Tournament>;
+    /** Adds an MP link to a match's room list and makes it the active one. */
+    addRoomLink(input: MatchRoomLinkInput): Promise<Tournament>;
+    /** Removes an MP link; the active link falls back to the last remaining one. */
+    removeRoomLink(input: MatchRoomLinkInput): Promise<Tournament>;
   };
   mayumi: {
     /** Every tournament published on the configured Mayumi instance. */
     list(): Promise<MayumiTournamentSummary[]>;
     preview(abbreviation: string, platform: 'stable' | 'lazer'): Promise<ImportPreview>;
-    setSession(uuid: string): Promise<MayumiSessionStatus>;
-    clearSession(): Promise<MayumiSessionStatus>;
-    sessionStatus(): Promise<MayumiSessionStatus>;
   };
   sessions: {
     list(): Promise<MatchSession[]>;
@@ -534,22 +532,14 @@ export interface DesktopApi {
       slotLabel: string;
       beatmapId?: number;
     }): Promise<MatchSession>;
-    recordResult(input: {
+    skipScore(input: {
       sessionId: string;
       slotLabel: string;
-      scores: {
-        userId: number;
-        username?: string;
-        score: number;
-        accuracy: number;
-        maxCombo: number;
-        misses: number;
-        mods: string[];
-        passed: boolean;
-      }[];
-      source: 'irc' | 'referee_hub' | 'manual';
+      winner: 'team_one' | 'team_two';
     }): Promise<MatchSession>;
     undo(sessionId: string): Promise<MatchSession>;
+    /** Re-syncs a finished session's snapshot into its tournament. */
+    syncMatch(sessionId: string): Promise<MatchSession>;
     /** Binds an ad-hoc room to a stored match; only allowed once per room. */
     bindMatch(input: {
       sessionId: string;
@@ -647,12 +637,11 @@ export const IPC = {
   tournamentsImportFile: 'tournaments:import-file',
   tournamentsImportBracket: 'tournaments:import-bracket',
   tournamentsApplyImport: 'tournaments:apply-import',
+  tournamentsAddRoomLink: 'tournaments:add-room-link',
+  tournamentsRemoveRoomLink: 'tournaments:remove-room-link',
 
   mayumiList: 'mayumi:list',
   mayumiPreview: 'mayumi:preview',
-  mayumiSetSession: 'mayumi:set-session',
-  mayumiClearSession: 'mayumi:clear-session',
-  mayumiSessionStatus: 'mayumi:session-status',
 
   sessionsList: 'sessions:list',
   sessionsListLogs: 'sessions:list-logs',
@@ -670,8 +659,9 @@ export const IPC = {
   sessionsClose: 'sessions:close',
   sessionsRemove: 'sessions:remove',
   sessionsApplyAction: 'sessions:apply-action',
-  sessionsRecordResult: 'sessions:record-result',
+  sessionsSkipScore: 'sessions:skip-score',
   sessionsUndo: 'sessions:undo',
+  sessionsSyncMatch: 'sessions:sync-match',
   sessionsAdjustScore: 'sessions:adjust-score',
   sessionsSetFirstTeams: 'sessions:set-first-teams',
   sessionsBindMatch: 'sessions:bind-match',

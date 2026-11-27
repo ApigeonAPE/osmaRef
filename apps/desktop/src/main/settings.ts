@@ -61,7 +61,6 @@ export class SettingsStore {
     next.serverBaseUrl = next.serverBaseUrl.trim().replace(/\/$/, '');
     next.ircHost = next.ircHost.trim();
     next.hubBaseUrl = next.hubBaseUrl.trim().replace(/\/$/, '');
-    next.mayumiBaseUrl = next.mayumiBaseUrl.trim().replace(/\/$/, '');
     next.ircDefaultChannels = (next.ircDefaultChannels ?? []).map((channel) =>
       channel.startsWith('#') ? channel : `#${channel}`,
     );

@@ -1945,7 +1945,7 @@ function MatchesEditor({
         groupId: target.groups[0]?.id ?? null,
         refereeIds: [],
         scheduledAt: new Date().toISOString(),
-        result: { scoreRed: 0, scoreBlue: 0, roomId: null, beatmaps: [] },
+        result: { scoreRed: 0, scoreBlue: 0, roomIds: [], activeRoomId: null, beatmaps: [] },
         notes: undefined,
       };
       if (type === 'lobby') {
@@ -1969,6 +1969,26 @@ function MatchesEditor({
 
   const patchMatch = (index: number, mutator: (match: Match) => void) => {
     edit((next) => mutator(next.stages[stageIndex]!.matches[index]!));
+  };
+
+  const addMpLink = (index: number, matchId: string) => {
+    const roomId = parseMpRoomId(mpLinks[matchId] ?? '');
+    if (roomId === null) return;
+    patchMatch(index, (target) => {
+      if (!target.result.roomIds.includes(roomId)) target.result.roomIds.push(roomId);
+      target.result.activeRoomId = roomId;
+    });
+    setMpLinks((previous) => ({ ...previous, [matchId]: '' }));
+  };
+
+  const removeMpLink = (index: number, roomId: number) => {
+    patchMatch(index, (target) => {
+      target.result.roomIds = target.result.roomIds.filter((entry) => entry !== roomId);
+      if (target.result.activeRoomId === roomId) {
+        target.result.activeRoomId =
+          target.result.roomIds[target.result.roomIds.length - 1] ?? null;
+      }
+    });
   };
 
   const teamName = (teamId: number) =>
@@ -2023,10 +2043,10 @@ function MatchesEditor({
                   className="ghost small match-link"
                   title="MP Link"
                   aria-label="MP Link"
-                  disabled={!match.result.roomId}
+                  disabled={!match.result.activeRoomId}
                   onClick={() =>
                     void window.osmaRef.app.openExternal(
-                      `https://osu.ppy.sh/community/matches/${match.result.roomId}`,
+                      `https://osu.ppy.sh/community/matches/${match.result.activeRoomId}`,
                     )
                   }
                 />
@@ -2241,23 +2261,69 @@ function MatchesEditor({
                             }
                           />
                         </Field>
-                        <Field label="MP Link">
-                          <input
-                            value={
-                              mpLinks[match.id] ??
-                              (match.result.roomId
-                                ? `https://osu.ppy.sh/community/matches/${match.result.roomId}`
-                                : '')
-                            }
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setMpLinks((previous) => ({ ...previous, [match.id]: value }));
-                              patchMatch(index, (target) => {
-                                target.result.roomId = parseMpRoomId(value);
-                              });
-                            }}
-                          />
-                        </Field>
+                        <div className="field field-wide">
+                          <span className="field-label">MP Link</span>
+                          <div className="mp-links">
+                            <div className="mp-link-list">
+                              {match.result.roomIds.length === 0 ? (
+                                <span className="muted small">—</span>
+                              ) : null}
+                              {match.result.roomIds.map((roomId) => (
+                                <span
+                                  className={`mp-link-item${
+                                    roomId === match.result.activeRoomId ? ' active' : ''
+                                  }`}
+                                  key={roomId}
+                                >
+                                  <button
+                                    type="button"
+                                    className="mp-link-open"
+                                    onClick={() =>
+                                      void window.osmaRef.app.openExternal(
+                                        `https://osu.ppy.sh/community/matches/${roomId}`,
+                                      )
+                                    }
+                                  >
+                                    {roomId}
+                                  </button>
+                                  {roomId === match.result.activeRoomId ? (
+                                    <span className="mp-link-active">({t('Active')})</span>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    className="mp-link-remove"
+                                    aria-label={t('Remove')}
+                                    onClick={() => removeMpLink(index, roomId)}
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                            <div className="mp-link-add">
+                              <input
+                                value={mpLinks[match.id] ?? ''}
+                                placeholder="https://osu.ppy.sh/community/matches/…"
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  setMpLinks((previous) => ({ ...previous, [match.id]: value }));
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key !== 'Enter') return;
+                                  event.preventDefault();
+                                  addMpLink(index, match.id);
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="ghost small"
+                                onClick={() => addMpLink(index, match.id)}
+                              >
+                                {t('Add')}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </>
                     ) : null}
                   </div>

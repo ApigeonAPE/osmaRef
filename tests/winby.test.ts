@@ -57,7 +57,7 @@ describe('Win-by rules', () => {
   it('sums team scores with the built-in rule', () => {
     const result = evaluate([score(1, 100), score(2, 200), score(3, 50), score(4, 40)]);
     expect(result.winner).toBe('team_one');
-    expect(result.teamValues).toEqual({ team_one: 300, team_two: 90 });
+    expect(result.teamMapScores).toEqual({ team_one: 300, team_two: 90 });
     expect(result.needsReview).toBe(false);
   });
 

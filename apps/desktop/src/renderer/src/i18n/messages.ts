@@ -88,8 +88,10 @@ export const zhCN: Record<string, string> = {
   'Close room': '关闭房间',
   'Close this multiplayer room?': '确定关闭该多人房间？',
   'match finished': '比赛结束',
+  'Match finished': '比赛结束',
+  'Sync to tournament': '同步到赛事',
+  'Active': '活跃',
   'flow complete': '流程完成',
-  'Enter result — {slot}': '录入成绩 — {slot}',
   'Record the result before picking the next beatmap.': '请先录入成绩，再选择下一张图。',
   'The flow is complete.': '流程已完成。',
   'This match has no mappool.': '该比赛没有图池。',
@@ -107,6 +109,7 @@ export const zhCN: Record<string, string> = {
   'Playlist mods': '谱面模组',
   Mods: '模组',
   Add: '添加',
+  Remove: '移除',
   'Beatmap ID or link': '谱面 ID 或链接',
   'Remove from playlist': '从列表移除',
   Back: '返回',
@@ -155,17 +158,9 @@ export const zhCN: Record<string, string> = {
   // --- about ---------------------------------------------------------------
   About: '关于',
 
-  // --- result dialog -------------------------------------------------------
-  'Result for {slot}': '{slot} 的成绩',
-  'Record result': '记录成绩',
-  'This room has no roster, so there are no players to score. Invite players and add them to a team in the tournament editor, or record the result after the roster exists.':
-    '该房间没有名单，无法录入成绩。请先邀请玩家并在赛事编辑器中加入队伍，或等名单建立后再录入。',
-  player: '选手',
-  score: '分数',
-  'acc %': '准确率 %',
-  combo: '连击',
-  miss: 'Miss',
-  passed: '通过',
+  // --- skip score ----------------------------------------------------------
+  'Skip Score': '跳过计分',
+  'Skip score for {slot}': '{slot} 跳过计分',
 
   // --- audit ---------------------------------------------------------------
   'Create room': '创建房间',
@@ -205,13 +200,9 @@ export const zhCN: Record<string, string> = {
   Browse: '浏览',
   'Local tournaments': '本地赛事',
   Mayumi: 'Mayumi',
-  'Session uuid': '会话 uuid',
-  'Save session': '保存会话',
-  'Clear session': '清除会话',
   'No tournaments in progress': '当前没有进行中的赛事',
   'Show all': '显示全部',
   Refresh: '刷新',
-  Passed: '通过',
   Import: '导入',
   'Import file': '导入文件',
   'Import bracket.json': '从 bracket.json 导入',

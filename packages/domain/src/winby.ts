@@ -23,7 +23,7 @@ export interface WinByContext {
 
 export interface WinByEvaluation {
   winner: TeamSide | null;
-  teamValues: { team_one: number | null; team_two: number | null };
+  teamMapScores: { team_one: number | null; team_two: number | null };
   needsReview: boolean;
   reviewReason: string | null;
   slots: WinBySlot[];
@@ -99,13 +99,13 @@ export function evaluateWinBy(context: WinByContext): WinByEvaluation {
     context.category && context.category.length > 0 ? context.category : 0,
     context.sequence,
   ];
-  const teamValues = {
+  const teamMapScores = {
     team_one: teamSum(scores, teams[0]),
     team_two: teamSum(scores, teams[1]),
   };
   const fail = (reviewReason: string): WinByEvaluation => ({
     winner: null,
-    teamValues,
+    teamMapScores,
     needsReview: true,
     reviewReason,
     slots,
@@ -117,7 +117,7 @@ export function evaluateWinBy(context: WinByContext): WinByEvaluation {
       ? fail('Win-by rule could not determine a winner')
       : {
           winner: result === 'red' ? 'team_one' : 'team_two',
-          teamValues,
+          teamMapScores,
           needsReview: false,
           reviewReason: null,
           slots,
